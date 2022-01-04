@@ -66,5 +66,3 @@ def MOTA(baseline_tracking, gan_tracking, ground_truth):
         if len(gan_frame) > len(baseline_frame):
             print(i)
     return
-
-
