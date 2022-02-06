@@ -36,13 +36,13 @@ For the final evaluation, please refer to [mikel-brostrom's repo](https://github
 
 ## Tracking Speed
 
-The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The tracking speed is 15 ms per frame with 640 * 640 resolution with Tesla P100. The modified extractor is based on Dense skip connection in ResNet-18 with Squeeze and Excitation Network, only a minor increase on the number of learnable parameters. The tracking speed is 17 ms per frame under the same testing environment. The speed is acquired with `time` package after the synchronization of CUDA.
+The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The inference speed is 15 ~ 17 ms per frame with 640 * 640 resolution with Tesla T4. The modified extractor is based on Dense skip connection in ResNet-18 with Squeeze and Excitation Network, only a minor increase on the number of learnable parameters. The tracking speed is 17 ms per frame under the same testing environment. The speed is acquired with `time` package after the synchronization of CUDA.
 
 
 
 ## Evaluation
 
-The tracking quality is evaluated under regular metrics including MOTA, MOTP and IDSW. The evaluation can be deployed with a bash command. The evaluation results are shown below. Note that this is currently a **not** very successful attempt as the baseline is too strong.
+The tracking quality is evaluated under regular metrics including MOTA, MOTP and IDSW. The evaluation can be deployed with a bash command. I set the maximum distance to 0.15 (cosine distance). The evaluation results are shown below. Note that this is currently a **not** very successful attempt as the baseline is too strong.
 
 **Strong baseline**
 
@@ -59,16 +59,16 @@ The tracking quality is evaluated under regular metrics including MOTA, MOTP and
 
   **Current attempt**
 
-|          | MOTA   | MOTP   | MODA   | CLR_Re | CLR_Pr | MTR    | PTR    | MLR    | sMOTA  | CLR_TP | CLR_FN | CLR_FP | IDSW | MT   | PT   | ML   | Frag |
-| -------- | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ---- | ---- | ---- | ---- | ---- |
-| MOT16-02 | 34.644 | 77.466 | 35.361 | 39.926 | 89.74  | 16.667 | 42.593 | 40.741 | 25.647 | 7120   | 10713  | 814    | 128  | 9    | 23   | 22   | 280  |
-| MOT16-04 | 61.204 | 76.227 | 61.375 | 73.534 | 85.962 | 40.964 | 43.373 | 15.663 | 43.766 | 34885  | 12672  | 5697   | 81   | 34   | 36   | 13   | 474  |
-| MOT16-05 | 56.762 | 78.421 | 58.111 | 69.346 | 86.058 | 29.6   | 57.6   | 12.8   | 41.797 | 4728   | 2090   | 766    | 92   | 37   | 72   | 16   | 178  |
-| MOT16-09 | 59.635 | 84.116 | 60.89  | 74.986 | 84.177 | 52     | 44     | 4      | 47.724 | 3942   | 1315   | 741    | 66   | 13   | 11   | 1    | 118  |
-| MOT16-10 | 54.863 | 76.448 | 55.488 | 61.552 | 91.031 | 27.778 | 53.704 | 18.519 | 40.366 | 7582   | 4736   | 747    | 77   | 15   | 29   | 10   | 441  |
-| MOT16-11 | 62.525 | 84.973 | 62.906 | 78.984 | 83.087 | 49.275 | 39.13  | 11.594 | 50.656 | 7246   | 1928   | 1475   | 35   | 34   | 27   | 8    | 140  |
-| MOT16-13 | 41.808 | 74.654 | 42.541 | 49.319 | 87.918 | 22.43  | 44.86  | 32.71  | 29.308 | 5647   | 5803   | 776    | 84   | 24   | 48   | 35   | 256  |
-| COMBINED | 53.956 | 77.723 | 54.466 | 64.443 | 86.593 | 32.108 | 47.582 | 20.309 | 39.67  | 1150   | 39257  | 11016  | 563  | 166  | 246  | 105  | 1887 |
+|          | MOTA   | MOTP      | MODA   | CLR_Re | CLR_Pr | MTR    | PTR    | MLR    | sMOTA  | CLR_TP | CLR_FN | CLR_FP | IDSW | MT   | PT   | ML   | Frag |
+| -------- | ------ | --------- | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ---- | ---- | ---- | ---- | ---- |
+| MOT16-02 | 34.649 | 77.546    | 35.371 | 39.908 | 89.963 | 16.667 | 42.593 | 40.741 | 25.711 | 7099   | 10734  | 792    | 128  | 9    | 23   | 22   | 280  |
+| MOT16-04 | 61.24  | 76.122    | 61.436 | 73.358 | 86.02  | 40.964 | 44.578 | 14.458 | 43.723 | 34887  | 12670  | 5670   | 93   | 34   | 37   | 12   | 472  |
+| MOT16-05 | 56.688 | 78.356    | 58.038 | 69.346 | 85.979 | 30.4   | 55.2   | 14.4   | 41.679 | 4728   | 2090   | 771    | 92   | 38   | 69   | 18   | 177  |
+| MOT16-09 | 59.958 | 84.195    | 61.042 | 75.005 | 84.306 | 52     | 44     | 4      | 48.103 | 3943   | 1314   | 734    | 57   | 13   | 11   | 1    | 107  |
+| MOT16-10 | 55.326 | 76.365    | 55.894 | 61.926 | 91.124 | 27.778 | 53.704 | 18.519 | 40.689 | 7628   | 4690   | 743    | 70   | 15   | 29   | 10   | 446  |
+| MOT16-11 | 62.753 | 84.964    | 63.146 | 79.06  | 83.243 | 47.826 | 40.58  | 11.594 | 50.866 | 7253   | 1921   | 1460   | 36   | 33   | 28   | 8    | 136  |
+| MOT16-13 | 41.581 | 74.652    | 42.279 | 49.275 | 87.568 | 21.495 | 46.729 | 31.776 | 29.091 | 5642   | 5808   | 801    | 80   | 23   | 50   | 34   | 268  |
+| COMBINED | 54.03  | **77.67** | 54.534 | 64.471 | 86.645 | 31.915 | 47.776 | 20.309 | 39.634 | 71180  | 39227  | 10971  | 556  | 165  | 247  | 105  | 1876 |
 
 
 
@@ -76,4 +76,4 @@ The tracking quality is evaluated under regular metrics including MOTA, MOTP and
 
 We need to reconsider the work critically. The generated images may help with the pre-training of the re-id backbone when the baseline is weak. But now the mAP could easily reach 0.9+, the GAN enhancement should not work well.
 
-The training of the re-id backbone is naive. Still I want a light backbone. Without re-ranking, the classification accuracy for training set reached 78.8% in 25 epochs in merged models and ~72% in separated models in 15 epochs respectively. I checked the tricks of SE block as well as NLA (non-local attention) and don't know which one is better. Note that the loss weight assignment and margin setting are tricky.
+The training of the re-id backbone is naive. Still I want a light backbone, but it seems that it is hard to optimize ResNet18. I should try ResNet34 or DLA34 instead. The classification accuracy for training set reached 99%+ after 25 epochs in merged models. I checked the tricks of SE block as well as NLA (non-local attention) and don't know which one is better. Note that the loss weight assignment and margin setting are tricky.
