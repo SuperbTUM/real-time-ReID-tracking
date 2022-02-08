@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 import logging
 
-from .model_dense import SEDense18
+from .model_dense_new import SEDense18
 # from .model import Net
 
 

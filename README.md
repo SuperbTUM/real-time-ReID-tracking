@@ -1,5 +1,6 @@
 ## Update
 
+- Feb. 8, 2022 Reformat files
 - Feb. 4, 2022  Add some thoughts 
 - Jan. 3, 2022  Add more details
 - Dec. 20, 2021  First submit
@@ -26,6 +27,8 @@ Person gallery: [Market1501](https://www.kaggle.com/pengcw1/market-1501/data) --
 
 Please do not use Google Colab, since file transfer is rather unstable!
 
+Replace the file with modified one in the original repositories.
+
 You can try to have generated images with GAN. That means you need additional training on the GAN. To train DC-GAN, please refer to the instructions on [qiaoguan's repo](https://github.com/qiaoguan/Person-reid-GAN-pytorch/tree/master/DCGAN-tensorflow). Please pay attention that this is an out-of-state repo and there is also file missing. You can also refer to the `ipynb` file in [modification_dcgan](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_dcgan) folder. Before that, make sure you properly execute `prepare.py`, `changeIndex.py` as well as the customized `re_index.py` before conducting training. We trained the backbone with `Market-1501/bounding_box_train` plus generated images. You can refer to the script files in our repo. 
 
 You will need to train the Re-ID model with Market1501. In the [modification_deepsort](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_deepsort) folder, you can see how we build the model as well train the model. The intuition is to use bag of tricks. We firstly trained the embedding network and classification network separately, and then we merged them together with merged loss. We have our checkpoint available [here](https://drive.google.com/file/d/1dP3afrkTWyYlLOGJFbIi4QWIxKoPYjOl/view?usp=sharing). 
@@ -42,7 +45,7 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
 
 ## Evaluation
 
-The tracking quality is evaluated under regular metrics including MOTA, MOTP and IDSW. The evaluation can be deployed with a bash command. I set the maximum distance to 0.15 (cosine distance). The evaluation results are shown below. Note that this is currently a **not** very successful attempt as the baseline is too strong.
+The tracking quality is evaluated under regular metrics including MOTA, MOTP and IDSW. The evaluation can be deployed with a bash command. I set the maximum distance to 0.15 (cosine distance). The evaluation results are shown below. Note that this is currently a **NOT** very successful attempt as the baseline is too strong.
 
 **Strong baseline**
 
@@ -76,4 +79,4 @@ The tracking quality is evaluated under regular metrics including MOTA, MOTP and
 
 We need to reconsider the work critically. The generated images may help with the pre-training of the re-id backbone when the baseline is weak. But now the mAP could easily reach 0.9+, the GAN enhancement should not work well.
 
-The training of the re-id backbone is naive. Still I want a light backbone, but it seems that it is hard to optimize ResNet18. I should try ResNet34 or DLA34 instead. The classification accuracy for training set reached 99%+ after 25 epochs in merged models. I checked the tricks of SE block as well as NLA (non-local attention) and don't know which one is better. Note that the loss weight assignment and margin setting are tricky.
+The training of the re-id backbone is naive. Still I want a light backbone, but it seems that it is hard to optimize ResNet18. Since the BagOfTricks method is NOT working as good as expected, I am switching to [AGW](https://github.com/mangye16/ReID-Survey) method.
