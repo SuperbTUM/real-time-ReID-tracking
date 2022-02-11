@@ -4,13 +4,13 @@ import numpy as np
 import cv2
 import logging
 
-from .model_dense_new import SEDense18
+from .SERes18_IBN import SEDense18_IBN
 # from .model import Net
 
 
 class Extractor(object):
     def __init__(self, model_path, use_cuda=True):
-        self.net = SEDense18(reid=True)
+        self.net = SEDense18_IBN(is_reid=True)
         self.device = "cuda" if torch.cuda.is_available() and use_cuda else "cpu"
         state_dict = torch.load(model_path, map_location=torch.device(self.device))
         self.net.load_state_dict(state_dict, strict=False)
