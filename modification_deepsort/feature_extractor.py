@@ -1,10 +1,13 @@
-import torch
-import torchvision.transforms as transforms
-import numpy as np
-import cv2
 import logging
 
+import cv2
+import numpy as np
+import torch
+import torchvision.transforms as transforms
+
 from .SERes18_IBN import SEDense18_IBN
+
+
 # from .model import Net
 
 
@@ -17,10 +20,12 @@ class Extractor(object):
         logger = logging.getLogger("root.tracker")
         logger.info("Loading weights from {}... Done!".format(model_path))
         self.net.to(self.device)
-        self.size = (64, 128)
+        # self.size = (64, 128)
+        self.size = (128, 256)
         self.norm = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
         ])
 
     def _preprocess(self, im_crops):
@@ -32,8 +37,9 @@ class Extractor(object):
             3. to torch Tensor
             4. normalize
         """
+
         def _resize(im, size):
-            return cv2.resize(im.astype(np.float32)/255., size)
+            return cv2.resize(im.astype(np.float32) / 255., size)
 
         im_batch = torch.cat([self.norm(_resize(im, self.size)).unsqueeze(
             0) for im in im_crops], dim=0).float()
