@@ -1,5 +1,6 @@
 ## Update
 
+- Feb. 27, Consider class-imbalanced problem and build balanced dataset for Market-1501 training set
 - Feb. 22, Add Video-based training code and switch IoU to DIoU
 - Feb. 11, Add IBN and modified MIN_CONF to 0.5
 - Feb. 8, 2022 Reformat files
@@ -17,7 +18,7 @@ This is a project of real-time multiple object tracking in person re-identificat
 
 ## Dependency
 
-The code was developed with PyTorch and Numpy. Please download and install the latest stable version with CUDA 11. All codes are tested with one single GPU.
+The code was developed with PyTorch and Numpy. Please download and install the latest stable version with CUDA 11. All codes are tested with one single GPU. If you wish to accelerate training, [apex](https://github.com/NVIDIA/apex) should be a great option. It can save training time as well as reduce memory cost. If you wish to accelerate inference, you can refer to TorchScript or TensorRT. A major reference is [this](https://developer.nvidia.com/blog/accelerating-inference-up-to-6x-faster-in-pytorch-with-torch-tensorrt/).
 
 
 
@@ -72,7 +73,7 @@ The tracking quality is evaluated under regular metrics including MOTA, MOTP and
 
 IDF1: 57.992
 
-  **Our Proposal**
+  **Our Proposal w/o Data Balance**
 
 |          | MOTA ⬆     | MOTP ⬆     | MODA ⬆     | CLR_Re ⬆ | CLR_Pr ⬆   | MTR ⬆  | PTR ⬆  | MLR ⬇  | sMOTA ⬆    | CLR_TP ⬆ | CLR_FN ⬇ | CLR_FP ⬇ | IDSW ⬇  | MT ⬆ | PT ⬆ | ML ⬇ | Frag ⬇   |
 | -------- | ---------- | ---------- | ---------- | -------- | ---------- | ------ | ------ | ------ | ---------- | -------- | -------- | -------- | ------- | ---- | ---- | ---- | -------- |
@@ -87,10 +88,25 @@ IDF1: 57.992
 
 IDF1: **58.946**
 
+**Our Proposal w/ Data Balance**, [checkpoint](https://drive.google.com/file/d/1-NKAC0__QOK28zKXD0dqiv6pihlCcZLK/view?usp=sharing)
+
+|          | MOTA ⬆ | MOTP ⬆ | MODA ⬆ | CLR_Re ⬆ | CLR_Pr ⬆ | MTR ⬆  | PTR ⬆  | MLR ⬇  | sMOTA ⬆ | CLR_TP ⬆ | CLR_FN ⬇ | CLR_FP ⬇ | IDSW ⬇ | MT ⬆ | PT ⬆ | ML ⬇ | Frag ⬇ |
+| -------- | ------ | ------ | ------ | -------- | -------- | ------ | ------ | ------ | ------- | -------- | -------- | -------- | ------ | ---- | ---- | ---- | ------ |
+| MOT16-02 | 33.898 | 78.3   | 34.419 | 36.859   | 93.793   | 16.667 | 38.889 | 44.444 | 25.899  | 6573     | 11260    | 435      | 93     | 9    | 21   | 24   | 178    |
+| MOT16-04 | 64.052 | 76.393 | 64.256 | 72.067   | 90.221   | 42.169 | 40.964 | 16.867 | 47.039  | 34273    | 13284    | 3715     | 97     | 35   | 34   | 14   | 387    |
+| MOT16-05 | 58.903 | 78.458 | 59.724 | 69.317   | 87.844   | 28.8   | 56.8   | 14.4   | 43.971  | 4726     | 2092     | 654      | 56     | 36   | 71   | 18   | 159    |
+| MOT16-09 | 62.317 | 84.061 | 63.116 | 75.594   | 85.832   | 52     | 44     | 4      | 50.268  | 3974     | 1283     | 656      | 42     | 13   | 11   | 1    | 88     |
+| MOT16-10 | 54.522 | 76.896 | 55.041 | 59.336   | 93.251   | 25.926 | 50     | 24.074 | 40.813  | 7309     | 5009     | 529      | 64     | 14   | 27   | 13   | 339    |
+| MOT16-11 | 66.514 | 85.207 | 66.819 | 78.363   | 87.161   | 49.275 | 34.783 | 15.942 | 54.922  | 7189     | 1985     | 1059     | 28     | 34   | 24   | 11   | 77     |
+| MOT16-13 | 40.672 | 75.058 | 41.162 | 45.721   | 90.933   | 18.692 | 44.86  | 36.449 | 29.269  | 5235     | 6215     | 522      | 56     | 20   | 48   | 39   | 204    |
+| COMBINED | 55.497 | 78.022 | 55.892 | 62.749   | 90.15    | 31.141 | 45.648 | 23.211 | 41.706  | 69279    | 41128    | 7570     | 436    | 161  | 236  | 120  | 1432   |
+
+IDF1: **59.31**
+
 
 
 ## Thoughts After the Milestone
 
 We need to reconsider the work critically. The generated images may help with the pre-training of the re-id backbone when the baseline is weak. But now the mAP could easily reach 0.9+, the simple GAN enhancement should not work well.
 
-However, [AGW](https://github.com/mangye16/ReID-Survey) method is surprisingly NOT working as good as expected.
+However, [AGW](https://github.com/mangye16/ReID-Survey) method is surprisingly NOT working as good as expected. In fact, the major cause is the introduction of GeM.
