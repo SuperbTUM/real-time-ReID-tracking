@@ -21,7 +21,7 @@ cudnn.benchmark = True
 
 class DataLoaderX(DataLoader):
     def __iter__(self):
-        BackgroundGenerator(super().__iter__())
+        return BackgroundGenerator(super().__iter__())
 
 
 class LabelSmoothing(nn.Module):
@@ -366,7 +366,7 @@ def train(dataset, batch_size=8, epochs=25, num_classes=517):
     loss_func = HybridLoss3(num_classes=num_classes)
     loss_stats = []
     for epoch in range(epochs):
-        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+        dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label = sample
