@@ -33,18 +33,19 @@ def fetch_rawdata(*paths):
 
 
 def construct_raw_dataset(query_images):
+    query_images = list(filter(lambda x: x.split("/")[2][0] != "-", query_images))
     labels = np.empty((len(query_images),), dtype=np.int32)
     cnt = 0
     cur = 1
     for i in range(len(query_images)):
-        image_info = query_images[i][:4]
+        image_info = query_images[i].split("/")[2][:4]
         id = int(image_info)
         if id != cur:
             cur = id
             cnt += 1
         labels[i] = cnt
     raw_dataset = list(zip(query_images, labels))
-    return np.asarray(raw_dataset), cnt + 2  # number of classes
+    return np.asarray(raw_dataset), cnt + 1  # number of classes
 
 
 class DataSet4GAN(Dataset):
@@ -140,14 +141,14 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, ngpu=1, nc=3, ndf=64, num_classes=751):
+    def __init__(self, ngpu=1, nc=3, ndf=64):
         super(Discriminator, self).__init__()
         self.ngpu = ngpu
         self.main = nn.Sequential(
-            # input is (nc) x 64 x 64
-            nn.Conv2d(nc, ndf, (8, 4), 2, 1, bias=False),
+            # input is (nc) x 128 x 64
+            nn.Conv2d(nc, ndf, 4, (4, 2), 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf) x 32 x 32
+            # state size. (ndf) x  x 32
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
@@ -160,8 +161,8 @@ class Discriminator(nn.Module):
             nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
-            nn.Conv2d(ndf * 8, num_classes, 4, 1, 0, bias=False),
-            # nn.Softmax(dim=1)
+            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            nn.Sigmoid()
         )
 
     def forward(self, input):
@@ -185,7 +186,7 @@ def load_model(nz, device="cuda:0", lr=0.0002):
 
 def load_dataset(raw_dataset, batch_size=32):
     transform = transforms.Compose([
-        transforms.Resize((64, 64)),
+        transforms.Resize((128, 64)),
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
@@ -193,7 +194,7 @@ def load_dataset(raw_dataset, batch_size=32):
     data_loader = DataLoaderX(reid_dataset,
                               shuffle=True,
                               batch_size=batch_size,
-                              num_workers=16,
+                              num_workers=4,
                               pin_memory=True)
     return data_loader
 
@@ -243,13 +244,13 @@ def train(raw_dataset,
             # Format batch
             real_cpu = data[0].to(device)
             b_size = real_cpu.size(0)
-            label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
+            Valid_label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
+            Fake_label = torch.full((b_size,), fake_label, dtype=torch.float, device=device)
             # Forward pass real batch through D
             output = netD(real_cpu).view(-1)
             # Calculate loss on all-real batch
-            errD_real = criterion(output, label)
+            errD_real = criterion(output, Valid_label)
             # Calculate gradients for D in backward pass
-            errD_real.backward()
             D_x = output.mean().item()
 
             ## Train with all-fake batch
@@ -257,16 +258,15 @@ def train(raw_dataset,
             noise = torch.randn(b_size, nz, 1, 1, device=device)
             # Generate fake image batch with G
             fake = netG(noise)
-            label.fill_(fake_label)
             # Classify all fake batch with D
             output = netD(fake.detach()).view(-1)
             # Calculate D's loss on the all-fake batch
-            errD_fake = criterion(output, label)
+            errD_fake = criterion(output, Fake_label)
             # Calculate the gradients for this batch, accumulated (summed) with previous gradients
-            errD_fake.backward()
             D_G_z1 = output.mean().item()
             # Compute error of D as sum over the fake and the real batches
             errD = errD_real + errD_fake
+            errD.backward()
             # Update D
             optimizerD.step()
 
@@ -274,11 +274,10 @@ def train(raw_dataset,
             # (2) Update G network: maximize log(D(G(z)))
             ###########################
             netG.zero_grad()
-            label.fill_(real_label)  # fake labels are real for generator cost
             # Since we just updated D, perform another forward pass of all-fake batch through D
             output = netD(fake).view(-1)
             # Calculate G's loss based on this output
-            errG = criterion(output, label)
+            errG = criterion(output, Valid_label)
             # Calculate gradients for G
             errG.backward()
             D_G_z2 = output.mean().item()
@@ -344,7 +343,7 @@ def generate(modelG_checkpoint, modelG, device="cuda:0"):
 
 
 if __name__ == "__main__":
-    query_images = fetch_rawdata("Market1501\\bounding_box_train\\", "Market1501\\bounding_box_test\\")
+    query_images = fetch_rawdata("Market1501/bounding_box_train/", "Market1501/bounding_box_test/")
     raw_dataset, num_classes = construct_raw_dataset(query_images)
     G_losses, D_losses, netG, img_list = train(raw_dataset, 20)
     plot(G_losses, D_losses)
