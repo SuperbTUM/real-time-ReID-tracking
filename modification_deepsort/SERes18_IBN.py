@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import models
+from torch.nn import functional as F
 
 
 class SEBlock(nn.Module):
@@ -25,6 +26,23 @@ class SEBlock(nn.Module):
         return x
 
 
+class GeM(nn.Module):
+    def __init__(self, p=3, eps=1e-6):
+        super(GeM, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def forward(self, x):
+        return self.gem(x, p=self.p, eps=self.eps)
+
+    def gem(self, x, p=3, eps=1e-6):
+        return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1. / p)
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(
+            self.eps) + ')'
+
+
 class IBN(nn.Module):
     def __init__(self, in_channels, ratio=0.5):
         """
@@ -46,7 +64,7 @@ class IBN(nn.Module):
 
 
 class SEDense18_IBN(nn.Module):
-    def __init__(self, num_class=751, needs_norm=True, is_reid=False):
+    def __init__(self, num_class=751, needs_norm=True, gem=True, is_reid=False):
         super().__init__()
         model = models.resnet18(pretrained=True)
         self.conv0 = model.conv1
@@ -92,7 +110,10 @@ class SEDense18_IBN(nn.Module):
         self.basicBlock42 = model.layer4[1]
         self.seblock8 = SEBlock(512)
 
-        self.avgpooling = model.avgpool
+        if gem:
+            self.avgpooling = GeM()
+        else:
+            self.avgpooling = model.avgpool
 
         self.bnneck = nn.BatchNorm1d(512)
         self.bnneck.bias.requires_grad_(False)
