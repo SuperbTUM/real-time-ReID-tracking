@@ -64,7 +64,11 @@ class IBN(nn.Module):
 
 
 class SEDense18_IBN(nn.Module):
-    def __init__(self, num_class=751, needs_norm=True, gem=True, is_reid=False):
+    """
+    Additionally, we would like to test the network with local average pooling
+    i.e. Divide into eight and concatenate them
+    """
+    def __init__(self, num_class=751, needs_norm=True, gem=True, is_reid=False, PAP=False):
         super().__init__()
         model = models.resnet18(pretrained=True)
         self.conv0 = model.conv1
@@ -127,6 +131,7 @@ class SEDense18_IBN(nn.Module):
         )
         self.needs_norm = needs_norm
         self.is_reid = is_reid
+        self.PAP = PAP
 
     def forward(self, x):
         x = self.conv0(x)
@@ -182,7 +187,14 @@ class SEDense18_IBN(nn.Module):
         scale8 = self.seblock8(x)
         x = scale8 * x + branch8
 
-        x = self.avgpooling(x)
+        if self.PAP:
+            channels = x.size(-1)
+            x_concatenate = []
+            for i in range(8):
+                x_concatenate.append(self.avgpooling(x[:, :, :, i*channels//8:min(channels, (i+1)*channels//8)].contiguous()))
+            x = torch.cat(x_concatenate, dim=-1).cuda()
+        else:
+            x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
         if self.is_reid:
             return feature
