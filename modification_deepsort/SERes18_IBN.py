@@ -191,8 +191,8 @@ class SEDense18_IBN(nn.Module):
             channels = x.size(-1)
             x_concatenate = []
             for i in range(8):
-                x_concatenate.append(self.avgpooling(x[:, :, :, i*channels//8:min(channels, (i+1)*channels//8)].contiguous()))
-            x = torch.cat(x_concatenate, dim=-1).cuda()
+                x_concatenate.append(self.avgpooling(x[:, i*channels//8:min(channels, (i+1)*channels//8), :, :].contiguous()))
+            x = torch.cat(x_concatenate, dim=1).cuda()
         else:
             x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
