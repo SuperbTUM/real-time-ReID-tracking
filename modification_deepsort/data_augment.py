@@ -2,8 +2,10 @@ import os.path as osp
 import glob
 import re
 import random
+import cv2
 import numpy as np
 from PIL import Image
+import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 from collections import defaultdict
 
@@ -129,7 +131,7 @@ class Market1501(BaseImageDataset):
 
 
 class Augmentation(Dataset):
-    def __init__(self, raw_dataset, root=None, transform=None, smooth=None):
+    def __init__(self, raw_dataset, root=None, transform=None, foreground=False):
         super(Augmentation, self).__init__()
         self.raw_dataset = raw_dataset
         self.cam_pid = defaultdict(set)
@@ -141,7 +143,7 @@ class Augmentation(Dataset):
             self.campid_index[camid][pid].add(index)
         self.root = root
         self.transform = transform
-        self.smooth = smooth
+        self.foreground = foreground
 
     def augment(self, index):
         path, pid, camid = self.raw_dataset[index]
@@ -181,34 +183,25 @@ class Augmentation(Dataset):
             resized_upper_body_img_flip = resized_upper_body_img_flip.reshape((-1, 3))[::-1]
             resized_upper_body_img = resized_upper_body_img_flip.reshape(ori_h, ori_w, ori_c)[::-1]
         start_point = (ref_h - resized_upper_body_img.shape[0], random.randint(0, ref_w - resized_upper_body_img.shape[1]))
-        referenced_image[start_point[0]:, start_point[1]:start_point[1]+resized_upper_body_img.shape[1],:] = resized_upper_body_img
-        if self.smooth:
-            referenced_image = self.smooth_stitching(start_point[0],
-                                                     ref_h,
-                                                     start_point[1],
-                                                     start_point[1]+resized_upper_body_img.shape[1],
-                                                     referenced_image)
+        if self.foreground:
+            referenced_image = self.foreground_augment(resized_upper_body_img, start_point, referenced_image)
+        else:
+            referenced_image[start_point[0]:, start_point[1]:start_point[1]+resized_upper_body_img.shape[1],:] = resized_upper_body_img
         return Image.fromarray(referenced_image)
 
     @staticmethod
-    def smooth_stitching(start_h,
-                         end_h,
-                         start_w,
-                         end_w,
-                         referenced_image):
-        ref_h, ref_w, _ = referenced_image.shape
-        for index_h, h in enumerate(range(start_h, end_h)):
-            if isinstance(referenced_image.ravel()[0], np.integer):
-                referenced_image[h, start_w] = int(referenced_image[h-1:min(ref_h, h+2), max(0, start_w-1):start_w+2].mean())
-                referenced_image[h, end_w - 1] = int(referenced_image[h-1:min(ref_h, h+2), end_w-2:min(ref_w, end_w+1)].mean())
-            else:
-                referenced_image[h, start_w] = referenced_image[h-1:min(ref_h, h+2), max(0, start_w-1):start_w+2].mean()
-                referenced_image[h, end_w - 1] = referenced_image[h-1:min(ref_h, h+2), end_w-2:min(ref_w, end_w+1)].mean()
-        for index_w, w in enumerate(range(start_w, end_w)):
-            if isinstance(referenced_image.ravel()[0], np.integer):
-                referenced_image[start_h, w] = int(referenced_image[start_h-1:start_h+2, max(0, w-1):min(ref_w, w+2)].mean())
-            else:
-                referenced_image[start_h, w] = referenced_image[start_h-1:start_h+2, max(0, w-1):min(ref_w, w+2)].mean()
+    def foreground_augment(resized_upper_body_image, start_point, referenced_image):
+        h, w = resized_upper_body_image.shape[:2]
+        mask = np.zeros((h, w), np.uint8)
+        rect = (2, 2, w - 2, h - 2)
+        fg_placeholder = np.zeros((1, 65), dtype="float")
+        bg_placeholder = np.zeros((1, 65), dtype="float")
+        cv2.grabCut(resized_upper_body_image, mask, rect, bg_placeholder, fg_placeholder, 5, cv2.GC_INIT_WITH_RECT)
+        mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+        resized_upper_body_image = resized_upper_body_image * mask2[:, :, np.newaxis]
+        for i, h in enumerate(range(start_point[0], referenced_image.shape[0])):
+            for j, w in enumerate(range(start_point[1], start_point[1]+resized_upper_body_image.shape[1])):
+                referenced_image[h, w, :] = resized_upper_body_image[i, j, :] if resized_upper_body_image[i, j, :].tolist() != [0, 0, 0] else referenced_image[h, w, :]
         return referenced_image
 
     def __len__(self):
@@ -247,24 +240,37 @@ def demo(image_path1, image_path2):
     resized_upper_body_img_flip = resized_upper_body_img_flip.reshape((-1, 3))[::-1]
     resized_upper_body_img = resized_upper_body_img_flip.reshape(ori_h, ori_w, ori_c)[::-1]
     start_point = (ref_h - resized_upper_body_img.shape[0], random.randint(0, ref_w - resized_upper_body_img.shape[1]))
-    referenced_image[start_point[0]:, start_point[1]:start_point[1] + resized_upper_body_img.shape[1],
-    :] = resized_upper_body_img
-    start_h, end_h = start_point[0], ref_h
-    start_w, end_w = start_point[1], start_point[1] + resized_upper_body_img.shape[1]
-    ref_h, ref_w, _ = referenced_image.shape
-    for index_h, h in enumerate(range(start_h, end_h)):
-        if isinstance(referenced_image.ravel()[0], np.integer):
-            referenced_image[h, start_w] = int(referenced_image[h-1:min(ref_h, h+2), max(0, start_w-1):start_w+2].mean())
-            referenced_image[h, end_w - 1] = int(referenced_image[h-1:min(ref_h, h+2), end_w-2:min(ref_w, end_w+1)].mean())
-        else:
-            referenced_image[h, start_w] = referenced_image[h-1:min(ref_h, h+2), max(0, start_w-1):start_w+2].mean()
-            referenced_image[h, end_w - 1] = referenced_image[h-1:min(ref_h, h+2), end_w-2:min(ref_w, end_w+1)].mean()
-    for index_w, w in enumerate(range(start_w, end_w)):
-        if isinstance(referenced_image.ravel()[0], np.integer):
-            referenced_image[start_h, w] = int(referenced_image[start_h-1:start_h+2, max(0, w-1):min(ref_w, w+2)].mean())
-        else:
-            referenced_image[start_h, w] = referenced_image[start_h-1:start_h+2, max(0, w-1):min(ref_w, w+2)].mean()
+    # referenced_image[start_point[0]:, start_point[1]:start_point[1] + resized_upper_body_img.shape[1],
+    # :] = resized_upper_body_img
+
+    h, w = resized_upper_body_img.shape[:2]
+    mask = np.zeros((h, w), np.uint8)
+    rect = (2, 2, w - 2, h - 2)
+    fg_placeholder = np.zeros((1, 65), dtype="float")
+    bg_placeholder = np.zeros((1, 65), dtype="float")
+    cv2.grabCut(resized_upper_body_img, mask, rect, bg_placeholder, fg_placeholder, 5, cv2.GC_INIT_WITH_RECT)
+    mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+    resized_upper_body_image = resized_upper_body_img * mask2[:, :, np.newaxis]
+    for i, h in enumerate(range(start_point[0], referenced_image.shape[0])):
+        for j, w in enumerate(range(start_point[1], start_point[1] + resized_upper_body_image.shape[1])):
+            print(resized_upper_body_image[i, j, :])
+            referenced_image[h, w, :] = resized_upper_body_image[i, j, :] \
+                if resized_upper_body_image[i, j, :].tolist() != [0, 0, 0] else referenced_image[h, w, :]
     return Image.fromarray(referenced_image)
+
+
+def foreground_segmentation(image):
+    h, w = image.shape[:2]
+    mask = np.zeros((h, w), np.uint8)
+    rect = (2, 2, w-2, h-2)
+    fg_placeholder = np.zeros((1, 65), dtype="float")
+    bg_placeholder = np.zeros((1, 65), dtype="float")
+    cv2.grabCut(image, mask, rect, bg_placeholder, fg_placeholder, 5, cv2.GC_INIT_WITH_RECT)
+    mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+    image = image * mask2[:, :, np.newaxis]
+    plt.imshow(image)
+    plt.show()
+    return image
 
 
 if __name__ == "__main__":
