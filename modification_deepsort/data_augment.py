@@ -175,6 +175,11 @@ class Augmentation(Dataset):
             ratio = random.randint(int(ref_w) >> 1, int(ref_w)) / upper_body.shape[1]
         resized_upper_body = upper_body_pil.resize((int(upper_body.shape[1] * ratio), int(upper_body.shape[0] * ratio)))
         resized_upper_body_img = np.array(resized_upper_body)
+        if random.random() > 0.5:
+            ori_h, ori_w, ori_c = resized_upper_body_img.shape
+            resized_upper_body_img_flip = resized_upper_body_img.copy()
+            resized_upper_body_img_flip = resized_upper_body_img_flip.reshape((-1, 3))[::-1]
+            resized_upper_body_img = resized_upper_body_img_flip.reshape(ori_h, ori_w, ori_c)[::-1]
         start_point = (ref_h - resized_upper_body_img.shape[0], random.randint(0, ref_w - resized_upper_body_img.shape[1]))
         referenced_image[start_point[0]:, start_point[1]:start_point[1]+resized_upper_body_img.shape[1],:] = resized_upper_body_img
         if self.smooth:
@@ -193,14 +198,14 @@ class Augmentation(Dataset):
                          referenced_image):
         ref_h, ref_w, _ = referenced_image.shape
         for index_h, h in enumerate(range(start_h, end_h)):
-            if referenced_image.dtype == int:
+            if isinstance(referenced_image.ravel()[0], np.integer):
                 referenced_image[h, start_w] = int(referenced_image[h-1:min(ref_h, h+2), max(0, start_w-1):start_w+2].mean())
                 referenced_image[h, end_w - 1] = int(referenced_image[h-1:min(ref_h, h+2), end_w-2:min(ref_w, end_w+1)].mean())
             else:
                 referenced_image[h, start_w] = referenced_image[h-1:min(ref_h, h+2), max(0, start_w-1):start_w+2].mean()
                 referenced_image[h, end_w - 1] = referenced_image[h-1:min(ref_h, h+2), end_w-2:min(ref_w, end_w+1)].mean()
         for index_w, w in enumerate(range(start_w, end_w)):
-            if referenced_image.dtype == int:
+            if isinstance(referenced_image.ravel()[0], np.integer):
                 referenced_image[start_h, w] = int(referenced_image[start_h-1:start_h+2, max(0, w-1):min(ref_w, w+2)].mean())
             else:
                 referenced_image[start_h, w] = referenced_image[start_h-1:start_h+2, max(0, w-1):min(ref_w, w+2)].mean()
@@ -237,6 +242,10 @@ def demo(image_path1, image_path2):
         ratio = random.randint(int(ref_w) >> 1, int(ref_w)) / upper_body.shape[1]
     resized_upper_body = upper_body_pil.resize((int(upper_body.shape[1] * ratio), int(upper_body.shape[0] * ratio)))
     resized_upper_body_img = np.array(resized_upper_body)
+    ori_h, ori_w, ori_c = resized_upper_body_img.shape
+    resized_upper_body_img_flip = resized_upper_body_img.copy()
+    resized_upper_body_img_flip = resized_upper_body_img_flip.reshape((-1, 3))[::-1]
+    resized_upper_body_img = resized_upper_body_img_flip.reshape(ori_h, ori_w, ori_c)[::-1]
     start_point = (ref_h - resized_upper_body_img.shape[0], random.randint(0, ref_w - resized_upper_body_img.shape[1]))
     referenced_image[start_point[0]:, start_point[1]:start_point[1] + resized_upper_body_img.shape[1],
     :] = resized_upper_body_img
@@ -244,14 +253,14 @@ def demo(image_path1, image_path2):
     start_w, end_w = start_point[1], start_point[1] + resized_upper_body_img.shape[1]
     ref_h, ref_w, _ = referenced_image.shape
     for index_h, h in enumerate(range(start_h, end_h)):
-        if referenced_image.dtype == int:
+        if isinstance(referenced_image.ravel()[0], np.integer):
             referenced_image[h, start_w] = int(referenced_image[h-1:min(ref_h, h+2), max(0, start_w-1):start_w+2].mean())
             referenced_image[h, end_w - 1] = int(referenced_image[h-1:min(ref_h, h+2), end_w-2:min(ref_w, end_w+1)].mean())
         else:
             referenced_image[h, start_w] = referenced_image[h-1:min(ref_h, h+2), max(0, start_w-1):start_w+2].mean()
             referenced_image[h, end_w - 1] = referenced_image[h-1:min(ref_h, h+2), end_w-2:min(ref_w, end_w+1)].mean()
     for index_w, w in enumerate(range(start_w, end_w)):
-        if referenced_image.dtype == int:
+        if isinstance(referenced_image.ravel()[0], np.integer):
             referenced_image[start_h, w] = int(referenced_image[start_h-1:start_h+2, max(0, w-1):min(ref_w, w+2)].mean())
         else:
             referenced_image[start_h, w] = referenced_image[start_h-1:start_h+2, max(0, w-1):min(ref_w, w+2)].mean()
