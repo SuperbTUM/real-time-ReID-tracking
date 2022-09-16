@@ -182,8 +182,7 @@ class Augmentation(Dataset):
                                                      ref_h,
                                                      start_point[1],
                                                      start_point[1]+resized_upper_body_img.shape[1],
-                                                     referenced_image,
-                                                     resized_upper_body_img)
+                                                     referenced_image)
         return Image.fromarray(referenced_image)
 
     @staticmethod
