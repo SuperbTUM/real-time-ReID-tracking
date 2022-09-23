@@ -386,6 +386,79 @@ def train(dataset, batch_size=8, epochs=25, num_classes=517):
     torch.save(model.state_dict(), "in_video_checkpoint.pt")
     return model, loss_stats
 
+# What if the dataset is too large or computing device is not strong enough?
+# Option 1: distributed training
+def distributed_train(dataset, batch_size=8, epochs=25, num_classes=517,
+                      rank=-1, world_size=-1):
+    import os
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "29500"
+    import torch.distributed as dist
+    assert dist.is_available()
+    from torch.nn.parallel import DistributedDataParallel as DDP
+
+    def setup(rank=rank, world_size=world_size):
+        if dist.is_nccl_available():
+            dist.init_process_group("nccl", rank=rank, world_size=world_size)
+        else:
+            dist.init_process_group("gloo", rank=rank, world_size=world_size)
+
+    def cleanup():
+        dist.destroy_process_group()
+
+    setup(rank, world_size)
+
+    """Original training
+    """
+    model = InVideoModel(num_class=num_classes, gem=False).cuda()
+    # Distributed training
+    # ----------
+    ddp_model = DDP(model, device_ids=[rank])
+    ddp_model.train()
+    # ----------
+    optimizer = torch.optim.Adam(ddp_model.parameters(), lr=0.001, weight_decay=5e-4)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
+    loss_func = HybridLoss3(num_classes=num_classes)
+    loss_stats = []
+    for epoch in range(epochs):
+        dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+        iterator = tqdm(dataloader)
+        for sample in iterator:
+            images, label = sample
+            optimizer.zero_grad()
+            images = images.cuda()
+            label = label.cuda()
+            prediction, feature = ddp_model(images)
+            loss = loss_func(feature, prediction, label)
+            loss_stats.append(loss.cpu().item())
+            nn.utils.clip_grad_norm_(ddp_model.parameters(), 10)
+            loss.backward()
+            optimizer.step()
+            lr_scheduler.step()
+            description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
+            iterator.set_description(description)
+    ddp_model.eval()
+    if rank == 0:
+        torch.save(ddp_model.state_dict(), "in_video_checkpoint.pt")
+    dist.barrier()
+    cleanup()
+    # Could initialize the job with torchrun
+    return ddp_model, loss_stats
+
+
+def activate_distributed_train(train_fn, world_size):
+    import torch.multiprocessing as mp
+    mp.spawn(train_fn,
+             args=(world_size, ),
+             nprocs=world_size,
+             join=True)
+
+
+def distributed_demo(dataset, batch_size=8, epochs=25, num_classes=517,
+                     rank=0, world_size=1):
+    activate_distributed_train(distributed_train(dataset, batch_size, epochs, num_classes,
+                                                 rank, world_size), world_size)
+
 
 def plot_loss(loss_stats):
     plt.figure()
