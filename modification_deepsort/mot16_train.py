@@ -431,7 +431,11 @@ def distributed_train(dataset, batch_size=8, epochs=25, num_classes=517,
             label = label.cuda()
             prediction, feature = ddp_model(images)
             loss = loss_func(feature, prediction, label)
-            loss_stats.append(loss.cpu().item())
+            # ------
+            dist.all_reduce(loss.clone(), op=dist.ReduceOp.SUM)
+            loss_record = loss / world_size
+            # ------
+            loss_stats.append(loss_record.cpu().item())
             nn.utils.clip_grad_norm_(ddp_model.parameters(), 10)
             loss.backward()
             optimizer.step()
