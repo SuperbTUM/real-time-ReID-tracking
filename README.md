@@ -1,5 +1,6 @@
 ## Update
 
+- Sep. 24, Support distributed training w/. PyTorch
 - Feb. 27, Consider class-imbalanced problem and build balanced dataset for Market-1501 training set
 - Feb. 22, Add Video-based training code and switch IoU to DIoU
 - Feb. 11, Add IBN and modified MIN_CONF to 0.5

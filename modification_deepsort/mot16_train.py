@@ -422,7 +422,7 @@ def distributed_train(dataset, batch_size=8, epochs=25, num_classes=517,
     loss_func = HybridLoss3(num_classes=num_classes)
     loss_stats = []
     for epoch in range(epochs):
-        dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True, sampler=DistributedSampler(dataset))
+        dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=False, pin_memory=True, sampler=DistributedSampler(dataset))
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label = sample
