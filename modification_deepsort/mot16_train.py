@@ -287,10 +287,24 @@ class InVideoModel(SEDense18_IBN):
 
         return x, feature
 
+import h5py
+import cv2
+def transform_dataset_hdf5(gt_paths, img_width, img_height):
+    """With OpenCV"""
+    h5file = "import_images.h5"
+    with h5py.File(h5file, "w") as h5f:
+        image_ds = h5f.create_dataset("images", shape=(len(gt_paths), img_width, img_height, 3), dtype=int)
+        for cnt, path in enumerate(gt_paths):
+            img = cv2.imread(path, cv2.IMREAD_COLOR)
+            img_resize = cv2.resize(img, (img_width, img_height))
+            image_ds[cnt:cnt+1, :, :] = img_resize
+    return image_ds
+
 
 class VideoDataset(Dataset):
     def __init__(self, gt_paths, transforms, seq_len=10, prefix_image_path="../datasets/MOT16/train/"):
         super(VideoDataset, self).__init__()
+        """Make the data loading lighter with h5py?"""
         self.gt_paths = gt_paths
         self.seq_len = seq_len
         self.transforms = transforms
