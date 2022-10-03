@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
+from torch.autograd import Variable
 import torchvision.transforms as transforms
 from PIL import Image
 from prefetch_generator import BackgroundGenerator
@@ -300,6 +301,12 @@ def transform_dataset_hdf5(gt_paths, img_width, img_height):
             image_ds[cnt:cnt+1, :, :] = img_resize
     return image_ds
 
+def recover_from_hdf5(image_ds, index):
+    with h5py.File(image_ds, "r") as h5f:
+        # Random access
+        image = h5f["images"][index, ...]
+    return image
+
 
 class VideoDataset(Dataset):
     def __init__(self, gt_paths, transforms, seq_len=10, prefix_image_path="../datasets/MOT16/train/"):
@@ -385,8 +392,8 @@ def train(dataset, batch_size=8, epochs=25, num_classes=517):
         for sample in iterator:
             images, label = sample
             optimizer.zero_grad()
-            images = images.cuda()
-            label = label.cuda()
+            images = images.cuda(non_blocking=True)
+            label = Variable(label).cuda(non_blocking=True)
             prediction, feature = model(images)
             loss = loss_func(feature, prediction, label)
             loss_stats.append(loss.cpu().item())
