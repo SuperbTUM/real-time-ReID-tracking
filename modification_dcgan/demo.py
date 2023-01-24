@@ -5,6 +5,7 @@ import glob
 from PIL import Image
 import numpy as np
 import torch
+torch.autograd.set_detect_anomaly(True)
 import torch.nn as nn
 from prefetch_generator import BackgroundGenerator
 import torchvision.utils as vutils
@@ -108,6 +109,54 @@ def weights_init(m):
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
 
+# try with VAE-GAN
+class VAE(nn.Module):
+    def __init__(self, device="cuda"):
+        super(VAE, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(3, 64, 5, stride=2, padding=2, bias=False),
+            nn.BatchNorm2d(64, momentum=0.9),
+            nn.ReLU(True),
+            nn.Conv2d(64, 128, 5, stride=2, padding=2, bias=False),
+            nn.BatchNorm2d(128, momentum=0.9),
+            nn.ReLU(True),
+            nn.Conv2d(128, 256, 5, stride=2, padding=2, bias=False),
+            nn.BatchNorm2d(256, momentum=0.9),
+            nn.LeakyReLU(0.2),
+            nn.Flatten(),
+            nn.Linear(256*16*8, 2048),
+            nn.BatchNorm1d(2048, momentum=0.9),
+            nn.ReLU(True)
+        )
+        self.fc_mean = nn.Linear(2048, 128)
+        self.fc_var = nn.Linear(2048, 128)
+
+        self.decoder = nn.Sequential(
+            nn.Linear(128, 16*8*256),
+            nn.BatchNorm1d(16*8*256, momentum=0.9),
+            nn.LeakyReLU(0.2),
+            nn.Unflatten(1, torch.Size([256, 16, 8])),
+            nn.ConvTranspose2d(256, 256, 6, stride=2, padding=2, bias=False),  # 5 or 6?
+            nn.BatchNorm2d(256, momentum=0.9),
+            nn.ConvTranspose2d(256, 128, 6, stride=2, padding=2, bias=False),
+            nn.BatchNorm2d(128, momentum=0.9),
+            nn.ConvTranspose2d(128, 32, 6, stride=2, padding=2, bias=False),
+            nn.BatchNorm2d(32, momentum=0.9),
+            nn.ConvTranspose2d(32, 3, 5, stride=1, padding=2),
+            nn.Tanh()
+        )
+        self.device = device
+
+    def forward(self, x):
+        bs = x.size()[0]
+        encoded = self.encoder(x)
+        mean = self.fc_mean(encoded)
+        var = self.fc_var(encoded)
+        epsilon = torch.randn(bs, 128).to(self.device)
+        z = mean + var * epsilon
+        x_tilda = self.decoder(z)
+        return mean, var, x_tilda
+
 
 class Generator(nn.Module):
     def __init__(self, ngpu=1, nz=100, ngf=64, nc=3):
@@ -141,7 +190,7 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, ngpu=1, nc=3, ndf=64):
+    def __init__(self, ngpu=1, nc=3, ndf=64, VAE=False):
         super(Discriminator, self).__init__()
         self.ngpu = ngpu
         self.main = nn.Sequential(
@@ -161,12 +210,24 @@ class Discriminator(nn.Module):
             nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ndf*8) x 4 x 4
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            nn.Sigmoid()
+            # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
         )
+        self.extension = nn.Sequential(
+            nn.Linear(ndf*8*4*4, 512),
+            nn.BatchNorm1d(512, momentum=0.9),
+            nn.Linear(512, 1)
+        )
+        self.getDis = nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
+        self.sigmoid = nn.Sigmoid()
+        self.VAE = VAE
 
     def forward(self, input):
-        return self.main(input)
+        main = self.main(input)
+        if self.VAE:
+            main = main.view(-1, 256*8*8)
+            main1 = main
+            return self.sigmoid(self.extension(main)), main1
+        return self.sigmoid(self.getDis(main))
 
 
 def load_model(nz, device="cuda:0", lr=0.0002):
@@ -206,6 +267,80 @@ def load_everything(nz=100, device="cuda:0", lr=1e-2):
     emaG = EMA(modelG, 0.999)
     emaG.register()
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD, emaG
+
+device = "cuda"
+def VAE_GAN_train_one_epoch(data, gen, discrim, criterion, optim_Dis, optim_E, optim_D, gamma=15):
+    bs = data.size()[0]
+
+    ones_label = torch.ones(bs, 1).to(device)
+    zeros_label = torch.zeros(bs, 1).to(device)
+    zeros_label1 = torch.zeros(64, 1).to(device)
+    datav = data.to(device)
+    mean, logvar, rec_enc = gen(datav)
+    z_p = torch.randn(64, 128).to(device)
+    x_p_tilda = gen.decoder(z_p)
+
+    output = discrim(datav)[0]
+    errD_real = criterion(output, ones_label)
+    output = discrim(rec_enc)[0]
+    errD_rec_enc = criterion(output, zeros_label)
+    output = discrim(x_p_tilda)[0]
+    errD_rec_noise = criterion(output, zeros_label1)
+    gan_loss = errD_real + errD_rec_enc + errD_rec_noise
+    optim_Dis.zero_grad()
+    gan_loss.backward(retain_graph=True)
+    optim_Dis.step()
+
+    output = discrim(datav)[0]
+    errD_real = criterion(output, ones_label)
+    output = discrim(rec_enc)[0]
+    errD_rec_enc = criterion(output, zeros_label)
+    output = discrim(x_p_tilda)[0]
+    errD_rec_noise = criterion(output, zeros_label1)
+    gan_loss = errD_real + errD_rec_enc + errD_rec_noise
+
+    x_l_tilda = discrim(rec_enc)[1]
+    x_l = discrim(datav)[1]
+    rec_loss = ((x_l_tilda - x_l) ** 2).mean()
+    err_dec = gamma * rec_loss - gan_loss
+    optim_D.zero_grad()
+    err_dec.backward(retain_graph=True)
+    optim_D.step()
+
+    mean, logvar, rec_enc = gen(datav)
+    x_l_tilda = discrim(rec_enc)[1]
+    x_l = discrim(datav)[1]
+    rec_loss = ((x_l_tilda - x_l) ** 2).mean()
+    prior_loss = 1 + logvar - mean.pow(2) - logvar.exp()
+    prior_loss = (-0.5 * torch.sum(prior_loss)) / torch.numel(mean.data)
+    err_enc = prior_loss + 5 * rec_loss
+
+    optim_E.zero_grad()
+    err_enc.backward(retain_graph=True)
+    optim_E.step()
+
+
+def train_VAE_GAN(raw_dataset,
+                  checkpoint=None,
+                  epochs=10,
+                  batch_size=64,
+                  device="cuda:0",
+                  lr=1e-3,
+                  training=True
+                    ):
+    if not training:
+        return checkpoint
+    alpha = 0.1
+    gen = VAE().to(device)
+    discrim = Discriminator(VAE=True).to(device)
+    criterion = nn.BCELoss().to(device)
+    optim_E = torch.optim.RMSprop(gen.encoder.parameters(), lr=lr)
+    optim_D = torch.optim.RMSprop(gen.decoder.parameters(), lr=lr)
+    optim_Dis = torch.optim.RMSprop(discrim.parameters(), lr=lr * alpha)
+    for epoch in range(epochs):
+        dataloader = load_dataset(raw_dataset, batch_size)
+        for i, data in enumerate(dataloader):
+            VAE_GAN_train_one_epoch(data, gen, discrim, criterion, optim_Dis, optim_E, optim_D)
 
 
 def train(raw_dataset,
@@ -343,8 +478,12 @@ def generate(modelG_checkpoint, modelG, device="cuda:0"):
 
 
 if __name__ == "__main__":
+    vae = True
     query_images = fetch_rawdata("Market1501/bounding_box_train/", "Market1501/bounding_box_test/")
     raw_dataset, num_classes = construct_raw_dataset(query_images)
-    G_losses, D_losses, netG, img_list = train(raw_dataset, 20)
-    plot(G_losses, D_losses)
-    plot_imglist(img_list)
+    if vae:
+        train_VAE_GAN(raw_dataset, epochs=20)
+    else:
+        G_losses, D_losses, netG, img_list = train(raw_dataset, epochs=20)
+        plot(G_losses, D_losses)
+        plot_imglist(img_list)
