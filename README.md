@@ -1,6 +1,6 @@
 ## Update
 
-- Jan. 24, 2023, Add VAE-GAN to support generating better synthetic images
+- Jan. 24, 2023, Add VAE-GAN/WGAN to support generating better synthetic images
 - Sep. 24, Support distributed training w/. PyTorch
 - Feb. 27, Consider class-imbalanced problem and build balanced dataset for Market-1501 training set
 - Feb. 22, Add Video-based training code and switch IoU to DIoU
