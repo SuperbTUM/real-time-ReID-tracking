@@ -14,6 +14,8 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
+import torch.onnx
+
 from SERes18_IBN import SEDense18_IBN
 from plr_osnet import plr_osnet
 
@@ -219,6 +221,16 @@ class HybridLoss3(nn.Module):
         return smooth_loss + triplet_loss + 0.0005 * center_loss
 
 
+def to_onnx(model, input_dummy):
+    torch.onnx.export(model,
+                      input_dummy,
+                      "reid_model.onnx",
+                      export_params=True,
+                      opset_version=10,
+                      do_constant_folding=True,
+                      input_names=["input"])
+
+
 def train_plr_osnet(dataset, batch_size=8, epochs=25, num_classes=517):
     model = plr_osnet(num_classes=num_classes, loss='triplet').cuda()
     model.train()
@@ -247,6 +259,7 @@ def train_plr_osnet(dataset, batch_size=8, epochs=25, num_classes=517):
             iterator.set_description(description)
     model.eval()
     torch.save(model.state_dict(), "in_video_checkpoint.pt")
+    to_onnx(model, torch.randn(batch_size, 3, 256, 128, requires_grad=True))
     return model, loss_stats
 
 
