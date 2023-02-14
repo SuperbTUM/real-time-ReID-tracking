@@ -31,23 +31,29 @@ class DataLoaderX(DataLoader):
 class LabelSmoothing(nn.Module):
     """ NLL loss with label smoothing. """
 
-    def __init__(self, smoothing=0.1, epsilon=1):
+    def __init__(self, smoothing=0.1, epsilon=1, k_sparse=-1):
         """ Constructor for the LabelSmoothing module.
         :param smoothing: label smoothing factor """
         super(LabelSmoothing, self).__init__()
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
         self.epsilon = epsilon
+        self.k_sparse = k_sparse
 
     def forward(self, x, target):
         logprobs = F.log_softmax(x, dim=-1)
         target = target.long()
+        if self.k_sparse > 0:
+            topk = x.topk(self.k_sparse, dim=-1)[0]
+            pos_loss = torch.logsumexp(topk, dim=-1)
+            neg_loss = torch.gather(x, 1, target[:, None].expand(-1, x.size(1)))[:, 0]
+            nll_loss = (pos_loss - neg_loss).sum()
+        else:
+            nll_loss = -logprobs.gather(dim=-1, index=target.unsqueeze(1))
+            nll_loss = nll_loss.squeeze(1)
+        smooth_loss = -logprobs.mean(dim=-1)
         smoothed_labels = F.one_hot(target, x.size(-1)) * self.confidence + self.smoothing / x.size(-1)
         one_minus_pt = torch.mean(torch.sum(smoothed_labels * (1 - logprobs), dim=-1))
-
-        nll_loss = -logprobs.gather(dim=-1, index=target.unsqueeze(1))
-        nll_loss = nll_loss.squeeze(1)
-        smooth_loss = -logprobs.mean(dim=-1)
         loss = self.confidence * nll_loss + self.smoothing * smooth_loss
         poly_loss = loss + one_minus_pt * self.epsilon
         # return loss.mean()
