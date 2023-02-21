@@ -109,6 +109,6 @@ IDF1: **59.31**
 
 ## Thoughts After the Milestone
 
-We need to reconsider the work critically. The generated images may help with the pre-training of the re-id backbone when the baseline is weak. But now the mAP could easily reach 0.9+, the simple GAN enhancement should not work well.
+Simple DCGAN may bring easy samples to make the network more likely to overfit. We may pre-cluster (K-Means++) datasets and conduct synthetic image generation on each cluster with stronger GAN network (VAE-GAN). We can even make the network partial-aware with separate attention on foreground and background.
 
 However, [AGW](https://github.com/mangye16/ReID-Survey) method is surprisingly NOT working as good as expected. In fact, the major cause is the introduction of GeM.
