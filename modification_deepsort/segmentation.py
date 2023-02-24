@@ -9,6 +9,9 @@ from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 from mot16_train import TripletLoss, CenterLoss
 
+import glob
+from osnet import osnet_ibn_x1_0, OSNet
+
 # use deeplabv3_resnet50 instead of deeplabv3_resnet101 to reduce the model size
 model = torch.hub.load('pytorch/vision:v0.8.0', 'deeplabv3_resnet50', pretrained=True)
 model.eval()
@@ -40,6 +43,55 @@ def extract_foreground_background(output, input_image):
             else:
                 background[h, w, :] = 0
     return foreground, background
+
+
+def batched_extraction(working_dir):
+    images_path = glob.glob("/".join((working_dir, "*.jpg")))
+    foreground, background = [], []
+    for path in images_path:
+        img = Image.open(path)
+        output = inference(img)
+        f, b = extract_foreground_background(output, img)
+        foreground.append(f)
+        background.append(b)
+    return foreground, background
+
+
+class ReIDModel(nn.Module):
+    def __init__(self, pretrained=True, num_class=751):
+        super(ReIDModel, self).__init__()
+        base_model = osnet_ibn_x1_0(pretrained=pretrained, num_classes=num_class)
+        self.osnet = nn.Sequential(*list(base_model.children())[:-2])
+        self.fc1 = self._construct_fc_layer((512, ), 512, dropout_p=None)
+        self.fc2 = self._construct_fc_layer((512, ), 512, dropout_p=None)
+        self.classifier = nn.Linear(1024, num_class)
+
+    def _construct_fc_layer(self, fc_dims, input_dim, dropout_p=None):
+        if fc_dims is None or fc_dims < 0:
+            self.feature_dim = input_dim
+            return None
+
+        if isinstance(fc_dims, int):
+            fc_dims = [fc_dims]
+
+        layers = []
+        for dim in fc_dims:
+            layers.append(nn.Linear(input_dim, dim))
+            layers.append(nn.BatchNorm1d(dim))
+            layers.append(nn.ReLU(inplace=True))
+            if dropout_p is not None:
+                layers.append(nn.Dropout(p=dropout_p))
+            input_dim = dim
+
+        self.feature_dim = fc_dims[-1]
+
+        return nn.Sequential(*layers)
+
+    def forward(self, img1, img2):
+        foreground_embedding = self.fc1(self.osnet(img1))
+        background_embedding = self.fc2(self.osnet(img2))
+        pred = self.classifier(torch.cat((foreground_embedding, background_embedding), dim=-1))
+        return foreground_embedding, background_embedding, pred
 
 
 class ExtractedDataset(Dataset):
