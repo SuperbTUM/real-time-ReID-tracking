@@ -344,7 +344,8 @@ class ShadowFeatureExtraction(nn.Module):
 
 class StageModule(nn.Module):
     def __init__(self, in_channels, hidden_dimension, layers, downscaling_factor, num_heads, head_dim, window_size,
-                 relative_pos_embedding):
+                 relative_pos_embedding,
+                 patch_merge=True):
         super().__init__()
         assert layers % 2 == 0, 'Stage layers need to be divisible by 2 for regular and shifted block.'
 
@@ -359,9 +360,13 @@ class StageModule(nn.Module):
                 SwinBlock(dim=hidden_dimension, heads=num_heads, head_dim=head_dim, mlp_dim=hidden_dimension * 4,
                           shifted=True, window_size=window_size, relative_pos_embedding=relative_pos_embedding),
             ]))
+        self.patch_merge = patch_merge
 
     def forward(self, x):
-        x = self.patch_partition(x)
+        if self.patch_merge:
+            x = self.patch_partition(x)
+        else:
+            x = x.permute(0, 2, 3, 1)
         for regular_block, shifted_block in self.layers:
             x = regular_block(x)
             x = shifted_block(x)
@@ -377,7 +382,8 @@ class SwinTransformer(nn.Module):
 
         self.stage1 = StageModule(in_channels=hidden_dim, hidden_dimension=hidden_dim, layers=layers[0],
                                   downscaling_factor=downscaling_factors[0], num_heads=heads[0], head_dim=head_dim,
-                                  window_size=window_size, relative_pos_embedding=relative_pos_embedding)
+                                  window_size=window_size, relative_pos_embedding=relative_pos_embedding,
+                                  patch_merge=False)
         self.stage2 = StageModule(in_channels=hidden_dim, hidden_dimension=hidden_dim * 2, layers=layers[1],
                                   downscaling_factor=downscaling_factors[1], num_heads=heads[1], head_dim=head_dim,
                                   window_size=window_size, relative_pos_embedding=relative_pos_embedding)
@@ -389,14 +395,14 @@ class SwinTransformer(nn.Module):
                                   window_size=window_size, relative_pos_embedding=relative_pos_embedding)
 
         self.mlp_head = nn.Sequential(
-            nn.LayerNorm(hidden_dim * 8),
-            nn.Linear(hidden_dim * 8, num_classes)
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, num_classes)
         )
 
         self.img_channel_align = nn.Conv2d(hidden_dim, hidden_dim * 8, 8, stride=8)
-        self.stage4_channel_align = nn.ConvTranspose2d(hidden_dim * 8, hidden_dim * 8, 2, 2)
-        self.stage3_channel_align = nn.ConvTranspose2d(hidden_dim * 4, hidden_dim * 8, 2, 2)
-        self.stage2_channel_align = nn.ConvTranspose2d(hidden_dim * 2, hidden_dim * 8, 2, 2)
+        self.stage4_channel_align = nn.ConvTranspose2d(hidden_dim * 8, hidden_dim * 4, 2, 2)
+        self.stage3_channel_align = nn.ConvTranspose2d(hidden_dim * 4, hidden_dim * 2, 2, 2)
+        self.stage2_channel_align = nn.ConvTranspose2d(hidden_dim * 2, hidden_dim, 2, 2)
 
     def forward(self, img):
         img = self.sfe(img)
