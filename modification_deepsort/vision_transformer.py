@@ -155,7 +155,7 @@ class Transformer(nn.Module):
 
 class ViT(nn.Module):
     def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, pool='cls', channels=3,
-                 dim_head=64, dropout=0., emb_dropout=0.):
+                 dim_head=64, dropout=0., emb_dropout=0., camera=0, side_info=False):
         super().__init__()
         image_height, image_width = pair(image_size)
         patch_height, patch_width = pair(patch_size)
@@ -175,6 +175,8 @@ class ViT(nn.Module):
         self.to_patch_embedding = Convolution_Stem(in_chans=channels, stem_stride=2, embed_dim=dim, patch_size=patch_size)
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
+        if camera > 0:
+            self.side_info_embedding = nn.Parameter(torch.randn(camera, 1, dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
         self.dropout = nn.Dropout(emb_dropout)
 
@@ -188,13 +190,17 @@ class ViT(nn.Module):
             nn.Linear(dim, num_classes)
         )
 
-    def forward(self, img):
+        self.side_info = side_info
+
+    def forward(self, img, view_index=None):
         x = self.to_patch_embedding(img)
         b, n, _ = x.shape
 
         cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b=b)
         x = torch.cat((cls_tokens, x), dim=1)
         x += self.pos_embedding[:, :(n + 1)]
+        if self.side_info and view_index:
+            x += self.side_info_embedding[view_index]
         x = self.dropout(x)
 
         x = self.transformer(x)
@@ -327,18 +333,23 @@ class PatchMerging(nn.Module):
 
 
 class ShadowFeatureExtraction(nn.Module):
-    def __init__(self, in_chan, hidden_dimension):
+    def __init__(self, in_chan, hidden_dimension, camera=0, side_info=False):
         super(ShadowFeatureExtraction, self).__init__()
         self.conv1 = nn.Conv2d(in_chan, 12, 2, stride=2)
         self.conv2 = nn.Conv2d(12, 48, 2, stride=2)
         self.fc = nn.Linear(48, hidden_dimension)
+        if camera > 0:
+            self.side_info_embedding = nn.Parameter(torch.randn(camera, hidden_dimension))
+        self.side_info = side_info
 
-    def forward(self, x):
+    def forward(self, x, view_index=None):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         bs, H, W = x.size(0), x.size(2), x.size(3)
         flattened_x = x.view(bs * H * W, -1)
         flattened_output = self.fc(flattened_x)
+        if self.side_info and view_index:
+            flattened_output += self.side_info_embedding[view_index]
         return flattened_output.view(bs, -1, H, W)
 
 
@@ -375,10 +386,10 @@ class StageModule(nn.Module):
 
 class SwinTransformer(nn.Module):
     def __init__(self, *, hidden_dim, layers, heads, channels=3, num_classes=1000, head_dim=32, window_size=7,
-                 downscaling_factors=(4, 2, 2, 2), relative_pos_embedding=True):
+                 downscaling_factors=(4, 2, 2, 2), relative_pos_embedding=True, camera=0, side_info=False):
         super().__init__()
 
-        self.sfe = ShadowFeatureExtraction(channels, hidden_dim)
+        self.sfe = ShadowFeatureExtraction(channels, hidden_dim, camera=camera, side_info=side_info)
 
         self.stage1 = StageModule(in_channels=hidden_dim, hidden_dimension=hidden_dim, layers=layers[0],
                                   downscaling_factor=downscaling_factors[0], num_heads=heads[0], head_dim=head_dim,
@@ -404,8 +415,8 @@ class SwinTransformer(nn.Module):
         self.stage3_channel_align = nn.ConvTranspose2d(hidden_dim * 4, hidden_dim * 2, 2, 2)
         self.stage2_channel_align = nn.ConvTranspose2d(hidden_dim * 2, hidden_dim, 2, 2)
 
-    def forward(self, img):
-        img = self.sfe(img)
+    def forward(self, img, view_index=None):
+        img = self.sfe(img, view_index)
 
         stage1_output = self.stage1(img)
         stage2_output = self.stage2(stage1_output)
@@ -429,9 +440,6 @@ def swin_t(hidden_dim=96, layers=(2, 2, 6, 2), heads=(3, 6, 12, 24), **kwargs):
     return SwinTransformer(hidden_dim=hidden_dim, layers=layers, heads=heads, **kwargs)
 
 
-if __name__ == "__main__":
-    patch_size = 32
-    img_size = (448, 224) # vehicle (224, 224) can we keep original ratio?
-    num_classes = 751
-    vit_model = ViT(image_size=img_size, patch_size=patch_size, num_classes=num_classes, dim=384, depth=6, heads=16,
-                    mlp_dim=2048, dropout=0.1, emb_dropout=0.1)
+def vit_t(img_size=(224, 224), patch_size=32, num_classes=751, **kwargs):
+    return ViT(image_size=img_size, patch_size=patch_size, num_classes=num_classes, dim=384, depth=6, heads=16,
+               mlp_dim=2048, dropout=0.1, emb_dropout=0.1, **kwargs)
