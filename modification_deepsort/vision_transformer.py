@@ -6,6 +6,7 @@ from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
 import numpy as np
+from timm.models.layers import trunc_normal_
 
 # helpers
 
@@ -177,6 +178,7 @@ class ViT(nn.Module):
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
         if camera > 0:
             self.side_info_embedding = nn.Parameter(torch.randn(camera, 1, dim))
+            trunc_normal_(self.side_info_embedding, std=0.02)
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
         self.dropout = nn.Dropout(emb_dropout)
 
@@ -200,7 +202,7 @@ class ViT(nn.Module):
         x = torch.cat((cls_tokens, x), dim=1)
         x += self.pos_embedding[:, :(n + 1)]
         if self.side_info and view_index:
-            x += self.side_info_embedding[view_index]
+            x += 1.5 * self.side_info_embedding[view_index]
         x = self.dropout(x)
 
         x = self.transformer(x)
@@ -260,8 +262,12 @@ class WindowAttention(nn.Module):
             self.pos_embedding = nn.Parameter(torch.randn(2 * window_size - 1, 2 * window_size - 1))
         else:
             self.pos_embedding = nn.Parameter(torch.randn(window_size ** 2, window_size ** 2))
+        trunc_normal_(self.pos_embedding, std=0.02)
 
         self.to_out = nn.Linear(inner_dim, dim)
+
+        self.post_proj = nn.Linear(dim, dim)
+        self.post_drop = nn.Dropout(0.1)
 
     def forward(self, x):
         if self.shifted:
@@ -294,6 +300,8 @@ class WindowAttention(nn.Module):
         out = rearrange(out, 'b h (nw_h nw_w) (w_h w_w) d -> b (nw_h w_h) (nw_w w_w) (h d)',
                         h=h, w_h=self.window_size, w_w=self.window_size, nw_h=nw_h, nw_w=nw_w)
         out = self.to_out(out)
+        out = self.post_proj(out)
+        out = self.post_drop(out)
 
         if self.shifted:
             out = self.cyclic_back_shift(out)
@@ -340,6 +348,7 @@ class ShadowFeatureExtraction(nn.Module):
         self.fc = nn.Linear(48, hidden_dimension)
         if camera > 0:
             self.side_info_embedding = nn.Parameter(torch.randn(camera, hidden_dimension))
+            trunc_normal_(self.side_info_embedding, std=0.02)
         self.side_info = side_info
 
     def forward(self, x, view_index=None):
@@ -349,7 +358,7 @@ class ShadowFeatureExtraction(nn.Module):
         flattened_x = x.view(bs * H * W, -1)
         flattened_output = self.fc(flattened_x)
         if self.side_info and view_index:
-            flattened_output += self.side_info_embedding[view_index]
+            flattened_output += 1.5 * self.side_info_embedding[view_index]
         return flattened_output.view(bs, -1, H, W)
 
 

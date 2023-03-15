@@ -1,5 +1,6 @@
 ## Update
 
+- Mar. 15, 2023, Add Swin-Transformer & ViT w/. Side Information and multi-scale features
 - Jan. 24, 2023, Add VAE-GAN/WGAN to support generating better synthetic images
 - Sep. 24, Support distributed training w/. PyTorch
 - Feb. 27, Consider class-imbalanced problem and build balanced dataset for Market-1501 training set
