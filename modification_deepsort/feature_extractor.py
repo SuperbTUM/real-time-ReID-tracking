@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 
-from .SERes18_IBN import SEDense18_IBN
+from reid.SERes18_IBN import SEDense18_IBN
 
 
 # from .model import Net

@@ -8,6 +8,8 @@ from einops.layers.torch import Rearrange
 import numpy as np
 from timm.models.layers import trunc_normal_
 
+from SERes18_IBN import GeM
+
 # helpers
 
 class MixedNorm(nn.Module):
@@ -424,6 +426,8 @@ class SwinTransformer(nn.Module):
         self.stage3_channel_align = nn.ConvTranspose2d(hidden_dim * 4, hidden_dim * 2, 2, 2)
         self.stage2_channel_align = nn.ConvTranspose2d(hidden_dim * 2, hidden_dim, 2, 2)
 
+        self.avgpool = GeM()
+
     def forward(self, img, view_index=None):
         img = self.sfe(img, view_index)
 
@@ -441,7 +445,8 @@ class SwinTransformer(nn.Module):
         stage1_align = self.stage2_channel_align(fused_output)
         fused_output = stage1_align + stage1_output
 
-        x = fused_output.mean(dim=[2, 3])
+        # x = fused_output.mean(dim=[2, 3])
+        x = self.avgpool(fused_output).squeeze()
         return self.mlp_head(x)
 
 
