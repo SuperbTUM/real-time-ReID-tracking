@@ -178,10 +178,12 @@ class TripletLoss(nn.Module):
         margin (float, optional): margin for triplet. Default is 0.3.
     """
 
-    def __init__(self, margin=0.3):
+    def __init__(self, margin=0.3, penalty=False, alpha=0.):
         super(TripletLoss, self).__init__()
         self.margin = margin
         self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+        self.penalty = penalty
+        self.alpha = alpha
 
     def forward(self, inputs, targets):
         """
@@ -207,7 +209,10 @@ class TripletLoss(nn.Module):
 
         # Compute ranking hinge loss
         y = torch.ones_like(dist_an)
-        return self.ranking_loss(dist_an, dist_ap, y)
+        loss = self.ranking_loss(dist_an, dist_ap, y)
+        if self.penalty:
+            loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
+        return loss
 
 
 class HybridLoss3(nn.Module):

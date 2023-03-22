@@ -158,7 +158,7 @@ class Transformer(nn.Module):
 
 class ViT(nn.Module):
     def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, pool='cls', channels=3,
-                 dim_head=64, dropout=0., emb_dropout=0., camera=0, side_info=False):
+                 dim_head=64, dropout=0., emb_dropout=0., camera=0, sequence=0, side_info=False):
         super().__init__()
         image_height, image_width = pair(image_size)
         patch_height, patch_width = pair(patch_size)
@@ -178,8 +178,14 @@ class ViT(nn.Module):
         self.to_patch_embedding = Convolution_Stem(in_chans=channels, stem_stride=2, embed_dim=dim, patch_size=patch_size)
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
-        if camera > 0:
+        if camera * sequence > 0:
+            self.side_info_embedding = nn.Parameter(torch.randn(camera * sequence, 1, dim))
+            trunc_normal_(self.side_info_embedding, std=0.02)
+        elif camera > 0:
             self.side_info_embedding = nn.Parameter(torch.randn(camera, 1, dim))
+            trunc_normal_(self.side_info_embedding, std=0.02)
+        elif sequence > 0:
+            self.side_info_embedding = nn.Parameter(torch.randn(sequence, 1, dim))
             trunc_normal_(self.side_info_embedding, std=0.02)
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
         self.dropout = nn.Dropout(emb_dropout)
@@ -343,15 +349,22 @@ class PatchMerging(nn.Module):
 
 
 class ShadowFeatureExtraction(nn.Module):
-    def __init__(self, in_chan, hidden_dimension, camera=0, side_info=False):
+    def __init__(self, in_chan, hidden_dimension, camera=0, sequence=0, side_info=False, side_info_coeff=1.5):
         super(ShadowFeatureExtraction, self).__init__()
         self.conv1 = nn.Conv2d(in_chan, 12, 2, stride=2)
         self.conv2 = nn.Conv2d(12, 48, 2, stride=2)
         self.fc = nn.Linear(48, hidden_dimension)
-        if camera > 0:
+        if camera * sequence > 0:
+            self.side_info_embedding = nn.Parameter(torch.randn(camera * sequence, hidden_dimension))
+            trunc_normal_(self.side_info_embedding, std=0.02)
+        elif camera > 0:
             self.side_info_embedding = nn.Parameter(torch.randn(camera, hidden_dimension))
             trunc_normal_(self.side_info_embedding, std=0.02)
+        elif sequence > 0:
+            self.side_info_embedding = nn.Parameter(torch.randn(sequence, hidden_dimension))
+            trunc_normal_(self.side_info_embedding, std=0.02)
         self.side_info = side_info
+        self.side_info_coeff = side_info_coeff
 
     def forward(self, x, view_index=None):
         x = F.relu(self.conv1(x))
@@ -360,7 +373,7 @@ class ShadowFeatureExtraction(nn.Module):
         flattened_x = x.view(bs * H * W, -1)
         flattened_output = self.fc(flattened_x)
         if self.side_info and view_index:
-            flattened_output += 1.5 * self.side_info_embedding[view_index]
+            flattened_output += self.side_info_coeff * self.side_info_embedding[view_index]
         return flattened_output.view(bs, -1, H, W)
 
 
