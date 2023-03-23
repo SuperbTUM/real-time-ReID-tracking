@@ -1,3 +1,19 @@
+## TODO
+
+- [ ] To work with latest YoloV8-DeepOCSort implementation towards a new benchmark(important!) and apply necessary changes on current repository.
+
+- [ ] To work with SEBlock for query-guided channel attention on gallery images, proposed by a CVPR2019' paper.
+
+- [ ] To debug and tune a VAE-(W)GAN model for Market1501.
+
+- [ ] To check if triplet loss w/. penalty is helpful in object reidentification/image retrivial/person search.
+
+- [ ] To work with sequential side information on ViT and Swin-transformer.
+
+- [ ] To check whether background information is helpful with a hyperparameter to zoom, inspired by an ECCV18' paper.
+
+  
+
 ## Update
 
 - Mar. 15, 2023, Add Swin-Transformer & ViT w/. Side Information and multi-scale features
@@ -15,19 +31,21 @@
 
 ## Introduction
 
-This is a project of real-time multiple object tracking in person re-identification in collaboration with two data science master students. The proposal is to re-design the Re-ID model and try to obtain a stronger backbone. Several thoughts were applied and will be discussed throughly in the following chapters. The baseline is a Yolov5 based DeepSort algorithm and can be found [here](https://github.com/mikel-brostrom/Yolov5_DeepSort_Pytorch). The author has updated his repository with import of fast-reid package. I developed my code with Dec. 2021 version when the re-id model from scratch existed. The baseline backbone was ResNet-18.
+This is a project of real-time multiple object tracking in person re-identification. The proposal is to re-design the Re-ID model and try to obtain a stronger backbone. Several thoughts were applied and will be discussed throughly in the following chapters. 
+
+The baseline is a Yolov5(now is YoloV8!) based DeepSort(now is DeepOCSort!) algorithm and can be found [here](https://github.com/mikel-brostrom/Yolov5_DeepSort_Pytorch). The author has updated his repository with import of fast-reid package. I developed my code with Dec. 2021 version when the re-id model from scratch existed. The baseline backbone was ResNet-18(now is OSNet!).
 
 
 
 ## Dependency
 
-The code was developed with PyTorch and Numpy. Please download and install the latest stable version with CUDA 11. All codes are tested with one single GPU. If you wish to accelerate training, [apex](https://github.com/NVIDIA/apex) should be a great option. It can save training time as well as reduce memory cost. If you wish to accelerate inference, you can refer to TorchScript or TensorRT. A major reference is [this](https://developer.nvidia.com/blog/accelerating-inference-up-to-6x-faster-in-pytorch-with-torch-tensorrt/).
+The code was developed with PyTorch and Numpy. Please download and install the latest stable version with CUDA 11. All codes are tested with one single GPU. If you wish to accelerate training, [mixed-precision training](https://github.com/NVIDIA/apex) should be a great option. It can save training time as well as reduce memory cost. Distributed training is also available. If you wish to accelerate inference, you may refer to TorchScript or TensorRT. A major reference is [this](https://developer.nvidia.com/blog/accelerating-inference-up-to-6x-faster-in-pytorch-with-torch-tensorrt/).
 
 
 
 ## Dataset
 
-We use MOT16 as benchmark and Market1501 to train our re-id network.
+We use MOT16 evaluation as benchmark and Market1501 to train our re-id network.
 
 Videos: [MOT16](https://motchallenge.net/data/MOT16/) => This dataset could be evaluated with completed bash scripts.
 
@@ -37,13 +55,11 @@ Person gallery: [Market1501](https://www.kaggle.com/pengcw1/market-1501/data) =>
 
 ## Quick Start
 
-Please do not use Google Colab, even if you have a Pro account, since file transfer is rather unstable (especially in the evaluation stage)!
-
-Replace the file with modified one in the original repositories.
+[Pending] Replace the file with modified one in the original repositories.
 
 You can try to have generated images with GAN. That means you need additional training on the GAN. To train DC-GAN, please refer to the instructions on [this](https://github.com/qiaoguan/Person-reid-GAN-pytorch/tree/master/DCGAN-tensorflow). Please pay attention that this is an out-of-state repo and there is also file missing. You can also refer to the `ipynb` file in [modification_dcgan](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_dcgan) folder. Before that, make sure you properly execute `prepare.py`, `changeIndex.py` as well as the customized `re_index.py` before conducting training. We trained the backbone with `Market-1501/bounding_box_train` plus generated images. You can refer to the script files in our repo. 
 
-You will need to train the Re-ID model with Market1501. In the [modification_deepsort](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_deepsort) folder, you can see how we build the model as well train the model. The intuition is to use bag of tricks. We considered random erasing augmentation, last stride reduction, center loss, SE block, batch norm neck, etc. We found that IBN module is important, so we also include this in our backbone. We have our checkpoint available [here](https://drive.google.com/file/d/1Ta89D7WXhL_H2lR_eYEyLuWfZEFdNEXo/view?usp=sharing). 
+You will need to train the Re-ID model with Market1501. In the [modification_deepsort](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_deepsort) folder, you can see how we build the model as well train the model. The intuition is to use bag of tricks. We considered random erasing augmentation, last stride reduction, center loss, SE block, batch norm neck, etc. We found that IBN and GeM modules are critical, so we also include this in our backbone. We have our checkpoint available [here](https://drive.google.com/file/d/1Ta89D7WXhL_H2lR_eYEyLuWfZEFdNEXo/view?usp=sharing). 
 
 If you want to train the Re-ID model with video dataset, please refer to the [video_train](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_deepsort/mot16_train.py) script.
 
@@ -53,11 +69,13 @@ For the final evaluation, please refer to [this Wiki](https://github.com/mikel-b
 
 ## Tracking Speed
 
-The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The inference speed is 15 ~ 20 ms per frame depending on the sparsity of pedestrians with 640 * 640 resolution with Tesla T4. It may be slower if bounding box is resized to (128, 256). The modified extractor is based on Dense skip connection in ResNet-18 with Squeeze and Excitation Network, only a minor increase on the number of learnable parameters. The tracking speed is 17 ms per frame under the same testing environment. The speed is acquired with `time` package after the synchronization of CUDA.
+The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The inference speed is 15 ~ 20 ms per frame [need to be re-assessed] depending on the sparsity of pedestrians with 640 * 640 resolution with Tesla T4. It may be slower if bounding box is resized to (128, 256). The modified extractor is based on Dense skip connection in ResNet-18 with Squeeze and Excitation Network, only a minor increase on the number of learnable parameters. The tracking speed is 17 ms per frame under the same testing environment. The speed is acquired with `time` package after the synchronization of CUDA.
 
 
 
 ## Evaluation
+
+[Need to be re-evaluated]
 
 The tracking quality is evaluated under regular metrics including MOTA, MOTP and IDSW. The evaluation can be deployed with a bash command. I set the maximum distance to 0.15 (cosine distance) and minimum confidence to 0.5. Also, I resized the bounding box to (128, 256). The evaluation results are shown below. Our proposal has better performance in MOTA, MOTP, MODA and IDF1 with 1% of absolute improvement! For specific meaning of tracking metrics, please refer to [this](https://link.springer.com/content/pdf/10.1007/s11263-020-01375-2.pdf) and [this](https://link.springer.com/content/pdf/10.1155/2008/246309.pdf).
 
@@ -111,5 +129,3 @@ IDF1: **59.31**
 ## Thoughts After the Milestone
 
 Simple DCGAN may bring easy samples to make the network more likely to overfit. We may pre-cluster (K-Means++) datasets and conduct synthetic image generation on each cluster with stronger GAN network (VAE-GAN). We can even make the network partial-aware with separate attention on foreground and background.
-
-However, [AGW](https://github.com/mangye16/ReID-Survey) method is surprisingly NOT working as good as expected. In fact, the major cause is the introduction of GeM.
