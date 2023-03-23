@@ -4,6 +4,7 @@ from torchvision import models
 from torch.nn import functional as F
 
 
+# This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):
     def __init__(self, c_in):
         super().__init__()
