@@ -7,7 +7,7 @@ from copy import deepcopy
 from PIL import Image
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
-from mot16_train import TripletLoss, CenterLoss
+from video_reid_train import TripletLoss, CenterLoss
 
 import glob
 from osnet import osnet_ibn_x1_0, OSNet
