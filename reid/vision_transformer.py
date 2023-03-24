@@ -1,3 +1,5 @@
+from __future__ import division, absolute_import
+
 import torch
 from torch import nn, einsum
 import torch.nn.functional as F
@@ -10,7 +12,12 @@ from timm.models.layers import trunc_normal_
 
 from SERes18_IBN import GeM
 
+import warnings
 # helpers
+
+__all__ = ["vit_t", "swin_t"]
+
+pretrained_urls = {"vit_t": "", "swin_t": ""}
 
 class MixedNorm(nn.Module):
     def __init__(self, features):
@@ -157,7 +164,7 @@ class Transformer(nn.Module):
 
 
 class ViT(nn.Module):
-    def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, pool='cls', channels=3,
+    def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, loss="softmax", pool='cls', channels=3,
                  dim_head=64, dropout=0., emb_dropout=0., camera=0, sequence=0, side_info=False):
         super().__init__()
         image_height, image_width = pair(image_size)
@@ -201,6 +208,7 @@ class ViT(nn.Module):
         )
 
         self.side_info = side_info
+        self.loss = loss
 
     def forward(self, img, view_index=None):
         x = self.to_patch_embedding(img)
@@ -218,7 +226,11 @@ class ViT(nn.Module):
         x = x.mean(dim=1) if self.pool == 'mean' else x[:, 0]
 
         x = self.to_latent(x)
-        return self.mlp_head(x)
+        y = self.mlp_head(x)
+        if self.loss == "softmax":
+            return y
+        elif self.loss == "triplet":
+            return y, x
 
 
 def create_mask(window_size, displacement, upper_lower, left_right):
@@ -409,7 +421,7 @@ class StageModule(nn.Module):
 
 
 class SwinTransformer(nn.Module):
-    def __init__(self, *, hidden_dim, layers, heads, channels=3, num_classes=1000, head_dim=32, window_size=7,
+    def __init__(self, *, hidden_dim, layers, heads, loss="softmax", channels=3, num_classes=1000, head_dim=32, window_size=7,
                  downscaling_factors=(4, 2, 2, 2), relative_pos_embedding=True, camera=0, side_info=False):
         super().__init__()
 
@@ -440,6 +452,7 @@ class SwinTransformer(nn.Module):
         self.stage2_channel_align = nn.ConvTranspose2d(hidden_dim * 2, hidden_dim, 2, 2)
 
         self.avgpool = GeM()
+        self.loss = loss
 
     def forward(self, img, view_index=None):
         img = self.sfe(img, view_index)
@@ -460,13 +473,103 @@ class SwinTransformer(nn.Module):
 
         # x = fused_output.mean(dim=[2, 3])
         x = self.avgpool(fused_output).squeeze()
-        return self.mlp_head(x)
+        y = self.mlp_head(x)
+        if self.loss == "softmax":
+            return y
+        elif self.loss == "triplet":
+            return y, x
 
 
-def swin_t(hidden_dim=96, layers=(2, 2, 6, 2), heads=(3, 6, 12, 24), **kwargs):
-    return SwinTransformer(hidden_dim=hidden_dim, layers=layers, heads=heads, **kwargs)
+def init_pretrained_weights(model, key=''):
+    """Initializes model with pretrained weights.
+
+    Layers that don't match with pretrained layers in name or size are kept unchanged.
+    """
+    import os
+    import errno
+    import gdown
+    from collections import OrderedDict
+
+    def _get_torch_home():
+        ENV_TORCH_HOME = 'TORCH_HOME'
+        ENV_XDG_CACHE_HOME = 'XDG_CACHE_HOME'
+        DEFAULT_CACHE_DIR = '~/.cache'
+        torch_home = os.path.expanduser(
+            os.getenv(
+                ENV_TORCH_HOME,
+                os.path.join(
+                    os.getenv(ENV_XDG_CACHE_HOME, DEFAULT_CACHE_DIR), 'torch'
+                )
+            )
+        )
+        return torch_home
+
+    torch_home = _get_torch_home()
+    model_dir = os.path.join(torch_home, 'checkpoints')
+    try:
+        os.makedirs(model_dir)
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            # Directory already exists, ignore.
+            pass
+        else:
+            # Unexpected OSError, re-raise.
+            raise
+    filename = key + '_imagenet.pth'
+    cached_file = os.path.join(model_dir, filename)
+
+    if not os.path.exists(cached_file):
+        gdown.download(pretrained_urls[key], cached_file, quiet=False)
+
+    state_dict = torch.load(cached_file)
+    model_dict = model.state_dict()
+    new_state_dict = OrderedDict()
+    matched_layers, discarded_layers = [], []
+
+    for k, v in state_dict.items():
+        if k.startswith('module.'):
+            k = k[7:]  # discard module.
+
+        if k in model_dict and model_dict[k].size() == v.size():
+            new_state_dict[k] = v
+            matched_layers.append(k)
+        else:
+            discarded_layers.append(k)
+
+    model_dict.update(new_state_dict)
+    model.load_state_dict(model_dict)
+
+    if len(matched_layers) == 0:
+        warnings.warn(
+            'The pretrained weights from "{}" cannot be loaded, '
+            'please check the key names manually '
+            '(** ignored and continue **)'.format(cached_file)
+        )
+    else:
+        print(
+            'Successfully loaded imagenet pretrained weights from "{}"'.
+            format(cached_file)
+        )
+        if len(discarded_layers) > 0:
+            print(
+                '** The following layers are discarded '
+                'due to unmatched keys or layer size: {}'.
+                format(discarded_layers)
+            )
 
 
-def vit_t(img_size=(224, 224), patch_size=32, num_classes=751, **kwargs):
-    return ViT(image_size=img_size, patch_size=patch_size, num_classes=num_classes, dim=384, depth=6, heads=16,
-               mlp_dim=2048, dropout=0.1, emb_dropout=0.1, **kwargs)
+def swin_t(hidden_dim=96, layers=(2, 2, 6, 2), heads=(3, 6, 12, 24),
+           num_classes=751, pretrained=False, loss="softmax", **kwargs):
+    model = SwinTransformer(hidden_dim=hidden_dim, layers=layers, heads=heads, num_classes=num_classes, loss=loss, **kwargs)
+    if pretrained:
+        init_pretrained_weights(model, "swin_t")
+    return model
+
+
+def vit_t(img_size=(224, 224), patch_size=32,
+          num_classes=751, pretrained=False, loss="softmax", **kwargs):
+    model = ViT(image_size=img_size, patch_size=patch_size, num_classes=num_classes, dim=384, depth=6, heads=16,
+                mlp_dim=2048, dropout=0.1, emb_dropout=0.1, loss=loss, **kwargs)
+    if pretrained:
+        init_pretrained_weights(model, "vit_t")
+    return model

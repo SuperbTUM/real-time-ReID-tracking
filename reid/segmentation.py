@@ -17,14 +17,18 @@ model = torch.hub.load('pytorch/vision:v0.8.0', 'deeplabv3_resnet50', pretrained
 model.eval()
 scriptedm = torch.jit.script(model)
 
-
-def inference(input_image):
+# There are two ways, one is to segment on blured image, one is on original image
+def inference(input_image, blured=False):
     preprocess = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-
+    blur = transforms.Compose([
+        transforms.GaussianBlur(7),
+    ])
     input_tensor = preprocess(input_image)
+    if blured:
+        input_tensor = blur(input_tensor)
     input_batch = input_tensor.unsqueeze(0)
     with torch.no_grad():
         output = scriptedm(input_batch)['out'][0]  #(21, W, H), 21 means classes
@@ -45,12 +49,12 @@ def extract_foreground_background(output, input_image):
     return foreground, background
 
 
-def batched_extraction(working_dir):
+def batched_extraction(working_dir, blured=False):
     images_path = glob.glob("/".join((working_dir, "*.jpg")))
     foreground, background = [], []
     for path in images_path:
         img = Image.open(path)
-        output = inference(img)
+        output = inference(img, blured)
         f, b = extract_foreground_background(output, img)
         foreground.append(f)
         background.append(b)

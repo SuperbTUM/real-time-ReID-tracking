@@ -59,7 +59,7 @@ Person gallery: [Market1501](https://www.kaggle.com/pengcw1/market-1501/data) =>
 
 You can try to have generated images with GAN. That means you need additional training on the GAN. To train DC-GAN, please refer to the instructions on [this](https://github.com/qiaoguan/Person-reid-GAN-pytorch/tree/master/DCGAN-tensorflow). Please pay attention that this is an out-of-state repo and there is also file missing. You can also refer to the `ipynb` file in [modification_dcgan](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_dcgan) folder. Before that, make sure you properly execute `prepare.py`, `changeIndex.py` as well as the customized `re_index.py` before conducting training. We trained the backbone with `Market-1501/bounding_box_train` plus generated images. You can refer to the script files in our repo. 
 
-You will need to train the Re-ID model with Market1501. In the [modification_deepsort](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_deepsort) folder, you can see how we build the model as well train the model. The intuition is to use bag of tricks. We considered random erasing augmentation, last stride reduction, center loss, SE block, batch norm neck, etc. We found that IBN and GeM modules are critical, so we also include this in our backbone. We have our checkpoint available [here](https://drive.google.com/file/d/1Ta89D7WXhL_H2lR_eYEyLuWfZEFdNEXo/view?usp=sharing). 
+You will need to train your Re-ID model with Market1501. In the [reid](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid) folder, you can see how we build the model as well train the model. The intuition is to apply bag of tricks. We considered random erasing augmentation, last stride reduction, center loss, SE block, batch norm neck, etc. We found that IBN and GeM modules are critical, so we also include this in our backbone. We have our checkpoint available [here](https://drive.google.com/file/d/1Ta89D7WXhL_H2lR_eYEyLuWfZEFdNEXo/view?usp=sharing). Please copy your model and checkpoints to `trackers/strongsort/models` and `trackers/strongsort/checkpoint`, and modify `reid_model_factory.py` accordingly.
 
 If you want to train the Re-ID model with video dataset, please refer to the [video_train](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_deepsort/mot16_train.py) script.
 
@@ -69,7 +69,7 @@ For the final evaluation, please refer to [this Wiki](https://github.com/mikel-b
 
 ## Tracking Speed
 
-The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The inference speed is 15 ~ 20 ms per frame [need to be re-assessed] depending on the sparsity of pedestrians with 640 * 640 resolution with Tesla T4. It may be slower if bounding box is resized to (128, 256). The modified extractor is based on Dense skip connection in ResNet-18 with Squeeze and Excitation Network, only a minor increase on the number of learnable parameters. The tracking speed is 17 ms per frame under the same testing environment. The speed is acquired with `time` package after the synchronization of CUDA.
+The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The inference speed is 15 ~ 20 ms per frame [need to be re-assessed and OSNet 1.0 is heavy!!! ~100ms per frame] depending on the sparsity of pedestrians with 640 * 640 resolution with Tesla P100. It may be slower if bounding box is resized to (128, 256). The modified extractor is based on Dense skip connection in ResNet-18 with Squeeze and Excitation Network, only a minor increase on the number of learnable parameters. The tracking speed is 17 ms per frame under the same testing environment. The speed is acquired with `time` package after the synchronization of CUDA.
 
 
 
@@ -79,7 +79,26 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
 
 The tracking quality is evaluated under regular metrics including MOTA, MOTP and IDSW. The evaluation can be deployed with a bash command. I set the maximum distance to 0.15 (cosine distance) and minimum confidence to 0.5. Also, I resized the bounding box to (128, 256). The evaluation results are shown below. Our proposal has better performance in MOTA, MOTP, MODA and IDF1 with 1% of absolute improvement! For specific meaning of tracking metrics, please refer to [this](https://link.springer.com/content/pdf/10.1007/s11263-020-01375-2.pdf) and [this](https://link.springer.com/content/pdf/10.1155/2008/246309.pdf).
 
-**Strong Baseline**
+**Original Baseline (YoloV8m detector)**
+
+```bash
+python val.py --benchmark MOT16 --tracking-method strongsort --device 0 --img 640 --processes-per-device 4 --yolo-weights /home/mh4116/yolov8_tracking/crowdhuman_yolov5m.pt
+```
+
+YoloV8 COCO detector is weak.
+
+|          | MOTA ⬆ | MOTP ⬆ | MODA ⬆ | CLR_Re ⬆ | CLR_Pr ⬆ | MTR ⬆  | PTR ⬆  | MLR ⬇  | sMOTA ⬆ | CLR_TP ⬆ | CLR_FN ⬇ | CLR_FP ⬇ | IDSW ⬇ | MT ⬆ | PT ⬆ | ML ⬇ | Frag ⬇ |
+| -------- | ------ | ------ | ------ | -------- | -------- | ------ | ------ | ------ | ------- | -------- | -------- | -------- | ------ | ---- | ---- | ---- | ------ |
+| MOT16-02 | 21.881 | 85.498 | 21.999 | 22.711   | 96.96    | 12.963 | 24.074 | 62.963 | 18.587  | 4050     | 13783    | 127      | 21     | 7    | 13   | 34   | 75     |
+| MOT16-04 | 28.917 | 85.24  | 28.974 | 30.832   | 94.314   | 8.4337 | 39.759 | 51.807 | 24.366  | 14663    | 32894    | 884      | 27     | 7    | 33   | 43   | 238    |
+| MOT16-05 | 52.156 | 77.17  | 52.728 | 61.426   | 87.597   | 20     | 58.4   | 21.6   | 38.133  | 4188     | 2630     | 593      | 39     | 25   | 73   | 27   | 131    |
+| MOT16-09 | 64.809 | 81.893 | 65.456 | 70.287   | 93.568   | 48     | 40     | 12     | 52.082  | 3695     | 1562     | 254      | 34     | 12   | 10   | 3    | 59     |
+| MOT16-10 | 40.372 | 78.124 | 40.705 | 44.756   | 91.7     | 18.519 | 35.185 | 46.296 | 30.581  | 5513     | 6805     | 499      | 41     | 10   | 19   | 25   | 141    |
+| MOT16-11 | 53.107 | 85.274 | 53.423 | 64.16    | 85.664   | 28.986 | 34.783 | 36.232 | 43.659  | 5886     | 3288     | 985      | 29     | 20   | 24   | 25   | 45     |
+| MOT16-13 | 25.852 | 79.639 | 26.131 | 28.306   | 92.865   | 10.28  | 33.645 | 56.075 | 20.088  | 3241     | 8209     | 249      | 32     | 11   | 36   | 60   | 120    |
+| COMBINED | 33.895 | 82.759 | 34.097 | 37.349   | 91.989   | 17.795 | 40.232 | 41.973 | 27.455  | 41236    | 69171    | 3591     | 223    | 92   | 208  | 217  | 809    |
+
+YoloV5 detector is not working right now...
 
 |          | MOTA ⬆ | MOTP ⬆ | MODA ⬆ | CLR_Re ⬆ | CLR_Pr ⬆ | MTR ⬆  | PTR ⬆  | MLR ⬇  | sMOTA ⬆ | CLR_TP ⬆ | CLR_FN ⬇ | CLR_FP ⬇ | IDSW ⬇ | MT ⬆ | PT ⬆ | ML ⬇ | Frag ⬇ |
 | -------- | ------ | ------ | ------ | -------- | -------- | ------ | ------ | ------ | ------- | -------- | -------- | -------- | ------ | ---- | ---- | ---- | ------ |
