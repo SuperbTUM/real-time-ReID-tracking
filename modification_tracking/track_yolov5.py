@@ -31,7 +31,8 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 from yolov5.models.common import DetectMultiBackend
 from yolov5.utils.dataloaders import LoadImages, LoadStreams, VID_FORMATS
 from yolov5.utils.segment.general import process_mask_native, process_mask
-from yolov5.utils.general import (check_file, Profile, scale_boxes, print_args, check_requirements, LOGGER, check_img_size, non_max_suppression,
+from yolov5.utils.general import (check_file, Profile, scale_boxes, print_args, check_requirements,
+                                  LOGGER, check_img_size, non_max_suppression,
                                   check_imshow, xyxy2xywh, increment_path, strip_optimizer, colorstr)
 from yolov5.utils.torch_utils import select_device, time_sync
 from yolov5.utils.plots import Annotator, colors, save_one_box
@@ -133,7 +134,7 @@ def run(
     is_seg = '-seg' in str(yolo_weights)
     model = DetectMultiBackend(yolo_weights, device=device, dnn=dnn, fp16=half)
     stride, names, pt = model.stride, model.names, model.pt
-    imgsz = check_img_size(imgsz, stride=stride)  # check image size
+    imgsz = check_img_size(imgsz, s=stride)  # check image size
 
     # Dataloader
     bs = 1
@@ -141,7 +142,7 @@ def run(
         show_vid = check_imshow(warn=True)
         dataset = LoadStreams(
             source,
-            imgsz=imgsz,
+            img_size=imgsz,
             stride=stride,
             auto=pt,
             transforms=getattr(model.model, 'transforms', None),
@@ -151,7 +152,7 @@ def run(
     else:
         dataset = LoadImages(
             source,
-            imgsz=imgsz,
+            img_size=imgsz,
             stride=stride,
             auto=pt,
             transforms=getattr(model.model, 'transforms', None),
