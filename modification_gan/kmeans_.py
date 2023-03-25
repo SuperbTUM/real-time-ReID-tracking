@@ -4,11 +4,12 @@ from torchvision import transforms, models
 import torch
 import torch.nn as nn
 import numpy as np
+from tqdm import tqdm
 
 
 def get_labels(repres, n_clusters=2):
     kmeans = KMeans(n_clusters, random_state=0)
-    return kmeans.fit_transform(repres)
+    return kmeans.fit_predict(repres)
 
 
 if __name__ == "__main__":
@@ -20,7 +21,7 @@ if __name__ == "__main__":
     transform = transforms.Compose([
         transforms.Resize((128, 64)),
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
     ])
     reid_dataset = DataSet4GAN(raw_dataset, transform)
     backbone = models.resnet50(pretrained=True)
@@ -33,9 +34,10 @@ if __name__ == "__main__":
                               pin_memory=True)
     repres = []
     with torch.no_grad():
-        for sample in data_loader:
-            sample = sample.to(device)
-            repre = backbone(sample).squeeze().cpu().numpy()
+        for sample in tqdm(data_loader):
+            img, label = sample
+            img = img.to(device)
+            repre = backbone(img).squeeze().cpu().numpy()
             repres.append(repre)
     repres = np.asarray(repres)
 
