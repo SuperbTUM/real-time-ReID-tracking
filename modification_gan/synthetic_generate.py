@@ -288,7 +288,7 @@ def VAE_GAN_train_one_epoch(
     zeros_label1 = torch.zeros((bs, ), device=device)
     datav = data.to(device)
     mean, logvar, rec_enc = gen(datav)
-    z_p = torch.randn(64, 128, device=device)
+    z_p = torch.randn(bs, 128, device=device)
     x_p_tilda = gen.decoder(z_p)
 
     output1 = discrim(datav)[0]
@@ -302,7 +302,7 @@ def VAE_GAN_train_one_epoch(
     else:
         errD_rec_noise = criterion(output2.squeeze(), zeros_label1)
     if gp:
-        alpha = torch.randn(bs, 1, 1, 1, device=device)
+        alpha = torch.rand(bs, 1, 1, 1, device=device)
         x_hat = alpha * datav + (1 - alpha) * x_p_tilda
         output3 = discrim(x_hat)[0]
         graidents = torch.autograd.grad(outputs=output3, inputs=x_hat,
