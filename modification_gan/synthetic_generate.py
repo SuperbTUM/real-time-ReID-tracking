@@ -223,9 +223,10 @@ class Discriminator(nn.Module):
         self.Wassertein = Wassertein
 
     def forward(self, input):
+        bs = input.size(0)
         main = self.main(input)
         if self.VAE:
-            main = main.view(-1, 256*8*8)
+            main = main.view(bs, -1)
             main1 = main
             if self.Wassertein:
                 return self.extension(main), main1
@@ -254,7 +255,7 @@ def load_dataset(raw_dataset, batch_size=32):
     transform = transforms.Compose([
         transforms.Resize((128, 64)),
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
     ])
     reid_dataset = DataSet4GAN(raw_dataset, transform)
     data_loader = DataLoaderX(reid_dataset,
@@ -275,42 +276,31 @@ def load_everything(nz=100, device="cuda:0", lr=1e-2):
 
 device = "cuda"
 def VAE_GAN_train_one_epoch(data, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein, gamma=15):
-    bs = data.size()[0]
+    bs, width, height = data.size(0), data.size(3), data.size(2)
 
-    ones_label = torch.ones(bs, 1).to(device)
-    zeros_label = torch.zeros(bs, 1).to(device)
-    zeros_label1 = torch.zeros(64, 1).to(device)
+    ones_label = torch.ones((bs, ), device=device)
+    zeros_label = torch.zeros((bs, ), device=device)
+    zeros_label1 = torch.zeros((bs, ), device=device)
     datav = data.to(device)
     mean, logvar, rec_enc = gen(datav)
-    z_p = torch.randn(64, 128).to(device)
+    z_p = torch.randn(64, 128, device=device)
     x_p_tilda = gen.decoder(z_p)
 
-    output = discrim(datav)[0]
-    errD_real = criterion(output, ones_label)
-    output = discrim(rec_enc)[0]
-    errD_rec_enc = criterion(output, zeros_label)
-    output = discrim(x_p_tilda)[0]
-    errD_rec_noise = criterion(output, zeros_label1)
-    gan_loss = errD_real + errD_rec_enc + errD_rec_noise
-    optim_Dis.zero_grad()
-    gan_loss.backward(retain_graph=True)
-    optim_Dis.step()
-
-    output = discrim(datav)[0]
+    output1 = discrim(datav)[0]
     if Wassertein:
-        errD_real = -torch.mean(output.squeeze(1))  # ??
+        errD_real = -torch.mean(output1.squeeze(1))  # ??
     else:
-        errD_real = criterion(output, ones_label)
-    output = discrim(rec_enc)[0]
+        errD_real = criterion(output1.squeeze(), ones_label)
+    output2 = discrim(rec_enc)[0]
     if Wassertein:
-        errD_rec_enc = torch.mean(output.squeeze(1))
+        errD_rec_enc = torch.mean(output2.squeeze(1))
     else:
-        errD_rec_enc = criterion(output, zeros_label)
-    output = discrim(x_p_tilda)[0]
+        errD_rec_enc = criterion(output2.squeeze(), zeros_label)
+    output3 = discrim(x_p_tilda)[0]
     if Wassertein:
-        errD_rec_noise = torch.mean(output.squeeze(1))
+        errD_rec_noise = torch.mean(output3.squeeze(1))
     else:
-        errD_rec_noise = criterion(output, zeros_label1)
+        errD_rec_noise = criterion(output3.squeeze(), zeros_label1)
     gan_loss = errD_real + errD_rec_enc + errD_rec_noise
 
     x_l_tilda = discrim(rec_enc)[1]
@@ -332,6 +322,8 @@ def VAE_GAN_train_one_epoch(data, gen, discrim, criterion, optim_Dis, optim_E, o
     optim_E.zero_grad()
     err_enc.backward(retain_graph=True)
     optim_E.step()
+
+    print("discriminator loss: {:.4f}, generator loss: {:.4f}".format(err_dec.detach().cpu().item(), err_enc.detach().cpu().item()))
 
 
 def train_VAE_GAN(raw_dataset,
@@ -356,7 +348,8 @@ def train_VAE_GAN(raw_dataset,
     for epoch in range(epochs):
         dataloader = load_dataset(raw_dataset, batch_size)
         for i, data in enumerate(dataloader):
-            VAE_GAN_train_one_epoch(data, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein)
+            img, label = data  # label here is not so important
+            VAE_GAN_train_one_epoch(img, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein)
             if Wassertein:
                 for dis in discrim.main:
                     if dis.__class__.__name__ == ('Linear' or 'Conv2d'):

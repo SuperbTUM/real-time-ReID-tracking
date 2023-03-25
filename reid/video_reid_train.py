@@ -16,14 +16,16 @@ cudnn.benchmark = True
 
 
 class VideoDataset(Dataset):
-    def __init__(self, gt_paths, transforms, seq_len=10, prefix_image_path="../datasets/MOT16/train/"):
+    def __init__(self, gt_paths, transforms, lamda=1.0, seq_len=10, prefix_image_path="../datasets/MOT16/train/"):
         super(VideoDataset, self).__init__()
         """Make the data loading lighter with h5py?"""
+        assert lamda >= 1.0
         self.gt_paths = gt_paths
         self.seq_len = seq_len
         self.transforms = transforms
         self.gt_info, self.labels = self.read_gt()
         self.prefix_image_path = prefix_image_path
+        self.lamda = lamda
 
     def read_gt(self):
         gt_info = defaultdict(list)
@@ -45,6 +47,9 @@ class VideoDataset(Dataset):
                         labels.append(label)
                         diff = line[1] - label
                     bbox = list(map(lambda x: float(x), line[2:6]))
+                    if self.lamda > 1.0:
+                        bbox = [max(0., bbox[0]-bbox[0]*(self.lamda - 1)/2), max(0., bbox[1]-bbox[1]*(self.lamda - 1)/2),
+                                bbox[2]*self.lamda, bbox[3]*self.lamda]
                     frame = line[0]
                     file_loc = path.split("/")[-3] + "/"
                     detail = bbox + [int(frame)] + [file_loc]
@@ -203,6 +208,6 @@ if __name__ == "__main__":
         transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         # transforms.ToTensor(),
     ]
-    dataset = VideoDataset(gt_paths, transform_candidates)
+    dataset = VideoDataset(gt_paths, transform_candidates, 1.0)
     model, loss_stats = train(dataset, num_classes=len(dataset))
     plot_loss(loss_stats)
