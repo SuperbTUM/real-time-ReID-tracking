@@ -305,12 +305,12 @@ def VAE_GAN_train_one_epoch(
         alpha = torch.rand(bs, 1, 1, 1, device=device)
         x_hat = alpha * datav + (1 - alpha) * x_p_tilda
         output3 = discrim(x_hat)[0]
-        graidents = torch.autograd.grad(outputs=output3, inputs=x_hat,
+        gradients = torch.autograd.grad(outputs=output3, inputs=x_hat,
                                         grad_outputs=torch.ones_like(output3, device=device),
                                         create_graph=True,
                                         retain_graph=True,
                                         only_inputs=True)[0]
-        gradient_penalty = (graidents.view(graidents.size(0), -1).norm(2, 1) - 1) ** 2
+        gradient_penalty = (gradients.view(gradients.size(0), -1).norm(2, 1) - 1) ** 2
         gradient_penalty = gradient_penalty.mean()
         dis_loss = errD_real + errD_rec_noise + gradient_penalty
     else:

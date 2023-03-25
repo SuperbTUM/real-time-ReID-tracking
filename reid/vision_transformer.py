@@ -447,9 +447,9 @@ class SwinTransformer(nn.Module):
         )
 
         self.img_channel_align = nn.Conv2d(hidden_dim, hidden_dim * 8, 8, stride=8)
-        self.stage4_channel_align = nn.ConvTranspose2d(hidden_dim * 8, hidden_dim * 4, 2, 2)
-        self.stage3_channel_align = nn.ConvTranspose2d(hidden_dim * 4, hidden_dim * 2, 2, 2)
-        self.stage2_channel_align = nn.ConvTranspose2d(hidden_dim * 2, hidden_dim, 2, 2)
+        self.stage4_channel_align = nn.ConvTranspose2d(hidden_dim * 8, hidden_dim * 4, 4, 2, 1)
+        self.stage3_channel_align = nn.ConvTranspose2d(hidden_dim * 4, hidden_dim * 2, 4, 2, 1)
+        self.stage2_channel_align = nn.ConvTranspose2d(hidden_dim * 2, hidden_dim, 4, 2, 1)
 
         self.avgpool = GeM()
         self.loss = loss
