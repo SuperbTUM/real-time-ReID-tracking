@@ -16,6 +16,7 @@ from tqdm import tqdm
 import os
 import matplotlib.animation as animation
 from IPython.display import HTML
+import argparse
 
 
 class DataLoaderX(DataLoader):
@@ -50,8 +51,10 @@ def construct_raw_dataset(query_images):
 
 
 class DataSet4GAN(Dataset):
-    def __init__(self, raw_dataset, transform=None):
+    def __init__(self, raw_dataset, transform=None, group=-1):
         super(DataSet4GAN, self).__init__()
+        if group >= 0:
+            raw_dataset = filter(lambda x: x[-1] == group, raw_dataset)
         self.raw_dataset = raw_dataset
         self.transform = transform
 
@@ -59,7 +62,7 @@ class DataSet4GAN(Dataset):
         return len(self.raw_dataset)
 
     def __getitem__(self, item):
-        image_path, label = self.raw_dataset[item]
+        image_path, label = self.raw_dataset[item][:2]
         img_data = Image.open(image_path).convert("RGB")
         if self.transform:
             img_data = self.transform(img_data)
@@ -275,7 +278,9 @@ def load_everything(nz=100, device="cuda:0", lr=1e-2):
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD, emaG
 
 device = "cuda"
-def VAE_GAN_train_one_epoch(data, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein, gamma=15):
+def VAE_GAN_train_one_epoch(
+        data, gen, discrim, criterion, optim_Dis, optim_E, optim_D,
+        Wassertein, gp=False, gamma=15):
     bs, width, height = data.size(0), data.size(3), data.size(2)
 
     ones_label = torch.ones((bs, ), device=device)
@@ -288,19 +293,48 @@ def VAE_GAN_train_one_epoch(data, gen, discrim, criterion, optim_Dis, optim_E, o
 
     output1 = discrim(datav)[0]
     if Wassertein:
-        errD_real = -torch.mean(output1.squeeze(1))  # ??
+        errD_real = -torch.mean(output1.squeeze())
     else:
         errD_real = criterion(output1.squeeze(), ones_label)
-    output2 = discrim(rec_enc)[0]
+    output2 = discrim(x_p_tilda)[0]
     if Wassertein:
-        errD_rec_enc = torch.mean(output2.squeeze(1))
+        errD_rec_noise = torch.mean(output2.squeeze())
     else:
-        errD_rec_enc = criterion(output2.squeeze(), zeros_label)
-    output3 = discrim(x_p_tilda)[0]
+        errD_rec_noise = criterion(output2.squeeze(), zeros_label1)
+    if gp:
+        alpha = torch.randn(bs, 1, 1, 1, device=device)
+        x_hat = alpha * datav + (1 - alpha) * x_p_tilda
+        output3 = discrim(x_hat)[0]
+        graidents = torch.autograd.grad(outputs=output3, inputs=x_hat,
+                                        grad_outputs=torch.ones_like(output3, device=device),
+                                        create_graph=True,
+                                        retain_graph=True,
+                                        only_inputs=True)[0]
+        gradient_penalty = (graidents.view(graidents.size(0), -1).norm(2, 1) - 1) ** 2
+        gradient_penalty = gradient_penalty.mean()
+        dis_loss = errD_real + errD_rec_noise + gradient_penalty
+    else:
+        output3 = discrim(rec_enc)[0]
+        dis_loss = errD_real + errD_rec_noise + torch.mean(output3.squeeze())
+    optim_Dis.zero_grad()
+    dis_loss.backward(retain_graph=True)
+    optim_Dis.step()
+
+    output4 = discrim(datav)[0]
     if Wassertein:
-        errD_rec_noise = torch.mean(output3.squeeze(1))
+        errD_real = -torch.mean(output4.squeeze(1))  # ??
     else:
-        errD_rec_noise = criterion(output3.squeeze(), zeros_label1)
+        errD_real = criterion(output4.squeeze(), ones_label)
+    output5 = discrim(rec_enc)[0]
+    if Wassertein:
+        errD_rec_enc = torch.mean(output5.squeeze(1))
+    else:
+        errD_rec_enc = criterion(output5.squeeze(), zeros_label)
+    output6 = discrim(x_p_tilda)[0]
+    if Wassertein:
+        errD_rec_noise = torch.mean(output6.squeeze(1))
+    else:
+        errD_rec_noise = criterion(output6.squeeze(), zeros_label1)
     gan_loss = errD_real + errD_rec_enc + errD_rec_noise
 
     x_l_tilda = discrim(rec_enc)[1]
@@ -323,7 +357,10 @@ def VAE_GAN_train_one_epoch(data, gen, discrim, criterion, optim_Dis, optim_E, o
     err_enc.backward(retain_graph=True)
     optim_E.step()
 
-    print("discriminator loss: {:.4f}, generator loss: {:.4f}".format(err_dec.detach().cpu().item(), err_enc.detach().cpu().item()))
+    print("discriminator loss: {:.4f}, encoder loss: {:.4f}, decoder loss: {:.4f}".format(
+        dis_loss.detach().cpu().item(),
+        err_enc.detach().cpu().item(),
+        err_dec.detach().cpu().item()))
 
 
 def train_VAE_GAN(raw_dataset,
@@ -334,6 +371,7 @@ def train_VAE_GAN(raw_dataset,
                   lr=1e-3,
                   training=True,
                   Wassertein=False,
+                  gp=False,
                   threshold=0.05
                     ):
     if not training:
@@ -345,11 +383,12 @@ def train_VAE_GAN(raw_dataset,
     optim_E = torch.optim.RMSprop(gen.encoder.parameters(), lr=lr)
     optim_D = torch.optim.RMSprop(gen.decoder.parameters(), lr=lr)
     optim_Dis = torch.optim.RMSprop(discrim.parameters(), lr=lr * alpha)
+
     for epoch in range(epochs):
         dataloader = load_dataset(raw_dataset, batch_size)
         for i, data in enumerate(dataloader):
             img, label = data  # label here is not so important
-            VAE_GAN_train_one_epoch(img, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein)
+            VAE_GAN_train_one_epoch(img, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein, gp)
             if Wassertein:
                 for dis in discrim.main:
                     if dis.__class__.__name__ == ('Linear' or 'Conv2d'):
@@ -492,13 +531,20 @@ def generate(modelG_checkpoint, modelG, device="cuda:0"):
     return generated_image
 
 
+def parser():
+    args = argparse.ArgumentParser()
+    args.add_argument("--vae", action="store_true")
+    args.add_argument("--Wassertein", action="store_true")
+    args.add_argument("--gp", action="store_true")
+    return args.parse_args()
+
+
 if __name__ == "__main__":
-    vae = True
-    Wassertein = True
+    params = parser()
     query_images = fetch_rawdata("Market1501/bounding_box_train/", "Market1501/bounding_box_test/")
     raw_dataset, num_classes = construct_raw_dataset(query_images)
-    if vae:
-        train_VAE_GAN(raw_dataset, epochs=20, Wassertein=Wassertein)
+    if params.vae:
+        train_VAE_GAN(raw_dataset, epochs=20, Wassertein=params.Wassertein, gp=params.gp)
     else:
         G_losses, D_losses, netG, img_list = train(raw_dataset, epochs=20)
         plot(G_losses, D_losses)

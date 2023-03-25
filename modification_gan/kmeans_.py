@@ -7,16 +7,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-def get_labels(repres, n_clusters=2):
-    kmeans = KMeans(n_clusters, random_state=0)
-    return kmeans.fit_predict(repres)
-
-
-if __name__ == "__main__":
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    # We will split them to 2 sub-datasets
-
-    query_images = fetch_rawdata("Market1501/bounding_box_train/", "Market1501/bounding_box_test/")
+def get_repres(query_images):
     raw_dataset, num_classes = construct_raw_dataset(query_images)
     transform = transforms.Compose([
         transforms.Resize((128, 64)),
@@ -40,5 +31,18 @@ if __name__ == "__main__":
             repre = backbone(img).squeeze().cpu().numpy()
             repres.append(repre)
     repres = np.asarray(repres)
+    return repres
 
+
+def get_labels(repres, n_clusters=2):
+    kmeans = KMeans(n_clusters, random_state=0)
+    return kmeans.fit_predict(repres)
+
+
+if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # We will split them to 2 sub-datasets
+
+    query_images = fetch_rawdata("Market1501/bounding_box_train/", "Market1501/bounding_box_test/")
+    repres = get_repres(query_images)
     labels = get_labels(repres)
