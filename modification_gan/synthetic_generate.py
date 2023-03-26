@@ -196,28 +196,61 @@ class Discriminator(nn.Module):
     def __init__(self, ngpu=1, nc=3, ndf=64, VAE=False, Wassertein=False):
         super(Discriminator, self).__init__()
         self.ngpu = ngpu
-        self.main = nn.Sequential(
-            # input is (nc) x 128 x 64
-            nn.Conv2d(nc, ndf, 4, (4, 2), 1, bias=False),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf) x  x 32
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 2),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*2) x 16 x 16
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 4),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*4) x 8 x 8
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*8) x 4 x 4
-            # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-        )
+        if Wassertein:
+            self.main = nn.Sequential(
+                # input is (nc) x 128 x 64
+                nn.Conv2d(nc, ndf, 4, (4, 2), 1, bias=False),
+                nn.LeakyReLU(0.2, inplace=True),
+                # # state size. (ndf) x  x 32
+                # nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+                # nn.BatchNorm2d(ndf * 2),
+                # nn.LeakyReLU(0.2, inplace=True),
+                # # state size. (ndf*2) x 16 x 16
+                # nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+                # nn.BatchNorm2d(ndf * 4),
+                # nn.LeakyReLU(0.2, inplace=True),
+                # # state size. (ndf*4) x 8 x 8
+                # nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+                # nn.BatchNorm2d(ndf * 8),
+                # nn.LeakyReLU(0.2, inplace=True),
+                # state size. (ndf*8) x 4 x 4
+                # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+                nn.Conv2d(ndf, ndf * 2, 3, stride=1, padding=1),
+                nn.LeakyReLU(0.2, True),
+                nn.MaxPool2d((2, 2)),
+
+                nn.Conv2d(ndf * 2, ndf * 4, 3, stride=1, padding=1),
+                nn.LeakyReLU(0.2, True),
+                nn.MaxPool2d((2, 2)),
+
+                nn.Conv2d(ndf * 4, ndf * 8, 3, stride=1, padding=1),
+                nn.LeakyReLU(0.2, True),
+                nn.MaxPool2d((2, 2)),
+            )
+        else:
+            self.main = nn.Sequential(
+                # input is (nc) x 128 x 64
+                nn.Conv2d(nc, ndf, 4, (4, 2), 1, bias=False),
+                nn.LeakyReLU(0.2, inplace=True),
+                # state size. (ndf) x  x 32
+                nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+                nn.BatchNorm2d(ndf * 2),
+                nn.LeakyReLU(0.2, inplace=True),
+                # state size. (ndf*2) x 16 x 16
+                nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+                nn.BatchNorm2d(ndf * 4),
+                nn.LeakyReLU(0.2, inplace=True),
+                # state size. (ndf*4) x 8 x 8
+                nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+                nn.BatchNorm2d(ndf * 8),
+                nn.LeakyReLU(0.2, inplace=True),
+                # state size. (ndf*8) x 4 x 4
+                # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            )
         self.extension = nn.Sequential(
             nn.Linear(ndf*8*4*4, 512),
             nn.BatchNorm1d(512, momentum=0.9),
+            nn.LeakyReLU(0.2, True),
             nn.Linear(512, 1)
         )
         self.getDis = nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
@@ -280,7 +313,7 @@ def load_everything(nz=100, device="cuda:0", lr=1e-2):
 device = "cuda"
 def VAE_GAN_train_one_epoch(
         data, gen, discrim, criterion, optim_Dis, optim_E, optim_D,
-        Wassertein, gp=False, gamma=15):
+        Wassertein, gp=False, gamma=15, lamda=10):
     bs, width, height = data.size(0), data.size(3), data.size(2)
 
     ones_label = torch.ones((bs, ), device=device)
@@ -312,7 +345,7 @@ def VAE_GAN_train_one_epoch(
                                         only_inputs=True)[0]
         gradient_penalty = (gradients.view(gradients.size(0), -1).norm(2, 1) - 1) ** 2
         gradient_penalty = gradient_penalty.mean()
-        dis_loss = errD_real + errD_rec_noise + gradient_penalty
+        dis_loss = errD_real + errD_rec_noise + lamda * gradient_penalty
     else:
         output3 = discrim(rec_enc)[0]
         dis_loss = errD_real + errD_rec_noise + torch.mean(output3.squeeze())
@@ -384,16 +417,20 @@ def train_VAE_GAN(raw_dataset,
     optim_D = torch.optim.RMSprop(gen.decoder.parameters(), lr=lr)
     optim_Dis = torch.optim.RMSprop(discrim.parameters(), lr=lr * alpha)
 
+    lamda = 10
+
     for epoch in range(epochs):
         dataloader = load_dataset(raw_dataset, batch_size)
+        if epoch % 5 == 0:
+            lamda -= 1
         for i, data in enumerate(dataloader):
             img, label = data  # label here is not so important
-            VAE_GAN_train_one_epoch(img, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein, gp)
+            VAE_GAN_train_one_epoch(img, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein, gp, lamda=lamda)
             if Wassertein:
                 for dis in discrim.main:
                     if dis.__class__.__name__ == ('Linear' or 'Conv2d'):
                         dis.weight.requires_grad_ = False
-                        dis.weight.clamp_(-threshold, threshold)
+                        dis.weight.data.clamp_(-threshold, threshold)
                         dis.weight.requires_grad_ = True
 
 
