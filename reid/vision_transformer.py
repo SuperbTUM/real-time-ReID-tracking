@@ -217,7 +217,7 @@ class ViT(nn.Module):
         cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b=b)
         x = torch.cat((cls_tokens, x), dim=1)
         x += self.pos_embedding[:, :(n + 1)]
-        if self.side_info and view_index:
+        if self.side_info and view_index is not None:
             x += 1.5 * self.side_info_embedding[view_index]
         x = self.dropout(x)
 
@@ -384,7 +384,7 @@ class ShadowFeatureExtraction(nn.Module):
         bs, H, W = x.size(0), x.size(2), x.size(3)
         flattened_x = x.view(bs * H * W, -1)
         flattened_output = self.fc(flattened_x)
-        if self.side_info and view_index:
+        if self.side_info and view_index is not None:
             flattened_output += self.side_info_coeff * self.side_info_embedding[view_index]
         return flattened_output.view(bs, -1, H, W)
 

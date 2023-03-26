@@ -10,11 +10,11 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 import torchvision
-from .osnet import *
+from osnet import *
 import copy
 import random
 import math
-from .attention_module import Attention_Module
+from attention_module import Attention_Module
 
 
 class PLR_OSNet(nn.Module):

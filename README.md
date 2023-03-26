@@ -1,4 +1,4 @@
-## TODO
+## TODOs
 
 - [ ] To work with latest YoloV8-DeepOCSort implementation towards a new benchmark(important!) and apply necessary changes on current repository.
 
@@ -39,7 +39,15 @@ The baseline is a Yolov5(now is YoloV8!) based DeepSort(now is DeepOCSort!) algo
 
 ## Dependency
 
-The code was developed with PyTorch and Numpy. Please download and install the latest stable version with CUDA 11. All codes are tested with one single GPU. If you wish to accelerate training, [mixed-precision training](https://github.com/NVIDIA/apex) should be a great option. It can save training time as well as reduce memory cost. Distributed training is also available. If you wish to accelerate inference, you may refer to TorchScript or TensorRT. A major reference is [this](https://developer.nvidia.com/blog/accelerating-inference-up-to-6x-faster-in-pytorch-with-torch-tensorrt/).
+Python >= 3.8 is recommended.
+
+All code was developed with PyTorch and Numpy. Please download and install the latest stable version with CUDA 11.x. All codes are tested with one single GPU. If you wish to accelerate training, [mixed-precision training](https://github.com/NVIDIA/apex) should be a great option. It can save training time as well as reduce memory cost. Distributed training is also available. If you wish to accelerate inference, you may refer to TorchScript or TensorRT. A major reference is [this](https://developer.nvidia.com/blog/accelerating-inference-up-to-6x-faster-in-pytorch-with-torch-tensorrt/).
+
+You are suggested to install other dependencies with
+
+```bash
+pip install -r requirements.txt
+```
 
 
 
@@ -57,11 +65,39 @@ Person gallery: [Market1501](https://www.kaggle.com/pengcw1/market-1501/data) =>
 
 [Pending] Replace the file with modified one in the original repositories.
 
-You can try to have generated images with GAN. That means you need additional training on the GAN. To train DC-GAN, please refer to the instructions on [this](https://github.com/qiaoguan/Person-reid-GAN-pytorch/tree/master/DCGAN-tensorflow). Please pay attention that this is an out-of-state repo and there is also file missing. You can also refer to the `ipynb` file in [modification_dcgan](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_dcgan) folder. Before that, make sure you properly execute `prepare.py`, `changeIndex.py` as well as the customized `re_index.py` before conducting training. We trained the backbone with `Market-1501/bounding_box_train` plus generated images. You can refer to the script files in our repo. 
+**GAN training**
 
-You will need to train your Re-ID model with Market1501. In the [reid](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid) folder, you can see how we build the model as well train the model. The intuition is to apply bag of tricks. We considered random erasing augmentation, last stride reduction, center loss, SE block, batch norm neck, etc. We found that IBN and GeM modules are critical, so we also include this in our backbone. We have our checkpoint available [here](https://drive.google.com/file/d/1Ta89D7WXhL_H2lR_eYEyLuWfZEFdNEXo/view?usp=sharing). Please copy your model and checkpoints to `trackers/strongsort/models` and `trackers/strongsort/checkpoint`, and modify `reid_model_factory.py` accordingly.
+You can try to have generated images with GAN. That means you need additional training on the GAN. We have a few selections: DC-GAN, VAE-GAN and VAE-WGANGP. Explicitly, to train DC-GAN, please refer to the instructions on [this](https://github.com/qiaoguan/Person-reid-GAN-pytorch/tree/master/DCGAN-tensorflow). Please pay attention that this is an out-of-fashion repo w/. certain file missing. You can also refer to the `ipynb` file in [modification_gan](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_gan) folder. Before that, make sure you properly execute `prepare.py`, `changeIndex.py` as well as the customized `re_index.py` before conducting training. We trained the backbone with `Market-1501/bounding_box_train` plus generated images. You can refer to the script files in our repo. 
+
+In a general scenario, you can simply execute the training script:
+
+```python
+python synthetic_generate.py --vae --Wassertein --gp
+```
+
+**ReID training**
+
+You will need to train your Re-ID model with Market1501. In the [reid](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid) folder, you can see how we build the model as well train the model. There are a few versions of models.
+
+The intuition is to apply bag of tricks. We considered random erasing augmentation, last stride reduction, center loss, SE block, batch norm neck, etc. We found that IBN and GeM modules are critical, so we also include this in our backbone. We have our checkpoint available [here](https://drive.google.com/file/d/1Ta89D7WXhL_H2lR_eYEyLuWfZEFdNEXo/view?usp=sharing). 
+
+We also have plr_osnet, vision transformer from Trans-ReID, and swin transformer.
+
+We train the model on both image-based dataset and video-based dataset(w/. ground truth), and the scripts can be access under the same folder.
+
+```python
+python image_reid_train.py --backbone vit
+```
+
+```python
+python video_reid_train.py
+```
+
+To fit with `yolov8_tracking`, please copy your model and checkpoints to `trackers/strongsort/models` and `trackers/strongsort/checkpoint`, and modify `reid_model_factory.py` accordingly.
 
 If you want to train the Re-ID model with video dataset, please refer to the [video_train](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_deepsort/mot16_train.py) script.
+
+**Tracking evaluation**
 
 For the final evaluation, please refer to [this Wiki](https://github.com/mikel-brostrom/Yolov5_DeepSort_Pytorch/wiki/Evaluation) for details. We also have our script file for tracking (May not reliable as running in Colab).
 
