@@ -4,6 +4,8 @@ import torch.distributed as dist
 import h5py
 import cv2
 
+from accelerate import Accelerator
+
 
 def transform_dataset_hdf5(gt_paths, img_width, img_height):
     """With OpenCV"""
@@ -56,3 +58,8 @@ def postprocess_ddp(ddp_model, rank):
         torch.save(ddp_model.state_dict(), "checkpoint.pt")
     dist.barrier()
     cleanup()
+
+
+def accelerate_train(*args):
+    accelerator = Accelerator()
+    return {"accelerated": accelerator.prepare(*args), "accelerator":  accelerator}

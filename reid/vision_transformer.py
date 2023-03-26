@@ -422,10 +422,10 @@ class StageModule(nn.Module):
 
 class SwinTransformer(nn.Module):
     def __init__(self, *, hidden_dim, layers, heads, loss="softmax", channels=3, num_classes=1000, head_dim=32, window_size=7,
-                 downscaling_factors=(4, 2, 2, 2), relative_pos_embedding=True, camera=0, side_info=False):
+                 downscaling_factors=(4, 2, 2, 2), relative_pos_embedding=True, camera=0, sequence=0, side_info=False):
         super().__init__()
 
-        self.sfe = ShadowFeatureExtraction(channels, hidden_dim, camera=camera, side_info=side_info)
+        self.sfe = ShadowFeatureExtraction(channels, hidden_dim, camera=camera, sequence=sequence, side_info=side_info)
 
         self.stage1 = StageModule(in_channels=hidden_dim, hidden_dimension=hidden_dim, layers=layers[0],
                                   downscaling_factor=downscaling_factors[0], num_heads=heads[0], head_dim=head_dim,
