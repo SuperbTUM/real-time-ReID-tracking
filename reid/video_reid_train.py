@@ -47,7 +47,6 @@ class VideoDataset(Dataset):
                         labels.append(label)
                         diff = line[1] - label
                     bbox = list(map(lambda x: float(x), line[2:6]))
-                    print(bbox)
                     if self.lamda > 1.0:
                         bbox = [max(0., bbox[0]-bbox[0]*(self.lamda - 1)/2), max(0., bbox[1]-bbox[1]*(self.lamda - 1)/2),
                                 bbox[2]*self.lamda, bbox[3]*self.lamda]
