@@ -22,14 +22,14 @@ pretrained_urls = {"vit_t": "", "swin_t": ""}
 class MixedNorm(nn.Module):
     def __init__(self, features):
         super(MixedNorm, self).__init__()
-        self.layernorm = nn.InstanceNorm2d(features // 2)
         self.instancenorm = nn.InstanceNorm2d(features // 2, affine=True)
+        self.batchnorm = nn.BatchNorm2d(features // 2)
         self.features = features
 
     def forward(self, x):
         split = torch.split(x, self.features // 2, 1)
         out1 = self.instancenorm(split[0].contiguous())
-        out2 = self.layernorm(split[1].contiguous())
+        out2 = self.batchnorm(split[1].contiguous())
         out = torch.cat((out1, out2), 1)
         return out
 
@@ -365,6 +365,7 @@ class ShadowFeatureExtraction(nn.Module):
         super(ShadowFeatureExtraction, self).__init__()
         self.conv1 = nn.Conv2d(in_chan, 12, 2, stride=2)
         self.conv2 = nn.Conv2d(12, 48, 2, stride=2)
+        self.norm = MixedNorm(12)
         self.fc = nn.Linear(48, hidden_dimension)
         if camera * sequence > 0:
             self.side_info_embedding = nn.Parameter(torch.randn(camera * sequence, hidden_dimension))
@@ -379,7 +380,7 @@ class ShadowFeatureExtraction(nn.Module):
         self.side_info_coeff = side_info_coeff
 
     def forward(self, x, view_index=None):
-        x = F.relu(self.conv1(x))
+        x = F.relu(self.norm(self.conv1(x)))
         x = F.relu(self.conv2(x))
         bs, H, W = x.size(0), x.size(2), x.size(3)
         flattened_x = x.view(bs * H * W, -1)

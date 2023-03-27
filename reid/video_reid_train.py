@@ -7,8 +7,9 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import glob
 import argparse
+import madgrad
 
-from video_model import InVideoModel
+from video_model import resnet18, resnet34, resnet50, resnet101, resnet152, resnet200
 from train_utils import *
 
 cudnn.deterministic = True
@@ -102,12 +103,13 @@ class VideoDataset(Dataset):
         return images, label
 
 
-def train(dataset, batch_size=8, epochs=25, num_classes=517):
-    model = InVideoModel(num_class=num_classes, gem=False).cuda()
+def train(dataset, batch_size=8, epochs=25, num_classes=517, seq_len=10):
+    model = resnet50(num_classes=num_classes, gem=True, IBN=True,
+                     sample_height=256, sample_width=128, sample_duration=seq_len).cuda()
     model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=5e-4)
+    optimizer = madgrad.MADGRAD(model.parameters(), lr=1e-4, weight_decay=5e-4, momentum=0.)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
-    loss_func = HybridLoss3(num_classes=num_classes)
+    loss_func = HybridLoss3(num_classes=num_classes, feat_dim=2048)
     loss_stats = []
     for epoch in range(epochs):
         dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
@@ -132,9 +134,10 @@ def train(dataset, batch_size=8, epochs=25, num_classes=517):
 
 # What if the dataset is too large or computing device is not strong enough?
 # Option 1: distributed training
-def distributed_train(dataset, batch_size=8, epochs=25, num_classes=517,
+def distributed_train(dataset, batch_size=8, epochs=25, num_classes=517, seq_len=10,
                       rank=-1, world_size=-1):
-    model = InVideoModel(num_class=num_classes, gem=False).cuda()
+    model = resnet50(num_classes=num_classes, gem=True, IBN=True,
+                     sample_height=256, sample_width=128, sample_duration=seq_len).cuda()
     ddp_model = ddp_trigger(model, rank, world_size)
     """Original training
     """
@@ -142,9 +145,9 @@ def distributed_train(dataset, batch_size=8, epochs=25, num_classes=517,
     # ----------
     from torch.utils.data.distributed import DistributedSampler
     # ----------
-    optimizer = torch.optim.Adam(ddp_model.parameters(), lr=0.001, weight_decay=5e-4)
+    optimizer = madgrad.MADGRAD(model.parameters(), lr=1e-4, weight_decay=5e-4, momentum=0.)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
-    loss_func = HybridLoss3(num_classes=num_classes)
+    loss_func = HybridLoss3(num_classes=num_classes, feat_dim=2048)
     loss_stats = []
     for epoch in range(epochs):
         dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=False, pin_memory=True, sampler=DistributedSampler(dataset))

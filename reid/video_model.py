@@ -1,80 +1,318 @@
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from SERes18_IBN import SEDense18_IBN
+from torch.autograd import Variable
+import math
+from functools import partial
+
+__all__ = [
+    'ResNet', 'resnet10', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
+    'resnet152', 'resnet200'
+]
 
 
-# It's not working well as expected
-class InVideoModel(SEDense18_IBN):
-    def __init__(self, num_class, needs_norm=True, gem=True, is_reid=False):
-        super(InVideoModel, self).__init__(num_class=num_class,
-                                           needs_norm=needs_norm,
-                                           gem=gem,
-                                           is_reid=is_reid)
+def conv3x3x3(in_planes, out_planes, stride=1):
+    # 3x3x3 convolution with padding
+    return nn.Conv3d(
+        in_planes,
+        out_planes,
+        kernel_size=3,
+        stride=stride,
+        padding=1,
+        bias=False)
+
+
+def downsample_basic_block(x, planes, stride):
+    out = F.avg_pool3d(x, kernel_size=1, stride=stride)
+    zero_pads = torch.Tensor(
+        out.size(0), planes - out.size(1), out.size(2), out.size(3),
+        out.size(4)).zero_()
+    if isinstance(out.data, torch.cuda.FloatTensor):
+        zero_pads = zero_pads.cuda()
+
+    out = Variable(torch.cat([out.data, zero_pads], dim=1))
+
+    return out
+
+
+class MixedNorm3d(nn.Module):
+    def __init__(self, features):
+        super(MixedNorm3d, self).__init__()
+        self.half = features >> 1
+        self.batchnorm3d = nn.BatchNorm3d(self.half)
+        self.instancenorm3d = nn.InstanceNorm3d(features - self.half, affine=True)
 
     def forward(self, x):
-        b, s, c, h, w = x.size()
-        x = x.view(b * s, c, h, w)
-        x = self.conv0(x)
-        x = self.bn0(x)
-        x = self.relu0(x)
-        x = self.pooling0(x)
-        branch1 = x
-        x = self.basicBlock11(x)
-        scale1 = self.seblock1(x)
-        x = scale1 * x + branch1
+        split = torch.split(x, self.half, 1)
+        out1 = self.instancenorm3d(split[0].contiguous())
+        out2 = self.batchnorm3d(split[1].contiguous())
+        out = torch.cat((out1, out2), 1)
+        return out
 
-        branch2 = x
-        x = self.basicBlock12(x)
-        scale2 = self.seblock2(x)
-        x = scale2 * x + branch2
 
-        branch3 = x
-        x = self.basicBlock21(x)
-        scale3 = self.seblock3(x)
-        if self.needs_norm:
-            x = scale3 * x + self.optionalNorm2dconv3(self.ancillaryconv3(branch3))
+class GeM3d(nn.Module):
+    def __init__(self, kernel_size, stride=1, p=3, eps=1e-6):
+        super(GeM3d, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+        self.kernel_size = kernel_size
+        self.stride = stride
+
+    def forward(self, x):
+        return self.gem(x, p=self.p, eps=self.eps)
+
+    def gem(self, x, p=3, eps=1e-6):
+        return F.avg_pool3d(x.clamp(min=eps).pow(p), self.kernel_size, self.stride).pow(1. / p)
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(
+            self.eps) + ')'
+
+
+class BasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None, IBN=False):
+        super(BasicBlock, self).__init__()
+        self.conv1 = conv3x3x3(inplanes, planes, stride)
+        if IBN:
+            self.bn1 = MixedNorm3d(planes)
         else:
-            x = scale3 * x + self.ancillaryconv3(branch3)
+            self.bn1 = nn.BatchNorm3d(planes)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = conv3x3x3(planes, planes)
+        self.bn2 = nn.BatchNorm3d(planes)
+        self.downsample = downsample
+        self.stride = stride
 
-        branch4 = x
-        x = self.basicBlock22(x)
-        scale4 = self.seblock4(x)
-        x = scale4 * x + branch4
+    def forward(self, x):
+        residual = x
 
-        branch5 = x
-        x = self.basicBlock31(x)
-        scale5 = self.seblock5(x)
-        if self.needs_norm:
-            x = scale5 * x + self.optionalNorm2dconv5(self.ancillaryconv5(branch5))
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+
+class Bottleneck(nn.Module):
+    expansion = 4
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None, IBN=False):
+        super(Bottleneck, self).__init__()
+        self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
+        if IBN:
+            self.bn1 = MixedNorm3d(planes)
         else:
-            x = scale5 * x + self.ancillaryconv5(branch5)
+            self.bn1 = nn.BatchNorm3d(planes)
+        self.conv2 = nn.Conv3d(
+            planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm3d(planes)
+        self.conv3 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm3d(planes * 4)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
 
-        branch6 = x
-        x = self.basicBlock32(x)
-        scale6 = self.seblock6(x)
-        x = scale6 * x + branch6
+    def forward(self, x):
+        residual = x
 
-        branch7 = x
-        x = self.basicBlock41(x)
-        scale7 = self.seblock7(x)
-        if self.needs_norm:
-            x = scale7 * x + self.optionalNorm2dconv7(self.ancillaryconv7(branch7))
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+
+class ResNet(nn.Module):
+
+    def __init__(self,
+                 block,
+                 layers,
+                 sample_height,
+                 sample_width,
+                 sample_duration,
+                 shortcut_type='B',
+                 num_classes=400,
+                 IBN=False,
+                 gem=False):
+        self.inplanes = 64
+        super(ResNet, self).__init__()
+        self.conv1 = nn.Conv3d(
+            3,
+            64,
+            kernel_size=7,
+            stride=(1, 2, 2),
+            padding=(3, 3, 3),
+            bias=False)
+        self.bn1 = nn.BatchNorm3d(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
+        self.layer1 = self._make_layer(block, 64, layers[0], shortcut_type, IBN=IBN)
+        self.layer2 = self._make_layer(
+            block, 128, layers[1], shortcut_type, stride=2, IBN=IBN)
+        self.layer3 = self._make_layer(
+            block, 256, layers[2], shortcut_type, stride=2, IBN=IBN)
+        self.layer4 = self._make_layer(
+            block, 512, layers[3], shortcut_type, stride=2, IBN=IBN)
+        last_duration = int(math.ceil(sample_duration / 16.0))
+        last_height = int(math.ceil(sample_height / 32.0))
+        last_width = int(math.ceil(sample_width / 32.0))
+        if gem:
+            self.avgpool = GeM3d((last_duration, last_height, last_width), stride=1)
         else:
-            x = scale7 * x + self.ancillaryconv7(branch7)
+            self.avgpool = nn.AvgPool3d(
+                (last_duration, last_height, last_width), stride=1)
+        self.fc = nn.Linear(512 * block.expansion, num_classes)
 
-        branch8 = x
-        x = self.basicBlock42(x)
-        scale8 = self.seblock8(x)
-        x = scale8 * x + branch8
+        self.bnneck = nn.BatchNorm1d(512 * block.expansion)
+        self.bnneck.bias.requires_grad_(False)
 
-        bs, c, h, w = x.size()
-        x = x.view(b, s, c, h, w).permute(0, 2, 1, 3, 4).reshape(b, c, s * h, w)
+        for m in self.modules():
+            if isinstance(m, nn.Conv3d):
+                m.weight = nn.init.kaiming_normal_(m.weight, mode='fan_out')
+            elif isinstance(m, nn.BatchNorm3d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
 
-        x = self.avgpooling(x)
-        feature = x.view(x.size(0), -1)
-        if self.is_reid:
-            # do we need a further normalization here?
-            return F.normalize(feature, p=2, dim=1)
-        x = self.bnneck(feature)
-        x = self.classifier(x)
+    def _make_layer(self, block, planes, blocks, shortcut_type, stride=1, IBN=False):
+        downsample = None
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            if shortcut_type == 'A':
+                downsample = partial(
+                    downsample_basic_block,
+                    planes=planes * block.expansion,
+                    stride=stride)
+            else:
+                downsample = nn.Sequential(
+                    nn.Conv3d(
+                        self.inplanes,
+                        planes * block.expansion,
+                        kernel_size=1,
+                        stride=stride,
+                        bias=False), nn.BatchNorm3d(planes * block.expansion))
 
-        return x, feature
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample, IBN))
+        self.inplanes = planes * block.expansion
+        for i in range(1, blocks):
+            layers.append(block(self.inplanes, planes))
+
+        return nn.Sequential(*layers)
+
+    def load_matched_state_dict(self, state_dict):
+
+        own_state = self.state_dict()
+        for name, param in state_dict.items():
+            if name not in own_state:
+                continue
+            # if isinstance(param, Parameter):
+            # backwards compatibility for serialized parameters
+            param = param.data
+            print("loading " + name)
+            own_state[name].copy_(param)
+
+    def forward(self, x):
+        # default size is (b, s, c, w, h), s for seq_len, c for channel
+        # convert for 3d cnn, (b, c, s, w, h)
+        x = x.permute(0, 2, 1, 3, 4)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+        x = self.bnneck(x)
+        y = self.fc(x)
+
+        return y, x
+
+
+def get_fine_tuning_parameters(model, ft_begin_index):
+    if ft_begin_index == 0:
+        return model.parameters()
+
+    ft_module_names = []
+    for i in range(ft_begin_index, 5):
+        ft_module_names.append('layer{}'.format(i))
+    ft_module_names.append('fc')
+
+    parameters = []
+    for k, v in model.named_parameters():
+        for ft_module in ft_module_names:
+            if ft_module in k:
+                parameters.append({'params': v})
+                break
+            else:
+                parameters.append({'params': v, 'lr': 0.0})
+
+            return parameters
+
+def resnet10(**kwargs):
+    """Constructs a ResNet-18 model.
+    """
+    model = ResNet(BasicBlock, [1, 1, 1, 1], **kwargs)
+    return model
+
+def resnet18(**kwargs):
+    """Constructs a ResNet-18 model.
+    """
+    model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+    return model
+
+def resnet34(**kwargs):
+    """Constructs a ResNet-34 model.
+    """
+    model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    return model
+
+def resnet50(**kwargs):
+    """Constructs a ResNet-50 model.
+    """
+    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+    return model
+
+def resnet101(**kwargs):
+    """Constructs a ResNet-101 model.
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
+    return model
+
+def resnet152(**kwargs):
+    """Constructs a ResNet-101 model.
+    """
+    model = ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
+    return model
+
+def resnet200(**kwargs):
+    """Constructs a ResNet-101 model.
+    """
+    model = ResNet(Bottleneck, [3, 24, 36, 3], **kwargs)
+    return model
