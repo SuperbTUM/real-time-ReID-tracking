@@ -4,6 +4,7 @@ import torch.nn as nn
 from prefetch_generator import BackgroundGenerator
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
 import torch.onnx
 import numpy as np
@@ -245,13 +246,17 @@ class LGT(object):
         self.r1 = r1
 
     def __call__(self, img):
-
+        """
+        :param img: should be a tensor for the sake of preprocessing convenience
+        :return:
+        """
+        img = transforms.ToPILImage()(img)
         new = img.convert("L")   # Convert from here to the corresponding grayscale image
         np_img = np.array(new, dtype=np.uint8)
         img_gray = np.dstack([np_img, np_img, np_img])
 
         if random.uniform(0, 1) >= self.probability:
-            return img
+            return transforms.ToTensor()(img)
 
         for attempt in range(100):
             area = img.size[0] * img.size[1]
@@ -272,6 +277,6 @@ class LGT(object):
 
                 img = Image.fromarray(img.astype('uint8'))
 
-                return img
+                return transforms.ToTensor()(img)
 
-        return img
+        return transforms.ToTensor()(img)

@@ -2,6 +2,7 @@ import torch.nn.functional as F
 from SERes18_IBN import SEDense18_IBN
 
 
+# It's not working well as expected
 class InVideoModel(SEDense18_IBN):
     def __init__(self, num_class, needs_norm=True, gem=True, is_reid=False):
         super(InVideoModel, self).__init__(num_class=num_class,

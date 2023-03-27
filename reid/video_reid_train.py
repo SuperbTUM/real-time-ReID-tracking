@@ -5,7 +5,6 @@ from torch.autograd import Variable
 from torch.utils.data import Dataset
 from collections import defaultdict
 import matplotlib.pyplot as plt
-from torchvision import transforms
 import glob
 import argparse
 
@@ -48,9 +47,12 @@ class VideoDataset(Dataset):
                         labels.append(label)
                         diff = line[1] - label
                     bbox = list(map(lambda x: float(x), line[2:6]))
+                    print(bbox)
                     if self.lamda > 1.0:
                         bbox = [max(0., bbox[0]-bbox[0]*(self.lamda - 1)/2), max(0., bbox[1]-bbox[1]*(self.lamda - 1)/2),
                                 bbox[2]*self.lamda, bbox[3]*self.lamda]
+                    if bbox[2] <= 10 or bbox[3] <= 10 or bbox[0] + bbox[2] <= 10 or bbox[1] + bbox[3] <= 10:
+                        continue
                     frame = line[0]
                     file_loc = path.split("/")[-3] + "/"
                     detail = bbox + [int(frame)] + [file_loc]
@@ -84,12 +86,17 @@ class VideoDataset(Dataset):
                  round(min(image.size[0], left + width)),
                  round(min(image.size[1], top + height)))
             )
+            image = transforms.Compose(
+                [
+                    transforms.Resize((256, 128)),
+                    transforms.ToTensor(),
+                ]
+            )(image)
             if self.transforms:
                 # Random Augment
                 random.shuffle(self.transforms)
                 transform_final = transforms.Compose(self.transforms)
                 image = transform_final(image)
-            image = transforms.ToTensor()(image)
             images.append(image)
         images = torch.stack(images)
         label = torch.tensor(self.labels[item]).int()
@@ -99,7 +106,7 @@ class VideoDataset(Dataset):
 def train(dataset, batch_size=8, epochs=25, num_classes=517):
     model = InVideoModel(num_class=num_classes, gem=False).cuda()
     model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=5e-4)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
     loss_func = HybridLoss3(num_classes=num_classes)
     loss_stats = []
@@ -216,14 +223,11 @@ if __name__ == "__main__":
     for image_path in image_paths:
         gt_images.extend(sorted(glob.glob(image_path)))
     transform_candidates = [
-        transforms.Resize((256, 128)),
         transforms.RandomHorizontalFlip(),
-        transforms.Pad(10),
-        transforms.RandomCrop((256, 128)),
+        transforms.RandomCrop((256, 128), padding=10),
         LGT(),
         transforms.RandomErasing(),
         transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        # transforms.ToTensor(),
     ]
     dataset = VideoDataset(gt_paths, transform_candidates, params.crop_factor,
                            prefix_image_path="/".join((params.dataset_root, "train", "")))
