@@ -13,6 +13,10 @@ from dataset_market import Market1501
 import argparse
 
 
+cudnn.deterministic = True
+cudnn.benchmark = True
+
+
 class MarketDataset(Dataset):
     def __init__(self, images, transform=None):
         self.images = images
@@ -30,7 +34,7 @@ class MarketDataset(Dataset):
         return detailed_info
 
 
-def train_plr_osnet(dataset, batch_size=8, epochs=25, num_classes=517):
+def train_plr_osnet(dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
     model = plr_osnet(num_classes=num_classes, loss='triplet').cuda()
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
@@ -38,6 +42,10 @@ def train_plr_osnet(dataset, batch_size=8, epochs=25, num_classes=517):
     loss_func1 = HybridLoss3(num_classes=num_classes, feat_dim=2048)
     loss_func2 = HybridLoss3(num_classes=num_classes, feat_dim=512)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+    if accelerate:
+        res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
+        model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
+        accelerator = res_dict["accelerator"]
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
@@ -52,7 +60,10 @@ def train_plr_osnet(dataset, batch_size=8, epochs=25, num_classes=517):
             loss = loss1 + loss2
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
-            loss.backward()
+            if accelerate:
+                accelerator.backward(loss)
+            else:
+                loss.backward()
             optimizer.step()
             lr_scheduler.step()
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
@@ -63,7 +74,8 @@ def train_plr_osnet(dataset, batch_size=8, epochs=25, num_classes=517):
     return model, loss_stats
 
 
-def train_vision_transformer(dataset, backbone, batch_size=8, epochs=25, num_classes=517, all_cams=6, all_seq=6):
+def train_vision_transformer(dataset, backbone, batch_size=8, epochs=25, num_classes=517,
+                             all_cams=6, all_seq=6, accelerate=False):
     if backbone == "vit":
         model = vit_t(img_size=(448, 224), num_classes=num_classes, loss="triplet", camera=all_cams, sequence=all_seq, side_info=True).cuda()
     elif backbone == "swin":
@@ -75,6 +87,10 @@ def train_vision_transformer(dataset, backbone, batch_size=8, epochs=25, num_cla
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
     loss_func = HybridLoss3(num_classes=num_classes, feat_dim=384)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+    if accelerate:
+        res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
+        model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
+        accelerator = res_dict["accelerator"]
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
@@ -94,7 +110,10 @@ def train_vision_transformer(dataset, backbone, batch_size=8, epochs=25, num_cla
             logits, embeddings = model(images, view_index)
             loss = loss_func(embeddings, logits, label)
             loss_stats.append(loss.cpu().item())
-            loss.backward()
+            if accelerate:
+                accelerator.backward(loss)
+            else:
+                loss.backward()
             optimizer.step()
             lr_scheduler.step()
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
@@ -130,7 +149,8 @@ if __name__ == "__main__":
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         ])
         market_dataset = MarketDataset(dataset.train, transform)
-        model, loss_stats = train_plr_osnet(market_dataset, params.bs, params.epochs, dataset.num_train_pids)
+        model, loss_stats = train_plr_osnet(market_dataset, params.bs, params.epochs, dataset.num_train_pids,
+                                            params.accelerate)
     else:
         transform = transforms.Compose([
             transforms.Resize((448, 224)),
@@ -146,6 +166,7 @@ if __name__ == "__main__":
         model, loss_stats = train_vision_transformer(market_dataset, params.backbone, params.bs, params.epochs,
                                                      dataset.num_train_pids,
                                                      dataset.num_train_cams,
-                                                     dataset.num_train_seqs)
+                                                     dataset.num_train_seqs,
+                                                     params.accelerate)
 
     print("loss curve", loss_stats)

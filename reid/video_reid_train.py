@@ -7,6 +7,7 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 from torchvision import transforms
 import glob
+import argparse
 
 from video_model import InVideoModel
 from train_utils import *
@@ -23,9 +24,9 @@ class VideoDataset(Dataset):
         self.gt_paths = gt_paths
         self.seq_len = seq_len
         self.transforms = transforms
+        self.lamda = lamda
         self.gt_info, self.labels = self.read_gt()
         self.prefix_image_path = prefix_image_path
-        self.lamda = lamda
 
     def read_gt(self):
         gt_info = defaultdict(list)
@@ -191,10 +192,26 @@ def plot_loss(loss_stats):
     plt.show()
 
 
+def parser():
+    import os
+    def dir_path(string):
+        if os.path.isdir(string):
+            return string
+        else:
+            raise NotADirectoryError(string)
+    args = argparse.ArgumentParser()
+    args.add_argument("--dataset_root", default="mot16", type=dir_path)
+    args.add_argument("--bs", default=8, type=int)
+    args.add_argument("--epochs", default=50, type=int)
+    args.add_argument("--crop_factor", default=1.0, type=float)
+    return args.parse_args()
+
+
 if __name__ == "__main__":
+    params = parser()
     train_index = [2, 4, 5, 9, 10, 11, 13]
-    gt_paths = ["../datasets/MOT16/train/MOT16-" + str(i).zfill(2) + "/gt/gt.txt" for i in train_index]
-    image_paths = ["../datasets/MOT16/train/MOT16-" + str(i).zfill(2) + "/*.jpg" for i in train_index]
+    gt_paths = [params.dataset_root + "/train/MOT16-" + str(i).zfill(2) + "/gt/gt.txt" for i in train_index]
+    image_paths = [params.dataset_root + "/train/MOT16-" + str(i).zfill(2) + "/*.jpg" for i in train_index]
     gt_images = []
     for image_path in image_paths:
         gt_images.extend(sorted(glob.glob(image_path)))
@@ -208,6 +225,7 @@ if __name__ == "__main__":
         transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         # transforms.ToTensor(),
     ]
-    dataset = VideoDataset(gt_paths, transform_candidates, 1.0)
-    model, loss_stats = train(dataset, num_classes=len(dataset))
+    dataset = VideoDataset(gt_paths, transform_candidates, params.crop_factor,
+                           prefix_image_path="/".join((params.dataset_root, "train", "")))
+    model, loss_stats = train(dataset, params.bs, params.epochs, len(dataset))
     plot_loss(loss_stats)
