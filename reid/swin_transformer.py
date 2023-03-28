@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 
 import numpy as np
+import math
 import warnings
 from timm.models.layers import trunc_normal_
 from timm.models.layers import Mlp
@@ -196,12 +197,13 @@ class WindowAttention(nn.Module):
             lambda t: rearrange(t, 'b (nw_h w_h) (nw_w w_w) (h d) -> b h (nw_h nw_w) (w_h w_w) d',
                                 h=h, w_h=self.window_size, w_w=self.window_size), qkv)
 
-        dots = einsum('b h w i d, b h w j d -> b h w i j', q, k) * self.scale
-
         if self.version == "v2":
-            dots = self.logit_scale * dots
+            dots = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1))
+            logit_scale = torch.clamp(self.logit_scale.reshape(1, self.num_heads, 1, 1), max=math.log(1. / 0.01)).exp()
+            dots = logit_scale * dots
             dots += self._relative_positional_encodings()
         else:
+            dots = einsum('b h w i d, b h w j d -> b h w i j', q, k) * self.scale
             if self.relative_pos_embedding:
                 dots += self.pos_embedding[self.relative_indices[:, :, 0], self.relative_indices[:, :, 1]]
             else:
