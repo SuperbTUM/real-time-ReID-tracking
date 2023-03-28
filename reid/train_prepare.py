@@ -250,7 +250,8 @@ class LGT(object):
         :param img: should be a tensor for the sake of preprocessing convenience
         :return:
         """
-        img = transforms.ToPILImage()(img)
+        if isinstance(img, torch.Tensor):
+            img = transforms.ToPILImage()(img)
         new = img.convert("L")   # Convert from here to the corresponding grayscale image
         np_img = np.array(new, dtype=np.uint8)
         img_gray = np.dstack([np_img, np_img, np_img])
