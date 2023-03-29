@@ -178,7 +178,7 @@ class WindowAttention(nn.Module):
         window_area = self.window_size * self.window_size
         relative_position_bias = self.meta_mlp(self.relative_coordinates_log)
         relative_position_bias = relative_position_bias.transpose(1, 0).reshape(
-            self.num_heads, window_area, window_area
+            self.heads, window_area, window_area
         )
         relative_position_bias = relative_position_bias.unsqueeze(0)
         return relative_position_bias
@@ -199,9 +199,9 @@ class WindowAttention(nn.Module):
 
         if self.version == "v2":
             dots = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1))
-            logit_scale = torch.clamp(self.logit_scale.reshape(1, self.num_heads, 1, 1), max=math.log(1. / 0.01)).exp()
-            dots = logit_scale * dots
-            dots += self._relative_positional_encodings()
+            logit_scale = torch.clamp(self.logit_scale.reshape(1, self.heads, 1, 1, 1), max=math.log(1. / 0.01)).exp()
+            dots = dots * logit_scale
+            dots += self._relative_positional_encodings().unsqueeze(2)
         else:
             dots = einsum('b h w i d, b h w j d -> b h w i j', q, k) * self.scale
             if self.relative_pos_embedding:
