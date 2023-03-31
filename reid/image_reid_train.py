@@ -193,10 +193,11 @@ def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> l
                     _, preds = model(img, cam * all_cam + seq)
                 else:
                     _, preds = model(img)
-                preds = preds.squeeze()
                 preds = preds.softmax(dim=-1)
                 conf = preds.max(dim=-1)
-                candidates = preds.argmax(dim=-1)
+                candidates = preds.argmax(dim=-1).cpu().numpy()
+                cam = cam.cpu().numpy()
+                seq = seq.cpu().numpy()
                 for i, c in enumerate(conf):
                     if c > conf_thres:
                         labels.append((img[i], candidates[i], cam[i] if cam else None, seq[i] if seq else None))
