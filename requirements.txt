@@ -3,3 +3,4 @@ timm
 h5py
 accelerate
 madgrad
+onnxruntime-gpu

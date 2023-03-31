@@ -13,6 +13,8 @@ from train_utils import *
 from dataset_market import Market1501
 
 import argparse
+import onnxruntime
+from scipy.special import softmax
 
 
 cudnn.deterministic = True
@@ -175,7 +177,30 @@ def side_info_only(model):
 def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> list:
     model.eval()
     labels = []
-    with torch.no_grad():
+    if not use_onnx:
+        with torch.no_grad():
+            for sample in dataloader:
+                if len(sample) == 2:
+                    img, _ = sample
+                    cam = seq = None
+                elif len(sample) == 3:
+                    img, _, cam = sample
+                    seq = None
+                else:
+                    img, _, cam, seq = sample
+                img = img.cuda(non_blocking=True)
+                if cam is not None and any(cam) >= 0 and seq is not None and any(seq) >= 0:
+                    _, preds = model(img, cam * all_cam + seq)
+                else:
+                    _, preds = model(img)
+                preds = preds.squeeze()
+                preds = preds.softmax(dim=-1)
+                conf = preds.max(dim=-1)
+                candidates = preds.argmax(dim=-1)
+                for i, c in enumerate(conf):
+                    if c > conf_thres:
+                        labels.append((img[i], candidates[i], cam[i] if cam else None, seq[i] if seq else None))
+    else:
         for sample in dataloader:
             if len(sample) == 2:
                 img, _ = sample
@@ -185,15 +210,12 @@ def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> l
                 seq = None
             else:
                 img, _, cam, seq = sample
-            img = img.cuda(non_blocking=True)
-            if cam is not None and any(cam) >= 0 and seq is not None and any(seq) >= 0:
-                _, preds = model(img, cam * all_cam + seq)
-            else:
-                _, preds = model(img)
-            preds = preds.squeeze()
-            preds = preds.softmax(dim=-1)
-            conf = preds.max(dim=-1)
-            candidates = preds.argmax(dim=-1)
+            ort_inputs = {'input': to_numpy(img),
+                          "index": to_numpy(cam * dataset.num_train_cams + seq)}
+            preds = ort_session.run(["embedding", "output"], ort_inputs)[1]
+            preds = softmax(preds, axis=-1)
+            conf = preds.max(axis=-1)
+            candidates = preds.argmax(axis=-1)
             for i, c in enumerate(conf):
                 if c > conf_thres:
                     labels.append((img[i], candidates[i], cam[i] if cam else None, seq[i] if seq else None))
@@ -233,24 +255,23 @@ if __name__ == "__main__":
         model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                             params.accelerate)
 
-        if params.continual:
-            transform_test = transforms.Compose([transforms.Resize((256, 128)),
-                                                 transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-                                                 transforms.ToTensor(),
-                                                 ]
-                                                )
-            # This is fake
-            dataset_test = MarketDataset(dataset.gallery, transform_test)
-            dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True)
-
-            pseudo_labeled_data = inference(model, dataloader_test)
-            del dataset_test
-            market_dataset.add_pseudo(pseudo_labeled_data)
-            market_dataset.set_cross_domain()
-            model = side_info_only(model)
-            model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
-                                                params.accelerate)
-            market_dataset.reset_cross_domain()
+        # if params.continual:
+        #     transform_test = transforms.Compose([transforms.Resize((256, 128)),
+        #                                          transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        #                                          transforms.ToTensor(),
+        #                                          ]
+        #                                         )
+        #     dataset_test = MarketDataset(dataset.gallery, transform_test)
+        #     dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True)
+        #
+        #     pseudo_labeled_data = inference(model, dataloader_test)
+        #     del dataset_test
+        #     market_dataset.add_pseudo(pseudo_labeled_data)
+        #     market_dataset.set_cross_domain()
+        #     model = side_info_only(model)
+        #     model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
+        #                                         params.accelerate)
+        #     market_dataset.reset_cross_domain()
 
     else:
         transform_train = transforms.Compose([
@@ -270,6 +291,7 @@ if __name__ == "__main__":
                                              ]
                                             )
         market_dataset = MarketDataset(dataset.train, transform_train)
+        providers = ["TensorrtExecutionProvider", "CUDAExecutionProvider"]
 
         if params.backbone.startswith("vit"):
             model = vit_t(img_size=(448, 224), num_classes=dataset.num_train_pids, loss="triplet",
@@ -286,10 +308,13 @@ if __name__ == "__main__":
                 dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
                                               pin_memory=True)
 
-                pseudo_labeled_data = inference(model, dataloader_test, dataset.num_train_cams)
+                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
+
+                pseudo_labeled_data = inference(model, dataloader_test, dataset.num_train_cams, use_onnx=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
+                model = side_info_only(model)
                 model, loss_stats = train_vision_transformer(model, market_dataset, 384,
                                                              params.bs, params.epochs,
                                                              dataset.num_train_pids,
@@ -313,10 +338,12 @@ if __name__ == "__main__":
                 dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
                                               pin_memory=True)
 
-                pseudo_labeled_data = inference(model, dataloader_test, dataset.num_train_cams)
+                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
+                pseudo_labeled_data = inference(model, dataloader_test, dataset.num_train_cams, use_onnx=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
+                model = side_info_only(model)
                 model, loss_stats = train_vision_transformer(model, market_dataset, 96,
                                                              params.bs, params.epochs,
                                                              dataset.num_train_pids,

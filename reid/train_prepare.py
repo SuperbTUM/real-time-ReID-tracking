@@ -239,6 +239,10 @@ def to_onnx(model, input_dummy, input_names=["input"], output_names=["output"]):
                       output_names=output_names)
 
 
+def to_numpy(tensor):
+    return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+
+
 # This is the code of Local Grayscale Transformation
 
 class LGT(object):
