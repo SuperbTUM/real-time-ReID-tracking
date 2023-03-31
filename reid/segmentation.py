@@ -1,16 +1,15 @@
 # experimental
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 from copy import deepcopy
 from PIL import Image
 from torchvision import transforms
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from video_reid_train import TripletLoss, CenterLoss
 
 import glob
-from osnet import osnet_ibn_x1_0, OSNet
+from reid.backbones.osnet import osnet_ibn_x1_0
 
 # use deeplabv3_resnet50 instead of deeplabv3_resnet101 to reduce the model size
 model = torch.hub.load('pytorch/vision:v0.8.0', 'deeplabv3_resnet50', pretrained=True)

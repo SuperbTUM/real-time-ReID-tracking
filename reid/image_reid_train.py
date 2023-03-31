@@ -1,14 +1,13 @@
-from train_prepare import *
 import os
 import torch.onnx
 from torch.utils.data import Dataset
-from torchvision import transforms
 from tqdm import tqdm
 from torch.autograd import Variable
 
-from plr_osnet import plr_osnet
-from vision_transformer import vit_t
-from swin_transformer import swin_t
+from reid.backbones.plr_osnet import plr_osnet
+from reid.backbones.SERes18_IBN import seres18_ibn
+from reid.backbones.vision_transformer import vit_t
+from reid.backbones.swin_transformer import swin_t
 from train_utils import *
 from dataset_market import Market1501
 
@@ -59,6 +58,48 @@ class MarketDataset(Dataset):
         # if self._continual:
         #     return detailed_info + [0 if item < len(self.images) else 1]
         return detailed_info
+
+
+def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
+    if params.ckpt and os.path.exists(params.ckpt):
+        model.eval()
+        model_state_dict = torch.load(params.ckpt)
+        model.load_state_dict(model_state_dict, strict=False)
+    model.train()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
+    loss_func = HybridLoss3(num_classes=num_classes)
+    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+    if accelerate:
+        res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
+        model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
+        accelerator = res_dict["accelerator"]
+    loss_stats = []
+    for epoch in range(epochs):
+        iterator = tqdm(dataloader)
+        for sample in iterator:
+            images, label = sample[:2]
+            optimizer.zero_grad()
+            images = images.cuda(non_blocking=True)
+            label = Variable(label).cuda(non_blocking=True)
+            embeddings, outputs = model(images)
+            loss = loss_func(embeddings, outputs, label)
+            loss_stats.append(loss.cpu().item())
+            nn.utils.clip_grad_norm_(model.parameters(), 10)
+            if accelerate:
+                accelerator.backward(loss)
+            else:
+                loss.backward()
+            optimizer.step()
+            lr_scheduler.step()
+            description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
+            iterator.set_description(description)
+    model.eval()
+    torch.save(model.state_dict(), "cnn_net_checkpoint.pt")
+    to_onnx(model.module,
+            torch.randn(batch_size, 3, 256, 128, requires_grad=True, device="cuda"),
+            output_names=["embeddings", "outputs"])
+    return model, loss_stats
 
 
 def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
@@ -228,7 +269,11 @@ def parser():
     args.add_argument("--ckpt", help="where the checkpoint of vit is, can either be a onnx or pt", type=str,
                       default="vision_transformer_checkpoint.pt")
     args.add_argument("--bs", type=int, default=64)
-    args.add_argument("--backbone", type=str, default="plr_osnet", choices=["plr_osnet", "vit", "swin_v1", "swin_v2"])
+    args.add_argument("--backbone", type=str, default="plr_osnet", choices=["seres18",
+                                                                            "plr_osnet",
+                                                                            "vit",
+                                                                            "swin_v1",
+                                                                            "swin_v2"])
     args.add_argument("--epochs", type=int, default=50)
     args.add_argument("--continual", action="store_true")
     args.add_argument("--accelerate", action="store_true")
@@ -239,7 +284,7 @@ if __name__ == "__main__":
     params = parser()
     dataset = Market1501(root="Market1501")
 
-    if params.backbone == "plr_osnet":
+    if params.backbone in ("plr_osnet", "seres18"):
         # No need for cross-domain retrain
         transform_train = transforms.Compose([
             transforms.Resize((256, 128)),
@@ -252,7 +297,10 @@ if __name__ == "__main__":
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         ])
         market_dataset = MarketDataset(dataset.train, transform_train)
-        model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
+        if params.backbone == "plr_osnet":
+            model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
+        else:
+            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet").cuda()
         model = nn.DataParallel(model)
         model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                             params.accelerate)

@@ -1,4 +1,3 @@
-from train_prepare import *
 import torch.onnx
 from tqdm import tqdm
 from torch.autograd import Variable
@@ -9,7 +8,7 @@ import glob
 import argparse
 import madgrad
 
-from video_model import resnet18, resnet34, resnet50, resnet101, resnet152, resnet200
+from reid.backbones.video_model import resnet50
 from train_utils import *
 
 cudnn.deterministic = True

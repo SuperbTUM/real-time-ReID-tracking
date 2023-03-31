@@ -3,6 +3,8 @@ import torch.nn as nn
 from torchvision import models
 from torch.nn import functional as F
 
+from batchrenorm import BatchRenormalization2D
+
 
 # This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):
@@ -45,16 +47,19 @@ class GeM(nn.Module):
 
 
 class IBN(nn.Module):
-    def __init__(self, in_channels, ratio=0.5):
+    def __init__(self, in_channels, ratio=0.5, renorm=False):
         """
-        Some do instance norm, some do batch norm
+        Half do instance norm, half do batch norm
         """
         super().__init__()
         self.in_channels = in_channels
         self.ratio = ratio
         self.half = int(self.in_channels * ratio)
         self.IN = nn.InstanceNorm2d(self.half, affine=True)
-        self.BN = nn.BatchNorm2d(self.in_channels - self.half)
+        if renorm:
+            self.BN = BatchRenormalization2D(self.in_channels - self.half)
+        else:
+            self.BN = nn.BatchNorm2d(self.in_channels - self.half)
 
     def forward(self, x):
         split = torch.split(x, self.half, 1)
@@ -69,22 +74,29 @@ class SEDense18_IBN(nn.Module):
     Additionally, we would like to test the network with local average pooling
     i.e. Divide into eight and concatenate them
     """
-    def __init__(self, num_class=751, needs_norm=True, gem=True, is_reid=False, PAP=False):
+    def __init__(self,
+                 resnet18_pretrained=True,
+                 num_class=751,
+                 needs_norm=True,
+                 gem=True,
+                 renorm=False,
+                 is_reid=False,
+                 PAP=False):
         super().__init__()
-        model = models.resnet18(pretrained=True)
+        model = models.resnet18(pretrained=resnet18_pretrained)
         self.conv0 = model.conv1
         self.bn0 = model.bn1
         self.relu0 = model.relu
         self.pooling0 = model.maxpool
 
-        model.layer1[0].bn1 = IBN(64)
+        model.layer1[0].bn1 = IBN(64, renorm=renorm)
         self.basicBlock11 = model.layer1[0]
         self.seblock1 = SEBlock(64)
 
         self.basicBlock12 = model.layer1[1]
         self.seblock2 = SEBlock(64)
 
-        model.layer2[0].bn1 = IBN(128)
+        model.layer2[0].bn1 = IBN(128, renorm=renorm)
         self.basicBlock21 = model.layer2[0]
         self.seblock3 = SEBlock(128)
         self.ancillaryconv3 = nn.Conv2d(64, 128, 1, 2, 0)
@@ -93,7 +105,7 @@ class SEDense18_IBN(nn.Module):
         self.basicBlock22 = model.layer2[1]
         self.seblock4 = SEBlock(128)
 
-        model.layer3[0].bn1 = IBN(256)
+        model.layer3[0].bn1 = IBN(256, renorm=renorm)
         self.basicBlock31 = model.layer3[0]
         self.seblock5 = SEBlock(256)
         self.ancillaryconv5 = nn.Conv2d(128, 256, 1, 2, 0)
@@ -203,3 +215,17 @@ class SEDense18_IBN(nn.Module):
         x = self.classifier(x)
 
         return x, feature
+
+
+def seres18_ibn(num_classes=751, pretrained=False, loss="triplet", **kwargs):
+    if loss == "triplet":
+        is_reid = False
+    elif loss == "softmax":
+        is_reid = True
+    else:
+        raise NotImplementedError
+    model = SEDense18_IBN(num_class=num_classes,
+                          resnet18_pretrained=pretrained,
+                          is_reid=is_reid,
+                          **kwargs)
+    return model
