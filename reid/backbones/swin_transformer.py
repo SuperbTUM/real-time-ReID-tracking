@@ -12,7 +12,7 @@ import warnings
 from timm.models.layers import trunc_normal_
 from timm.models.layers import Mlp
 
-from SERes18_IBN import GeM
+from .SERes18_IBN import GeM
 
 
 __all__ = ["swin_t"]

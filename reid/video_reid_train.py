@@ -8,7 +8,7 @@ import glob
 import argparse
 import madgrad
 
-from reid.backbones.video_model import resnet50
+from backbones.video_model import resnet50
 from train_utils import *
 
 cudnn.deterministic = True

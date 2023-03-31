@@ -3,7 +3,7 @@ import torch.nn as nn
 from torchvision import models
 from torch.nn import functional as F
 
-from batchrenorm import BatchRenormalization2D
+from .batchrenorm import BatchRenormalization2D
 
 
 # This can be applied as channel attention for gallery based on query

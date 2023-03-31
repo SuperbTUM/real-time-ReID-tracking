@@ -4,10 +4,10 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from torch.autograd import Variable
 
-from reid.backbones.plr_osnet import plr_osnet
-from reid.backbones.SERes18_IBN import seres18_ibn
-from reid.backbones.vision_transformer import vit_t
-from reid.backbones.swin_transformer import swin_t
+from backbones.plr_osnet import plr_osnet
+from backbones.SERes18_IBN import seres18_ibn
+from backbones.vision_transformer import vit_t
+from backbones.swin_transformer import swin_t
 from train_utils import *
 from dataset_market import Market1501
 
@@ -266,6 +266,7 @@ def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> l
 
 def parser():
     args = argparse.ArgumentParser()
+    args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
     args.add_argument("--ckpt", help="where the checkpoint of vit is, can either be a onnx or pt", type=str,
                       default="vision_transformer_checkpoint.pt")
     args.add_argument("--bs", type=int, default=64)
@@ -282,7 +283,7 @@ def parser():
 
 if __name__ == "__main__":
     params = parser()
-    dataset = Market1501(root="Market1501")
+    dataset = Market1501(root="/".join((params.root, "Market1501")))
 
     if params.backbone in ("plr_osnet", "seres18"):
         # No need for cross-domain retrain

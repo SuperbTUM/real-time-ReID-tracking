@@ -9,9 +9,9 @@ __all__ = ['plr_osnet']
 import torch
 from torch import nn
 from torch.nn import functional as F
-from osnet import *
+from .osnet import *
 import copy
-from attention_module import Attention_Module
+from .attention_module import Attention_Module
 
 
 class PLR_OSNet(nn.Module):
