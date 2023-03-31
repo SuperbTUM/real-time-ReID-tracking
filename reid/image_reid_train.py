@@ -100,7 +100,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
             iterator.set_description(description)
     model.eval()
     torch.save(model.state_dict(), "plr_osnet_checkpoint.pt")
-    to_onnx(model,
+    to_onnx(model.module,
             torch.randn(batch_size, 3, 256, 128, requires_grad=True, device="cuda"),
             output_names=["y1", "y2", "fea"])
     return model, loss_stats
@@ -156,7 +156,7 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
             iterator.set_description(description)
     model.eval()
     torch.save(model.state_dict(), "vision_transformer_checkpoint.pt")
-    to_onnx(model,
+    to_onnx(model.module,
             (torch.randn(batch_size, 3, 448, 224, requires_grad=True, device="cuda"),
              torch.ones(batch_size, dtype=torch.long)),
             input_names=["input", "index"],
@@ -252,6 +252,7 @@ if __name__ == "__main__":
         ])
         market_dataset = MarketDataset(dataset.train, transform_train)
         model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
+        model = nn.DataParallel(model)
         model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                             params.accelerate)
 
@@ -297,6 +298,7 @@ if __name__ == "__main__":
             model = vit_t(img_size=(448, 224), num_classes=dataset.num_train_pids, loss="triplet",
                           camera=dataset.num_train_cams,
                           sequence=dataset.num_train_seqs, side_info=True).cuda()
+            model = nn.DataParallel(model)
             model, loss_stats = train_vision_transformer(model, market_dataset, 384,
                                                          params.bs, params.epochs,
                                                          dataset.num_train_pids,
@@ -326,6 +328,7 @@ if __name__ == "__main__":
                            camera=dataset.num_train_cams, sequence=dataset.num_train_seqs,
                            side_info=True,
                            version=params.backbone[-2:]).cuda()
+            model = nn.DataParallel(model)
             model, loss_stats = train_vision_transformer(model, market_dataset, 96,
                                                          params.bs, params.epochs,
                                                          dataset.num_train_pids,

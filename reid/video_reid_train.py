@@ -106,6 +106,7 @@ class VideoDataset(Dataset):
 def train(dataset, batch_size=8, epochs=25, num_classes=517, seq_len=10):
     model = resnet50(num_classes=num_classes, gem=True, IBN=True,
                      sample_height=256, sample_width=128, sample_duration=seq_len).cuda()
+    model = nn.DataParallel(model)
     model.train()
     optimizer = madgrad.MADGRAD(model.parameters(), lr=1e-4, weight_decay=5e-4, momentum=0.)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
