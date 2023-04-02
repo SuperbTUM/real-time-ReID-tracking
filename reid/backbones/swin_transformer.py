@@ -13,6 +13,7 @@ from timm.models.layers import trunc_normal_
 from timm.models.layers import Mlp
 
 from .SERes18_IBN import GeM
+from .attention_pooling import FeedForward
 
 
 __all__ = ["swin_t"]
@@ -70,21 +71,6 @@ class PostNorm(nn.Module):
 
     def forward(self, x, **kwargs):
         return self.norm(self.fn(x, **kwargs))
-
-
-class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout=0.):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
-            nn.Dropout(dropout)
-        )
-
-    def forward(self, x):
-        return self.net(x)
 
 
 def create_mask(window_size, displacement, upper_lower, left_right):

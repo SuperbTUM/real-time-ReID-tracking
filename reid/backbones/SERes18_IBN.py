@@ -4,6 +4,7 @@ from torchvision import models
 from torch.nn import functional as F
 
 from .batchrenorm import BatchRenormalization2D
+from .attention_pooling import AttentionPooling
 
 
 # This can be applied as channel attention for gallery based on query
@@ -78,10 +79,9 @@ class SEDense18_IBN(nn.Module):
                  resnet18_pretrained=True,
                  num_class=751,
                  needs_norm=True,
-                 gem=True,
+                 pooling="gem",
                  renorm=False,
-                 is_reid=False,
-                 PAP=False):
+                 is_reid=False):
         super().__init__()
         model = models.resnet18(pretrained=resnet18_pretrained)
         self.conv0 = model.conv1
@@ -127,8 +127,10 @@ class SEDense18_IBN(nn.Module):
         self.basicBlock42 = model.layer4[1]
         self.seblock8 = SEBlock(512)
 
-        if gem:
+        if pooling == "gem":
             self.avgpooling = GeM()
+        elif pooling == "attn":
+            self.avgpooling = AttentionPooling(512)
         else:
             self.avgpooling = model.avgpool
 
@@ -144,7 +146,6 @@ class SEDense18_IBN(nn.Module):
         )
         self.needs_norm = needs_norm
         self.is_reid = is_reid
-        self.PAP = PAP
 
     def forward(self, x):
         x = self.conv0(x)
@@ -200,14 +201,7 @@ class SEDense18_IBN(nn.Module):
         scale8 = self.seblock8(x)
         x = scale8 * x + branch8
 
-        if self.PAP:
-            channels = x.size(-1)
-            x_concatenate = []
-            for i in range(8):
-                x_concatenate.append(self.avgpooling(x[:, i*channels//8:min(channels, (i+1)*channels//8), :, :].contiguous()))
-            x = torch.cat(x_concatenate, dim=1).cuda()
-        else:
-            x = self.avgpooling(x)
+        x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
         if self.is_reid:
             return feature
