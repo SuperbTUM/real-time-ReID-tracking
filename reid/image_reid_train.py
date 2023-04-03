@@ -300,11 +300,14 @@ if __name__ == "__main__":
         market_dataset = MarketDataset(dataset.train, transform_train)
         if params.backbone == "plr_osnet":
             model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
+            model = nn.DataParallel(model)
+            model, loss_stats = train_cnn(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
+                                          params.accelerate)
         else:
-            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet").cuda()
-        model = nn.DataParallel(model)
-        model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
-                                            params.accelerate)
+            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", pooling="attn").cuda()
+            model = nn.DataParallel(model)
+            model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
+                                                params.accelerate)
 
         # if params.continual:
         #     transform_test = transforms.Compose([transforms.Resize((256, 128)),

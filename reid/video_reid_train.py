@@ -102,9 +102,9 @@ class VideoDataset(Dataset):
         return images, label
 
 
-def train(dataset, batch_size=8, epochs=25, num_classes=517, seq_len=10):
-    model = resnet50(num_classes=num_classes, gem=True, IBN=True,
-                     sample_height=256, sample_width=128, sample_duration=seq_len).cuda()
+def train(dataset, batch_size=8, epochs=25, num_classes=517, seq_len=10, **kwargs):
+    model = resnet50(num_classes=num_classes, pooling="gem", IBN=True,
+                     sample_height=256, sample_width=128, sample_duration=seq_len, **kwargs).cuda()
     model = nn.DataParallel(model)
     model.train()
     optimizer = madgrad.MADGRAD(model.parameters(), lr=1e-4, weight_decay=5e-4, momentum=0.)

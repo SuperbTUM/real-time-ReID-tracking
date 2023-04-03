@@ -5,6 +5,8 @@ from torch.autograd import Variable
 import math
 from functools import partial
 
+from .attention_pooling import AttentionPooling
+
 __all__ = [
     'ResNet', 'resnet10', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
     'resnet152', 'resnet200'
@@ -157,7 +159,7 @@ class ResNet(nn.Module):
                  shortcut_type='B',
                  num_classes=400,
                  IBN=False,
-                 gem=False):
+                 pooling="gem"):
         self.inplanes = 64
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv3d(
@@ -180,8 +182,10 @@ class ResNet(nn.Module):
         last_duration = int(math.ceil(sample_duration / 16.0))
         last_height = int(math.ceil(sample_height / 32.0))
         last_width = int(math.ceil(sample_width / 32.0))
-        if gem:
+        if pooling == "gem":
             self.avgpool = GeM3d((last_duration, last_height, last_width), stride=1)
+        elif pooling == "attn":
+            self.avgpool = AttentionPooling(512 * block.expansion)
         else:
             self.avgpool = nn.AvgPool3d(
                 (last_duration, last_height, last_width), stride=1)
