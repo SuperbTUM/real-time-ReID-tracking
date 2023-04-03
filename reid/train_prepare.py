@@ -210,8 +210,8 @@ class HybridLoss3(nn.Module):
     def __init__(self, num_classes, feat_dim=512, margin=0.3, smoothing=0.1):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
-        # self.triplet = TripletLoss(margin)
-        self.triplet = WeightedRegularizedTriplet()
+        self.triplet = TripletLoss(margin)
+        # self.triplet = WeightedRegularizedTriplet()
         self.smooth = LabelSmoothing(smoothing)
 
     def forward(self, embeddings, outputs, targets):

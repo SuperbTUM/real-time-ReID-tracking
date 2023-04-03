@@ -27,6 +27,17 @@ class BatchRenormalization2D(nn.Module):
         self.d_max = torch.tensor(0.0)
 
     def forward(self, x):
+        
+        device = x.device
+        
+        self.running_avg_std = self.running_avg_std.to(device)
+        self.running_avg_mean = self.running_avg_mean.to(device)
+        
+        self.gamma = self.gamma.to(device)
+        self.beta = self.beta.to(device)
+
+        self.r_max = self.r_max.to(device)
+        self.d_max = self.d_max.to(device)
 
         batch_ch_mean = torch.mean(x, dim=(0, 2, 3), keepdim=True)
         batch_ch_std = torch.clamp(torch.std(x, dim=(0, 2, 3), keepdim=True), self.eps, 1e10)

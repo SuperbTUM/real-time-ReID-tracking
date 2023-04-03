@@ -82,7 +82,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             optimizer.zero_grad()
             images = images.cuda(non_blocking=True)
             label = Variable(label).cuda(non_blocking=True)
-            embeddings, outputs = model(images)
+            outputs, embeddings = model(images)
             loss = loss_func(embeddings, outputs, label)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
@@ -304,7 +304,7 @@ if __name__ == "__main__":
             model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                                 params.accelerate)
         else:
-            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", pooling="attn").cuda()
+            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=True).cuda()
             model = nn.DataParallel(model)
             model, loss_stats = train_cnn(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                           params.accelerate)
