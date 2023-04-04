@@ -1,16 +1,16 @@
 ## TODOs
 
-- [ ] To work with latest YoloV8-DeepOCSort implementation towards a new benchmark(important!) and apply necessary changes on current repository.
+- [x] To work with latest YoloV8-DeepOCSort implementation towards a new benchmark(important!) and apply necessary changes on current repository.
 
 - [ ] To work with SEBlock for query-guided channel attention on gallery images, proposed by a CVPR2019' paper.
 
-- [ ] To debug and tune a VAE-(W)GAN model for Market1501.
+- [x] To debug and tune a VAE-(W)GAN model for Market1501.
 
 - [ ] To check if triplet loss w/. penalty is helpful in object reidentification/image retrivial/person search.
 
 - [ ] To work with sequential side information on ViT and Swin-transformer.
 
-- [ ] To check whether background information is helpful with a hyperparameter to zoom, inspired by an ECCV18' paper.
+- [x] To check whether background information is helpful with a hyperparameter to zoom, inspired by an ECCV18' paper.
 
   
 
@@ -72,7 +72,7 @@ You can try to have generated images with GAN. That means you need additional tr
 In a general scenario, you can simply execute the training script:
 
 ```python
-python synthetic_generate.py --vae --Wassertein --gp
+python modification_gan/synthetic_generate.py --vae --Wassertein --gp
 ```
 
 **ReID training**
@@ -86,11 +86,11 @@ We also have plr_osnet, vision transformer from Trans-ReID, and swin transformer
 We train the model on both image-based dataset and video-based dataset(w/. ground truth), and the scripts can be access under the same folder.
 
 ```python
-python image_reid_train.py --backbone vit
+python reid/image_reid_train.py --backbone vit --accelerate
 ```
 
 ```python
-python video_reid_train.py
+python reid/video_reid_train.py --crop_factor 1.0
 ```
 
 To fit with `yolov8_tracking`, please copy your model and checkpoints to `trackers/strongsort/models` and `trackers/strongsort/checkpoint`, and modify `reid_model_factory.py` accordingly.

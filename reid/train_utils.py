@@ -75,7 +75,7 @@ def plot_loss(loss_stats):
     plt.title('training loss')
     plt.legend()
     plt.grid()
-    if os.path.exists("images/"):
+    if not os.path.exists("images/"):
         os.mkdir("images/")
     plt.savefig("images/loss_curve.png")
     plt.show()
