@@ -46,7 +46,7 @@ class LabelSmoothing(nn.Module):
             nll_loss = nll_loss.squeeze(1)
         smooth_loss = -logprobs.mean(dim=-1)
         smoothed_labels = F.one_hot(target, x.size(-1)) * self.confidence + self.smoothing / x.size(-1)
-        one_minus_pt = torch.mean(torch.sum(smoothed_labels * (1 - logprobs), dim=-1))
+        one_minus_pt = torch.sum(smoothed_labels * (1 - logprobs), dim=-1)
         loss = self.confidence * nll_loss + self.smoothing * smooth_loss
         poly_loss = loss + one_minus_pt * self.epsilon
         # return loss.mean()
