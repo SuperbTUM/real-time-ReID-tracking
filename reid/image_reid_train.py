@@ -13,6 +13,7 @@ from dataset_market import Market1501
 import argparse
 import onnxruntime
 from scipy.special import softmax
+import madgrad
 
 
 cudnn.deterministic = True
@@ -65,9 +66,9 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
-    loss_func = HybridLoss3(num_classes=num_classes)
+    optimizer = madgrad.MADGRAD(model.parameters(), lr=0.001, weight_decay=5e-4)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.5)
+    loss_func = HybridLoss3(num_classes=num_classes, epsilon=params.epsilon)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
@@ -107,8 +108,8 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
+    optimizer = madgrad.MADGRAD(model.parameters(), lr=0.001, weight_decay=5e-4)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.5)
     loss_func1 = HybridLoss3(num_classes=num_classes, feat_dim=2048)
     loss_func2 = HybridLoss3(num_classes=num_classes, feat_dim=512)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
@@ -155,7 +156,7 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
 
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.5)
     loss_func = HybridLoss3(num_classes=num_classes, feat_dim=feat_dim)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
@@ -275,6 +276,7 @@ def parser():
                                                                             "swin_v1",
                                                                             "swin_v2"])
     args.add_argument("--epochs", type=int, default=50)
+    args.add_argument("--epsilon", help="for polyloss, 0 by default", type=float, default=0.0)
     args.add_argument("--continual", action="store_true")
     args.add_argument("--accelerate", action="store_true")
     return args.parse_args()

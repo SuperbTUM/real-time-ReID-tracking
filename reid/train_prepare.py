@@ -24,7 +24,7 @@ class DataLoaderX(DataLoader):
 class LabelSmoothing(nn.Module):
     """ NLL loss with label smoothing. """
 
-    def __init__(self, smoothing=0.1, epsilon=1, k_sparse=-1):
+    def __init__(self, smoothing=0.1, epsilon=0., k_sparse=-1):
         """ Constructor for the LabelSmoothing module.
         :param smoothing: label smoothing factor """
         super(LabelSmoothing, self).__init__()
@@ -207,12 +207,16 @@ class TripletLoss(nn.Module):
 
 
 class HybridLoss3(nn.Module):
-    def __init__(self, num_classes, feat_dim=512, margin=0.3, smoothing=0.1):
+    def __init__(self, num_classes,
+                 feat_dim=512,
+                 margin=0.3,
+                 smoothing=0.1,
+                 epsilon=0):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
         self.triplet = TripletLoss(margin)
         # self.triplet = WeightedRegularizedTriplet()
-        self.smooth = LabelSmoothing(smoothing)
+        self.smooth = LabelSmoothing(smoothing, epsilon)
 
     def forward(self, embeddings, outputs, targets):
         """
