@@ -3,6 +3,8 @@ import torch.onnx
 import torch.distributed as dist
 import h5py
 import cv2
+import os
+import matplotlib.pyplot as plt
 
 from accelerate import Accelerator
 
@@ -63,3 +65,17 @@ def postprocess_ddp(ddp_model, rank):
 def accelerate_train(*args):
     accelerator = Accelerator()
     return {"accelerated": accelerator.prepare(*args), "accelerator":  accelerator}
+
+
+def plot_loss(loss_stats):
+    plt.figure()
+    plt.plot(np.arange(len(loss_stats)), loss_stats, linewidth=2, label="train loss")
+    plt.xlabel("iterations")
+    plt.ylabel('loss')
+    plt.title('training loss')
+    plt.legend()
+    plt.grid()
+    if os.path.exists("images/"):
+        os.mkdir("images/")
+    plt.savefig("images/loss_curve.png")
+    plt.show()

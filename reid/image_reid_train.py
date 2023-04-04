@@ -1,4 +1,3 @@
-import os
 import torch.onnx
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -409,4 +408,4 @@ if __name__ == "__main__":
         else:
             raise NotImplementedError
 
-    print("loss curve", loss_stats)
+    plot_loss(loss_stats)

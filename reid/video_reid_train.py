@@ -3,7 +3,6 @@ from tqdm import tqdm
 from torch.autograd import Variable
 from torch.utils.data import Dataset
 from collections import defaultdict
-import matplotlib.pyplot as plt
 import glob
 import argparse
 import madgrad
@@ -188,17 +187,6 @@ def distributed_demo(dataset, batch_size=8, epochs=25, num_classes=517,
                      rank=0, world_size=1):
     activate_distributed_train(distributed_train(dataset, batch_size, epochs, num_classes,
                                                  rank, world_size), world_size)
-
-
-def plot_loss(loss_stats):
-    plt.figure()
-    plt.plot(loss_stats, linewidth=2, label="train loss")
-    plt.xlabel("iterations")
-    plt.ylabel('loss')
-    plt.title('training loss')
-    plt.legend()
-    plt.grid()
-    plt.show()
 
 
 def parser():
