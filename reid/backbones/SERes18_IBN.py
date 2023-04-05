@@ -75,14 +75,14 @@ class SEDense18_IBN(nn.Module):
     i.e. Divide into eight and concatenate them
     """
     def __init__(self,
-                 resnet18_pretrained=True,
+                 resnet18_pretrained="IMAGENET1K_V1",
                  num_class=751,
                  needs_norm=True,
                  pooling="gem",
                  renorm=False,
                  is_reid=False):
         super().__init__()
-        model = models.resnet18(pretrained=resnet18_pretrained)
+        model = models.resnet18(weights=resnet18_pretrained, progress=False)
         self.conv0 = model.conv1
         self.bn0 = model.bn1
         self.relu0 = model.relu
@@ -210,7 +210,7 @@ class SEDense18_IBN(nn.Module):
         return feature, x
 
 
-def seres18_ibn(num_classes=751, pretrained=False, loss="triplet", **kwargs):
+def seres18_ibn(num_classes=751, pretrained="IMAGENET1K_V1", loss="triplet", **kwargs):
     if loss == "triplet":
         is_reid = False
     elif loss == "softmax":

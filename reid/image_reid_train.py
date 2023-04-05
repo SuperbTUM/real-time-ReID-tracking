@@ -253,7 +253,7 @@ def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> l
             else:
                 img, _, cam, seq = sample
             ort_inputs = {'input': to_numpy(img),
-                          "index": to_numpy(cam * dataset.num_train_cams + seq)}
+                          "index": to_numpy(cam * all_cam + seq)}
             preds = ort_session.run(["embeddings", "outputs"], ort_inputs)[1]
             preds = softmax(preds, axis=-1)
             conf = preds.max(axis=-1)
