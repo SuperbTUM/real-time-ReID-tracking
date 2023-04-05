@@ -208,7 +208,7 @@ class SEDense18_IBN(nn.Module):
         x = self.bnneck(feature)
         x = self.classifier(x)
 
-        return x, feature
+        return feature, x
 
 
 def seres18_ibn(num_classes=751, pretrained=False, loss="triplet", **kwargs):

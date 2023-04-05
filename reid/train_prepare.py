@@ -229,18 +229,32 @@ class HybridLoss3(nn.Module):
         return smooth_loss + triplet_loss + 0.0005 * center_loss
 
 
-def to_onnx(model, input_dummy, input_names=["input"], output_names=["output"]):
+def to_onnx(model, input_dummy, input_names=["input"], output_names=["outputs"]):
     import os
     if not os.path.exists("checkpoint"):
         os.mkdir("checkpoint")
-    torch.onnx.export(model,
-                      input_dummy,
-                      "checkpoint/reid_model.onnx",
-                      export_params=True,
-                      opset_version=10,
-                      do_constant_folding=True,
-                      input_names=input_names,
-                      output_names=output_names)
+    try:
+        dynamic_axes = {'input': {0: 'batch_size'},
+                        'outputs': {0: 'batch_size'}}
+        torch.onnx.export(model,
+                          input_dummy,
+                          "checkpoint/reid_model.onnx",
+                          export_params=True,
+                          opset_version=10,
+                          do_constant_folding=True,
+                          input_names=input_names,
+                          output_names=output_names,
+                          dynamic_axes=dynamic_axes
+                          )
+    except:
+        torch.onnx.export(model,
+                          input_dummy,
+                          "checkpoint/reid_model.onnx",
+                          export_params=True,
+                          opset_version=10,
+                          do_constant_folding=True,
+                          input_names=input_names,
+                          output_names=output_names)
 
 
 def to_numpy(tensor):

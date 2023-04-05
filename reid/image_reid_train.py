@@ -82,7 +82,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             optimizer.zero_grad()
             images = images.cuda(non_blocking=True)
             label = Variable(label).cuda(non_blocking=True)
-            outputs, embeddings = model(images)
+            embeddings, outputs = model(images)
             loss = loss_func(embeddings, outputs, label)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
@@ -95,10 +95,10 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
     model.eval()
-    torch.save(model.state_dict(), "cnn_net_checkpoint.pt")
     to_onnx(model.module,
             torch.randn(batch_size, 3, 256, 128, requires_grad=True, device="cuda"),
             output_names=["embeddings", "outputs"])
+    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint.pt")
     return model, loss_stats
 
 
@@ -140,10 +140,10 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
     model.eval()
-    torch.save(model.state_dict(), "plr_osnet_checkpoint.pt")
     to_onnx(model.module,
             torch.randn(batch_size, 3, 256, 128, requires_grad=True, device="cuda"),
             output_names=["y1", "y2", "fea"])
+    torch.save(model.state_dict(), "checkpoint/plr_osnet_checkpoint.pt")
     return model, loss_stats
 
 
@@ -196,12 +196,12 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
     model.eval()
-    torch.save(model.state_dict(), "vision_transformer_checkpoint.pt")
     to_onnx(model.module,
             (torch.randn(batch_size, 3, 448, 224, requires_grad=True, device="cuda"),
              torch.ones(batch_size, dtype=torch.long)),
             input_names=["input", "index"],
-            output_names=["embedding", "output"])
+            output_names=["embeddings", "outputs"])
+    torch.save(model.state_dict(), "checkpoint/vision_transformer_checkpoint.pt")
     return model, loss_stats
 
 
@@ -254,7 +254,7 @@ def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> l
                 img, _, cam, seq = sample
             ort_inputs = {'input': to_numpy(img),
                           "index": to_numpy(cam * dataset.num_train_cams + seq)}
-            preds = ort_session.run(["embedding", "output"], ort_inputs)[1]
+            preds = ort_session.run(["embeddings", "outputs"], ort_inputs)[1]
             preds = softmax(preds, axis=-1)
             conf = preds.max(axis=-1)
             candidates = preds.argmax(axis=-1)
@@ -340,9 +340,9 @@ if __name__ == "__main__":
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         ])
         transform_test = transforms.Compose([transforms.Resize((448, 224)),
+                                             transforms.ToTensor(),
                                              transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                                                   std=(0.229, 0.224, 0.225)),
-                                             transforms.ToTensor(),
                                              ]
                                             )
         market_dataset = MarketDataset(dataset.train, transform_train)
