@@ -189,12 +189,11 @@ if __name__ == "__main__":
     providers = ["CUDAExecutionProvider"]
     ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
     market_gallery = MarketDataset(dataset.gallery, transform_test)
-    dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True, drop_last=True)
+    dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_train_cams, True, True
                     if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
     market_query = MarketDataset(dataset.query, transform_test)
-    dataloader = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True,
-                             drop_last=True)
+    dataloader = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_train_cams, True, True
     if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
 

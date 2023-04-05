@@ -234,8 +234,11 @@ def to_onnx(model, input_dummy, input_names=["input"], output_names=["outputs"])
     if not os.path.exists("checkpoint"):
         os.mkdir("checkpoint")
     try:
-        dynamic_axes = {'input': {0: 'batch_size'},
-                        'outputs': {0: 'batch_size'}}
+        dynamic_axes = dict()
+        for input_name in input_names:
+            dynamic_axes[input_name] = {0: 'batch_size'}
+        for output_name in output_names:
+            dynamic_axes[output_name] = {0: 'batch_size'}
         torch.onnx.export(model,
                           input_dummy,
                           "checkpoint/reid_model.onnx",
