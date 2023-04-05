@@ -110,7 +110,7 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                 ort_inputs = {'input': to_numpy(img)}
             else:
                 ort_inputs = {'input': to_numpy(img),
-                              "index": to_numpy(cam * dataset.num_train_cams + seq)}
+                              "index": to_numpy(cam * all_cam + seq)}
             embeddings = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
             embeddings = torch.tensor(embeddings, dtype=torch.float32)
             embeddings = torch.norm(embeddings, p=2, dim=1, keepdim=True)
@@ -152,6 +152,13 @@ if __name__ == "__main__":
                                                                   std=(0.229, 0.224, 0.225)),
                                              ]
                                             )
+        transform_test_flip = transforms.Compose([
+            transforms.Resize((256, 128)),
+            transforms.RandomHorizontalFlip(p=1.0),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                 std=(0.229, 0.224, 0.225)),
+        ])
         model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
     elif params.backbone == "seres18":
         transform_test = transforms.Compose([transforms.Resize((256, 128)),
@@ -160,6 +167,13 @@ if __name__ == "__main__":
                                                                   std=(0.229, 0.224, 0.225)),
                                              ]
                                             )
+        transform_test_flip = transforms.Compose([
+            transforms.Resize((256, 128)),
+            transforms.RandomHorizontalFlip(p=1.0),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                 std=(0.229, 0.224, 0.225)),
+        ])
         model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=True).cuda()
     elif params.backbone == "vit":
         transform_test = transforms.Compose([transforms.Resize((448, 224)),
@@ -168,6 +182,13 @@ if __name__ == "__main__":
                                                                   std=(0.229, 0.224, 0.225)),
                                              ]
                                             )
+        transform_test_flip = transforms.Compose([
+            transforms.Resize((448, 224)),
+            transforms.RandomHorizontalFlip(p=1.0),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                 std=(0.229, 0.224, 0.225)),
+        ])
         model = vit_t(img_size=(448, 224), num_classes=dataset.num_train_pids, loss="triplet",
                       camera=dataset.num_train_cams,
                       sequence=dataset.num_train_seqs, side_info=True).cuda()
@@ -178,6 +199,13 @@ if __name__ == "__main__":
                                                                   std=(0.229, 0.224, 0.225)),
                                              ]
                                             )
+        transform_test_flip = transforms.Compose([
+            transforms.Resize((448, 224)),
+            transforms.RandomHorizontalFlip(p=1.0),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                 std=(0.229, 0.224, 0.225)),
+        ])
         model = swin_t(num_classes=dataset.num_train_pids, loss="triplet",
                        camera=dataset.num_train_cams, sequence=dataset.num_train_seqs,
                        side_info=True,
@@ -190,12 +218,26 @@ if __name__ == "__main__":
     ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
     market_gallery = MarketDataset(dataset.gallery, transform_test)
     dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_train_cams, True, True
+    gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True, True
                     if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip)
+    dataloader = DataLoaderX(market_gallery_augment, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
+    gallery_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_gallery_cams, True, True
+    if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+
+    gallery_embeddings = (gallery_embeddings + gallery_embeddings_augment) / 2.0
+
     market_query = MarketDataset(dataset.query, transform_test)
     dataloader = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_train_cams, True, True
+    query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True, True
     if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    market_query_augment = MarketDataset(dataset.query, transform_test_flip)
+    dataloader = DataLoaderX(market_query_augment, batch_size=params.bs, num_workers=4, shuffle=False,
+                             pin_memory=True)
+    query_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_query_cams, True, True
+    if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+
+    query_embeddings = (query_embeddings + query_embeddings_augment) / 2.0
 
     CMC = torch.IntTensor(gallery_embeddings.size(0)).zero_()
     ap = 0.0
