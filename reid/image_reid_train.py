@@ -96,7 +96,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             iterator.set_description(description)
     model.eval()
     to_onnx(model.module,
-            torch.randn(batch_size, 3, 256, 128, requires_grad=True, device="cuda"),
+            torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
             output_names=["embeddings", "outputs"])
     torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint.pt")
     return model, loss_stats
@@ -141,7 +141,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
             iterator.set_description(description)
     model.eval()
     to_onnx(model.module,
-            torch.randn(batch_size, 3, 256, 128, requires_grad=True, device="cuda"),
+            torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
             output_names=["y1", "y2", "fea"])
     torch.save(model.state_dict(), "checkpoint/plr_osnet_checkpoint.pt")
     return model, loss_stats
@@ -197,8 +197,8 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
             iterator.set_description(description)
     model.eval()
     to_onnx(model.module,
-            (torch.randn(batch_size, 3, 448, 224, requires_grad=True, device="cuda"),
-             torch.ones(batch_size, dtype=torch.long)),
+            (torch.randn(1, 3, 448, 224, requires_grad=True, device="cuda"),
+             torch.ones(1, dtype=torch.long)),
             input_names=["input", "index"],
             output_names=["embeddings", "outputs"])
     torch.save(model.state_dict(), "checkpoint/vision_transformer_checkpoint.pt")

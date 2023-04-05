@@ -19,7 +19,6 @@ class SEBlock(nn.Module):
         self.c_in = c_in
 
     def forward(self, x):
-        assert self.c_in == x.size(1)
         x = self.globalavgpooling(x)
         x = x.squeeze()
         x = self.fc1(x)
