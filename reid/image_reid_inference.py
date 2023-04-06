@@ -12,6 +12,7 @@ from backbones.SERes18_IBN import seres18_ibn
 from backbones.plr_osnet import plr_osnet
 from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
+from backbones.resnet50 import ft_net
 
 from train_utils import to_numpy, DataLoaderX
 from image_reid_train import MarketDataset
@@ -112,7 +113,6 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                 ort_inputs = {'input': to_numpy(img),
                               "index": to_numpy(cam * all_cam + seq)}
             embeddings = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
-            assert embeddings.shape[1] != 751
             embeddings = torch.from_numpy(embeddings)
             embeddings_total.append(embeddings)
             true_labels.append(true_label)
@@ -137,7 +137,8 @@ def parser():
                                                                             "plr_osnet",
                                                                             "vit",
                                                                             "swin_v1",
-                                                                            "swin_v2"])
+                                                                            "swin_v2",
+                                                                            "resnet50"])
     return args.parse_args()
 
 
@@ -175,6 +176,21 @@ if __name__ == "__main__":
                                  std=(0.229, 0.224, 0.225)),
         ])
         model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=True).cuda()
+    elif params.backbone == "resnet50":
+        transform_test = transforms.Compose([transforms.Resize((256, 128)),
+                                             transforms.ToTensor(),
+                                             transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                                                  std=(0.229, 0.224, 0.225)),
+                                             ]
+                                            )
+        transform_test_flip = transforms.Compose([
+            transforms.Resize((256, 128)),
+            transforms.RandomHorizontalFlip(p=1.0),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                 std=(0.229, 0.224, 0.225)),
+        ])
+        model = ft_net(751).cuda()
     elif params.backbone == "vit":
         transform_test = transforms.Compose([transforms.Resize((448, 224)),
                                              transforms.ToTensor(),
@@ -214,8 +230,8 @@ if __name__ == "__main__":
         raise NotImplementedError
     model = nn.DataParallel(model)
     model.eval()
-    if params.ckpt.endswith("pt"):
-        model.load_state_dict(torch.load(params.ckpt))
+    if params.ckpt.endswith("pt") or params.ckpt.endswith("pth"):
+        model.load_state_dict(torch.load(params.ckpt), strict=False)
     else:
         providers = ["CUDAExecutionProvider"]
         ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)

@@ -66,9 +66,9 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    optimizer = madgrad.MADGRAD(model.parameters(), lr=0.001, weight_decay=5e-4)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.5)
-    loss_func = HybridLoss3(num_classes=num_classes, epsilon=params.epsilon)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.1)
+    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
@@ -110,8 +110,8 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
     model.train()
     optimizer = madgrad.MADGRAD(model.parameters(), lr=0.001, weight_decay=5e-4)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.5)
-    loss_func1 = HybridLoss3(num_classes=num_classes, feat_dim=2048)
-    loss_func2 = HybridLoss3(num_classes=num_classes, feat_dim=512)
+    loss_func1 = HybridLoss(num_classes, 2048, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
+    loss_func2 = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
@@ -128,7 +128,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
             global_branch, local_branch, feat = model(images)
             loss1 = loss_func1(feat[0], global_branch, label)
             loss2 = loss_func2(feat[1], local_branch, label)
-            loss = loss1 + loss2
+            loss = loss1 + loss2  # / 2.0
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:
@@ -157,7 +157,7 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.5)
-    loss_func = HybridLoss3(num_classes=num_classes, feat_dim=feat_dim)
+    loss_func = HybridLoss(num_classes, feat_dim, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
@@ -277,6 +277,8 @@ def parser():
                                                                             "swin_v2"])
     args.add_argument("--epochs", type=int, default=50)
     args.add_argument("--epsilon", help="for polyloss, 0 by default", type=float, default=0.0)
+    args.add_argument("--margin", help="for triplet loss", default=0.0, type=float)
+    args.add_argument("--center_lamda", help="for center loss", default=0.0, type=float)
     args.add_argument("--continual", action="store_true")
     args.add_argument("--accelerate", action="store_true")
     return args.parse_args()

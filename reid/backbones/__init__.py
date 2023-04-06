@@ -5,5 +5,6 @@ __all__ = ["swin_transformer",
            "osnet",
            "video_model",
            "AGW_MODEL",
-           "model_dense_new"]
+           "SEDense18",
+           "resnet50"]
 __version__ = "0.1.0"

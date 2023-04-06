@@ -7,6 +7,19 @@ from .batchrenorm import BatchRenormalization2D
 from .attention_pooling import AttentionPooling
 
 
+def weights_init_kaiming(m):
+    classname = m.__class__.__name__
+    # print(classname)
+    if classname.find('Conv') != -1:
+        torch.nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in') # For old pytorch, you may use kaiming_normal.
+    elif classname.find('Linear') != -1:
+        torch.nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_out')
+        torch.nn.init.constant_(m.bias.data, 0.0)
+    elif classname.find('BatchNorm1d') != -1:
+        torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
+        torch.nn.init.constant_(m.bias.data, 0.0)
+
+
 # This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):
     def __init__(self, c_in):
@@ -47,7 +60,7 @@ class GeM(nn.Module):
 
 
 class IBN(nn.Module):
-    def __init__(self, in_channels, ratio=0.5, renorm=False):
+    def __init__(self, in_channels, ratio=0.5):
         """
         Half do instance norm, half do batch norm
         """
@@ -56,10 +69,7 @@ class IBN(nn.Module):
         self.ratio = ratio
         self.half = int(self.in_channels * ratio)
         self.IN = nn.InstanceNorm2d(self.half, affine=True)
-        if renorm:
-            self.BN = BatchRenormalization2D(self.in_channels - self.half)
-        else:
-            self.BN = nn.BatchNorm2d(self.in_channels - self.half)
+        self.BN = nn.BatchNorm2d(self.in_channels - self.half)
 
     def forward(self, x):
         split = torch.split(x, self.half, 1)
@@ -84,18 +94,21 @@ class SEDense18_IBN(nn.Module):
         super().__init__()
         model = models.resnet18(weights=resnet18_pretrained, progress=False)
         self.conv0 = model.conv1
-        self.bn0 = model.bn1
+        if renorm:
+            self.bn0 = BatchRenormalization2D(64)
+        else:
+            self.bn0 = model.bn1
         self.relu0 = model.relu
         self.pooling0 = model.maxpool
 
-        model.layer1[0].bn1 = IBN(64, renorm=renorm)
+        model.layer1[0].bn1 = IBN(64)
         self.basicBlock11 = model.layer1[0]
         self.seblock1 = SEBlock(64)
 
         self.basicBlock12 = model.layer1[1]
         self.seblock2 = SEBlock(64)
 
-        model.layer2[0].bn1 = IBN(128, renorm=renorm)
+        model.layer2[0].bn1 = IBN(128)
         self.basicBlock21 = model.layer2[0]
         self.seblock3 = SEBlock(128)
         self.ancillaryconv3 = nn.Conv2d(64, 128, 1, 2, 0)
@@ -104,7 +117,7 @@ class SEDense18_IBN(nn.Module):
         self.basicBlock22 = model.layer2[1]
         self.seblock4 = SEBlock(128)
 
-        model.layer3[0].bn1 = IBN(256, renorm=renorm)
+        model.layer3[0].bn1 = IBN(256)
         self.basicBlock31 = model.layer3[0]
         self.seblock5 = SEBlock(256)
         self.ancillaryconv5 = nn.Conv2d(128, 256, 1, 2, 0)
@@ -115,10 +128,8 @@ class SEDense18_IBN(nn.Module):
 
         self.basicBlock41 = model.layer4[0]
         # last stride = 1
-        self.basicBlock41.conv1 = nn.Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False,
-                                            device="cuda:0")
-        self.basicBlock41.downsample[0] = nn.Conv2d(256, 512, kernel_size=(1, 1), stride=(1, 1), bias=False,
-                                                    device="cuda:0")
+        self.basicBlock41.conv1 = nn.Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        self.basicBlock41.downsample[0] = nn.Conv2d(256, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
         self.seblock7 = SEBlock(512)
         self.ancillaryconv7 = nn.Conv2d(256, 512, 1, 1, 0)
         self.optionalNorm2dconv7 = nn.BatchNorm2d(512)
@@ -129,6 +140,7 @@ class SEDense18_IBN(nn.Module):
         if pooling == "gem":
             self.avgpooling = GeM()
         elif pooling == "attn":
+            # Won't converge
             self.avgpooling = AttentionPooling(512)
         else:
             self.avgpooling = model.avgpool

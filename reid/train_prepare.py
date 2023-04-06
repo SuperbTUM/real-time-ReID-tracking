@@ -1,6 +1,7 @@
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
+from torch.autograd import Variable
 from prefetch_generator import BackgroundGenerator
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
@@ -133,7 +134,7 @@ class WeightedRegularizedTriplet(object):
 
     def __call__(self, global_feat, labels, normalize_feature=False):
         if normalize_feature:
-            global_feat = F.normalize(global_feat, axis=-1)
+            global_feat = F.normalize(global_feat, dim=-1)
         dist_mat = euclidean_dist(global_feat, global_feat)
 
         N = dist_mat.size(0)
@@ -189,35 +190,40 @@ class TripletLoss(nn.Module):
         # dist.addmm_(1, -2, inputs, inputs.t())
         dist.addmm_(inputs, inputs.t(), beta=1, alpha=-2)
         dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
-
         # For each anchor, find the hardest positive and negative
         mask = targets.expand(n, n).eq(targets.expand(n, n).t())
         dist_ap, dist_an = [], []
         for i in range(n):
-            dist_ap.append(dist[i][mask[i]].max().unsqueeze(0))
-            dist_an.append(dist[i][mask[i] == 0].min().unsqueeze(0))
+            dist_ap.append(dist[i][mask[i]].max())
+            dist_an.append(dist[i][mask[i] == 0].min())
         dist_ap = torch.cat(dist_ap)
         dist_an = torch.cat(dist_an)
-
         # Compute ranking hinge loss
-        y = torch.ones_like(dist_an)
+        y = dist_an.data.new()
+        y.resize_as_(dist_an.data)
+        y.fill_(1)
+        y = Variable(y)
         loss = self.ranking_loss(dist_an, dist_ap, y)
         if self.penalty:
             loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
         return loss
 
 
-class HybridLoss3(nn.Module):
+class HybridLoss(nn.Module):
     def __init__(self, num_classes,
                  feat_dim=512,
                  margin=0.3,
                  smoothing=0.1,
-                 epsilon=0):
+                 epsilon=0,
+                 lamda=0.0005):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
-        self.triplet = TripletLoss(margin)
-        # self.triplet = WeightedRegularizedTriplet()
+        if margin > 0.:
+            self.triplet = TripletLoss(margin)
+        else:
+            self.triplet = WeightedRegularizedTriplet()
         self.smooth = LabelSmoothing(smoothing, epsilon)
+        self.lamda = lamda
 
     def forward(self, embeddings, outputs, targets):
         """
@@ -227,7 +233,7 @@ class HybridLoss3(nn.Module):
         smooth_loss = self.smooth(outputs, targets)
         triplet_loss = self.triplet(embeddings, targets)
         center_loss = self.center(embeddings, targets)
-        return smooth_loss + triplet_loss + 0.0005 * center_loss
+        return smooth_loss + triplet_loss + self.lamda * center_loss
 
 
 def to_onnx(model, input_dummy, input_names=["input"], output_names=["outputs"]):

@@ -108,7 +108,7 @@ def train(dataset, batch_size=8, epochs=25, num_classes=517, seq_len=10, **kwarg
     model.train()
     optimizer = madgrad.MADGRAD(model.parameters(), lr=1e-4, weight_decay=5e-4, momentum=0.)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
-    loss_func = HybridLoss3(num_classes=num_classes, feat_dim=2048)
+    loss_func = HybridLoss(num_classes, 2048)
     loss_stats = []
     for epoch in range(epochs):
         dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
@@ -146,7 +146,7 @@ def distributed_train(dataset, batch_size=8, epochs=25, num_classes=517, seq_len
     # ----------
     optimizer = madgrad.MADGRAD(model.parameters(), lr=1e-4, weight_decay=5e-4, momentum=0.)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5)
-    loss_func = HybridLoss3(num_classes=num_classes, feat_dim=2048)
+    loss_func = HybridLoss(num_classes=num_classes, feat_dim=2048)
     loss_stats = []
     for epoch in range(epochs):
         dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=False, pin_memory=True, sampler=DistributedSampler(dataset))
