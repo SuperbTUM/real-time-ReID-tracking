@@ -2,6 +2,7 @@ from dataset_market import Market1501
 import argparse
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import onnxruntime
 import numpy as np
 from torchvision import transforms
@@ -88,12 +89,11 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                 else:
                     img, true_label, cam, seq = sample
                 img = img.cuda(non_blocking=True)
-                if cam is not None and any(cam) >= 0 and seq is not None and any(seq) >= 0:
+                if use_side:
                     embeddings, _ = model(img, cam * all_cam + seq)
                 else:
                     embeddings, _ = model(img)
-                embeddings = torch.norm(embeddings, p=2, dim=1, keepdim=True)
-                embeddings_total.append(embeddings.type(torch.float32))
+                embeddings_total.append(embeddings)
                 true_labels.append(true_label)
                 true_cams.append(cam)
     else:
@@ -112,8 +112,8 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                 ort_inputs = {'input': to_numpy(img),
                               "index": to_numpy(cam * all_cam + seq)}
             embeddings = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
-            embeddings = torch.tensor(embeddings, dtype=torch.float32)
-            embeddings = torch.norm(embeddings, p=2, dim=1, keepdim=True)
+            assert embeddings.shape[1] != 751
+            embeddings = torch.from_numpy(embeddings)
             embeddings_total.append(embeddings)
             true_labels.append(true_label)
             true_cams.append(cam)
@@ -214,28 +214,39 @@ if __name__ == "__main__":
         raise NotImplementedError
     model = nn.DataParallel(model)
     model.eval()
-    providers = ["CUDAExecutionProvider"]
-    ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
+    if params.ckpt.endswith("pt"):
+        model.load_state_dict(torch.load(params.ckpt))
+    else:
+        providers = ["CUDAExecutionProvider"]
+        ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
     market_gallery = MarketDataset(dataset.gallery, transform_test)
     dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True, True
+    gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True
+    if params.ckpt.endswith("onnx") else False, True
                     if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
     market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip)
     dataloader = DataLoaderX(market_gallery_augment, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    gallery_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_gallery_cams, True, True
+    gallery_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_gallery_cams, True
+    if params.ckpt.endswith("onnx") else False, True
     if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    gallery_embeddings_augment = F.normalize(gallery_embeddings_augment, dim=1)
 
     gallery_embeddings = (gallery_embeddings + gallery_embeddings_augment) / 2.0
 
     market_query = MarketDataset(dataset.query, transform_test)
     dataloader = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True, True
+    query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True
+    if params.ckpt.endswith("onnx") else False, True
     if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    query_embeddings = F.normalize(query_embeddings, dim=1)
     market_query_augment = MarketDataset(dataset.query, transform_test_flip)
     dataloader = DataLoaderX(market_query_augment, batch_size=params.bs, num_workers=4, shuffle=False,
                              pin_memory=True)
-    query_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_query_cams, True, True
+    query_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_query_cams, True
+    if params.ckpt.endswith("onnx") else False, True
     if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    query_embeddings_augment = F.normalize(query_embeddings_augment, dim=1)
 
     query_embeddings = (query_embeddings + query_embeddings_augment) / 2.0
 
