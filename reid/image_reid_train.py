@@ -9,6 +9,7 @@ from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
 from train_utils import *
 from dataset_market import Market1501
+from train_prepare import WarmupMultiStepLR
 
 import argparse
 import onnxruntime
@@ -66,8 +67,8 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.1)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    lr_scheduler = WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
@@ -109,7 +110,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     optimizer = madgrad.MADGRAD(model.parameters(), lr=0.001, weight_decay=5e-4)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.5)
+    lr_scheduler = WarmupMultiStepLR(optimizer, [10, 30])
     loss_func1 = HybridLoss(num_classes, 2048, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     loss_func2 = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
@@ -156,7 +157,7 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
 
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3000, gamma=0.5)
+    lr_scheduler = WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, feat_dim, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:

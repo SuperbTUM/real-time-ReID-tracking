@@ -190,7 +190,7 @@ if __name__ == "__main__":
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                  std=(0.229, 0.224, 0.225)),
         ])
-        model = ft_net(751).cuda()
+        model = ft_net(dataset.num_train_pids).cuda()
     elif params.backbone == "vit":
         transform_test = transforms.Compose([transforms.Resize((448, 224)),
                                              transforms.ToTensor(),
