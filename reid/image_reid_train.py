@@ -1,7 +1,6 @@
 import torch.onnx
 from torch.utils.data import Dataset
 from tqdm import tqdm
-from torch.autograd import Variable
 
 from backbones.plr_osnet import plr_osnet
 from backbones.SERes18_IBN import seres18_ibn
@@ -68,7 +67,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    lr_scheduler = WarmupMultiStepLR(optimizer, [10, 30])
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 30], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
@@ -92,9 +91,9 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             else:
                 loss.backward()
             optimizer.step()
-            lr_scheduler.step()
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
+        lr_scheduler.step()
     model.eval()
     to_onnx(model.module,
             torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
@@ -137,9 +136,9 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
             else:
                 loss.backward()
             optimizer.step()
-            lr_scheduler.step()
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
+        lr_scheduler.step()
     model.eval()
     to_onnx(model.module,
             torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
@@ -193,9 +192,9 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
             else:
                 loss.backward()
             optimizer.step()
-            lr_scheduler.step()
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
+        lr_scheduler.step()
     model.eval()
     to_onnx(model.module,
             (torch.randn(1, 3, 448, 224, requires_grad=True, device="cuda"),
