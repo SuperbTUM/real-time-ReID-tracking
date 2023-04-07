@@ -103,30 +103,48 @@ class SEDense18_IBN(nn.Module):
 
         model.layer1[0].bn1 = IBN(64)
         self.basicBlock11 = model.layer1[0]
+        if renorm:
+            self.basicBlock11.bn2 = BatchRenormalization2D(64)
         self.seblock1 = SEBlock(64)
 
         self.basicBlock12 = model.layer1[1]
+        if renorm:
+            self.basicBlock12.bn1 = BatchRenormalization2D(64)
+            self.basicBlock12.bn2 = BatchRenormalization2D(64)
         self.seblock2 = SEBlock(64)
 
         model.layer2[0].bn1 = IBN(128)
         self.basicBlock21 = model.layer2[0]
+        if renorm:
+            self.basicBlock21.bn2 = BatchRenormalization2D(128)
         self.seblock3 = SEBlock(128)
         self.ancillaryconv3 = nn.Conv2d(64, 128, 1, 2, 0)
         self.optionalNorm2dconv3 = nn.BatchNorm2d(128)
 
         self.basicBlock22 = model.layer2[1]
+        if renorm:
+            self.basicBlock22.bn1 = BatchRenormalization2D(128)
+            self.basicBlock22.bn2 = BatchRenormalization2D(128)
         self.seblock4 = SEBlock(128)
 
         model.layer3[0].bn1 = IBN(256)
         self.basicBlock31 = model.layer3[0]
+        if renorm:
+            self.basicBlock31.bn2 = BatchRenormalization2D(256)
         self.seblock5 = SEBlock(256)
         self.ancillaryconv5 = nn.Conv2d(128, 256, 1, 2, 0)
         self.optionalNorm2dconv5 = nn.BatchNorm2d(256)
 
         self.basicBlock32 = model.layer3[1]
+        if renorm:
+            self.basicBlock32.bn1 = BatchRenormalization2D(256)
+            self.basicBlock32.bn2 = BatchRenormalization2D(256)
         self.seblock6 = SEBlock(256)
 
+        model.layer4[0].bn1 = IBN(512)
         self.basicBlock41 = model.layer4[0]
+        if renorm:
+            self.basicBlock41.bn2 = BatchRenormalization2D(512)
         # last stride = 1
         self.basicBlock41.conv1 = nn.Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
         self.basicBlock41.downsample[0] = nn.Conv2d(256, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
@@ -135,6 +153,9 @@ class SEDense18_IBN(nn.Module):
         self.optionalNorm2dconv7 = nn.BatchNorm2d(512)
 
         self.basicBlock42 = model.layer4[1]
+        if renorm:
+            self.basicBlock42.bn1 = BatchRenormalization2D(512)
+            self.basicBlock42.bn2 = BatchRenormalization2D(512)
         self.seblock8 = SEBlock(512)
 
         if pooling == "gem":

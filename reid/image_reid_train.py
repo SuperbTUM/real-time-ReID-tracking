@@ -281,6 +281,7 @@ def parser():
     args.add_argument("--center_lamda", help="for center loss", default=0.0, type=float)
     args.add_argument("--continual", action="store_true")
     args.add_argument("--accelerate", action="store_true")
+    args.add_argument("--renorm", action="store_true")
     return args.parse_args()
 
 
@@ -307,7 +308,7 @@ if __name__ == "__main__":
             model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                                 params.accelerate)
         else:
-            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=True).cuda()
+            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm).cuda()
             model = nn.DataParallel(model)
             model, loss_stats = train_cnn(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                           params.accelerate)
