@@ -111,6 +111,18 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
 
 ## Evaluation
 
+**Re-identification**
+
+SeRes18-IBN-BatchReNorm(Important!)-Softmax+SoftTriplet+Center
+
+| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
+| ------ |--------|--------|--------|--------|
+| Value  | 0.7304 | 0.8863 | 0.9353 | 0.4954 |
+
+
+
+**Tracking**
+
 [Need to be re-evaluated]
 
 The tracking quality is evaluated under regular metrics including MOTA, MOTP and IDSW. The evaluation can be deployed with a bash command. I set the maximum distance to 0.15 (cosine distance) and minimum confidence to 0.5. Also, I resized the bounding box to (128, 256). The evaluation results are shown below. Our proposal has better performance in MOTA, MOTP, MODA and IDF1 with 1% of absolute improvement! For specific meaning of tracking metrics, please refer to [this](https://link.springer.com/content/pdf/10.1007/s11263-020-01375-2.pdf) and [this](https://link.springer.com/content/pdf/10.1155/2008/246309.pdf).
