@@ -42,7 +42,7 @@ def get_labels(repres, n_clusters=2):
     try:
         kmeans = Kmeans(d=repres.shape[1], k=n_clusters, niter=300, nredo=10)
         kmeans.train(repres.astype(np.float32))
-        return kmeans.index.search(repres.astype(np.float32), 1)[1]
+        return kmeans.index.search(repres.astype(np.float32), 1)[1].flatten()
     except:
         kmeans = KMeans(n_clusters, random_state=0)
         return kmeans.fit_predict(repres)
