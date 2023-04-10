@@ -95,9 +95,12 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             iterator.set_description(description)
         lr_scheduler.step()
     model.eval()
-    to_onnx(model.module,
-            torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
-            output_names=["embeddings", "outputs"])
+    try:
+        to_onnx(model.module,
+                torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
+                output_names=["embeddings", "outputs"])
+    except RuntimeError:
+        pass
     torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint.pt")
     return model, loss_stats
 

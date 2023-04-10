@@ -2,8 +2,6 @@
 
 - [x] To work with latest YoloV8-DeepOCSort implementation towards a new benchmark(important!) and apply necessary changes on current repository.
 
-- [ ] To work with SEBlock for query-guided channel attention on gallery images, proposed by a CVPR2019' paper.
-
 - [x] To debug and tune a VAE-(W)GAN model for Market1501.
 
 - [ ] To check if triplet loss w/. penalty is helpful in object reidentification/image retrivial/person search.
