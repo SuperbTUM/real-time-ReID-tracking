@@ -171,11 +171,10 @@ class TripletLoss(nn.Module):
         margin (float, optional): margin for triplet. Default is 0.3.
     """
 
-    def __init__(self, margin=0.3, penalty=False, alpha=0., smooth=False):
+    def __init__(self, margin=0.3, alpha=0., smooth=False):
         super(TripletLoss, self).__init__()
         self.margin = margin
         self.ranking_loss = nn.MarginRankingLoss(margin=margin)
-        self.penalty = penalty
         self.alpha = alpha
         self.smooth = smooth
 
@@ -206,8 +205,7 @@ class TripletLoss(nn.Module):
         y.fill_(1)
         y = Variable(y)
         loss = self.ranking_loss(dist_an, dist_ap, y)
-        if self.penalty:
-            loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
+        loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
         if self.smooth:
             loss = F.softplus(loss)
         else:
@@ -222,11 +220,12 @@ class HybridLoss(nn.Module):
                  smoothing=0.1,
                  epsilon=0,
                  lamda=0.0005,
+                 alpha=0.,
                  triplet_smooth=False):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
         if margin > 0.:
-            self.triplet = TripletLoss(margin, triplet_smooth)  # Smooth only works for hard triplet loss now
+            self.triplet = TripletLoss(margin, alpha, triplet_smooth)  # Smooth only works for hard triplet loss now
         else:
             self.triplet = WeightedRegularizedTriplet()
         self.smooth = LabelSmoothing(smoothing, epsilon)

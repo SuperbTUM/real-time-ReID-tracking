@@ -4,7 +4,7 @@
 
 - [x] To debug and tune a VAE-(W)GAN model for Market1501.
 
-- [ ] To check if triplet loss w/. penalty is helpful in object reidentification/image retrivial/person search.
+- [x] To check if triplet loss w/. penalty is helpful in object reidentification/image retrivial/person search.
 
 - [ ] To work with sequential side information on ViT and Swin-transformer.
 
