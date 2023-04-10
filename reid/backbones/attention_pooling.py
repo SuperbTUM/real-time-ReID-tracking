@@ -25,10 +25,14 @@ class AttentionPooling(nn.Module):
         self.softmax = nn.Softmax(-1)
 
     def forward(self, x):
+        bs = x.size(0)
         weights = torch.matmul(x.view(-1, x.shape[1]), self.cls_vec)
         weights = self.softmax(weights.view(x.shape[0], -1))
         x = torch.bmm(x.view(x.shape[0], x.shape[1], -1), weights.unsqueeze(-1)).squeeze()
         x = x + self.cls_vec
         x = self.fc(x)
         x = x + self.cls_vec
-        return x.squeeze()
+        x = x.squeeze()
+        if bs == 1:
+            x = x.unsqueeze(0)
+        return x

@@ -117,13 +117,15 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
             embeddings_total.append(embeddings)
             true_labels.append(true_label)
             true_cams.append(cam)
-    embeddings_total = torch.stack(embeddings_total)
-    embed_dim = embeddings_total.size(-1)
-    embeddings_total = embeddings_total.view(-1, embed_dim)
-    true_labels = torch.stack(true_labels)
-    true_labels = true_labels.flatten()
-    true_cams = torch.stack(true_cams)
-    true_cams = true_cams.flatten()
+    embed_dim = embeddings_total[-1].size(1)
+    try:
+        embeddings_total = torch.stack(embeddings_total).view(-1, embed_dim)
+        true_labels = torch.stack(true_labels).flatten()
+        true_cams = torch.stack(true_cams).flatten()
+    except RuntimeError:
+        embeddings_total = torch.cat((torch.stack(embeddings_total[:-1]).view(-1, embed_dim), embeddings_total[-1]), dim=0)
+        true_labels = torch.cat((torch.stack(true_labels[:-1]).flatten(), true_labels[-1]), dim=0)
+        true_cams = torch.cat((torch.stack(true_cams[:-1]).flatten(), true_cams[-1]), dim=0)
     return embeddings_total, true_labels, true_cams
 
 

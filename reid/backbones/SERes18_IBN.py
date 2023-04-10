@@ -161,7 +161,7 @@ class SEDense18_IBN(nn.Module):
         if pooling == "gem":
             self.avgpooling = GeM()
         elif pooling == "attn":
-            self.avgpooling = AttentionPooling(512)
+            self.avgpooling = AttentionPooling(512)  # not working so well
         else:
             self.avgpooling = model.avgpool
 

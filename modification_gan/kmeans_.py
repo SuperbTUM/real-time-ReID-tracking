@@ -1,5 +1,9 @@
 from synthetic_generate import DataSet4GAN, fetch_rawdata, construct_raw_dataset, DataLoaderX
-from sklearn.cluster import KMeans
+try:
+    from faiss import Kmeans  # faiss should be faster
+except ImportError:
+    from sklearn.cluster import KMeans
+
 from torchvision import transforms, models
 import torch
 import torch.nn as nn
@@ -35,8 +39,13 @@ def get_repres(query_images):
 
 
 def get_labels(repres, n_clusters=2):
-    kmeans = KMeans(n_clusters, random_state=0)
-    return kmeans.fit_predict(repres)
+    try:
+        kmeans = Kmeans(d=repres.shape[1], k=n_clusters, niter=300, nredo=10)
+        kmeans.train(repres.astype(np.float32))
+        return kmeans.index.search(repres.astype(np.float32), 1)[1]
+    except:
+        kmeans = KMeans(n_clusters, random_state=0)
+        return kmeans.fit_predict(repres)
 
 
 if __name__ == "__main__":

@@ -47,6 +47,11 @@ You are suggested to install other dependencies with
 pip install -r requirements.txt
 ```
 
+Optionally, using `faiss` is highly recommended.
+
+```bash
+conda install -c pytorch faiss-cpu
+```
 
 
 ## Dataset
