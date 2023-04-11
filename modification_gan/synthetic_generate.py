@@ -516,6 +516,7 @@ def generate(modelG_checkpoint, modelG, device="cuda:0"):
 
 def parser():
     args = argparse.ArgumentParser()
+    args.add_argument("--root", type=str, default="~")
     args.add_argument("--k", type=int, default=1, help="number of clusters in k-means")
     args.add_argument("--vae", action="store_true")
     args.add_argument("--Wassertein", action="store_true")
@@ -525,7 +526,8 @@ def parser():
 
 if __name__ == "__main__":
     params = parser()
-    query_images = fetch_rawdata("Market1501/bounding_box_train/", "Market1501/bounding_box_test/")
+    query_images = fetch_rawdata("/".join((params.root, "Market1501/bounding_box_train/")),
+                                 "/".join((params.root, "Market1501/bounding_box_test/")))
     raw_dataset, num_classes = construct_raw_dataset(query_images)
     if params.k > 1:
         reid_dataset = DataSet4GAN(raw_dataset, transform=transforms.Compose([

@@ -8,6 +8,7 @@ import numpy as np
 from torchvision import transforms
 from tqdm import tqdm
 
+from backbones.baseline_lite import ft_baseline
 from backbones.SERes18_IBN import seres18_ibn
 from backbones.plr_osnet import plr_osnet
 from backbones.vision_transformer import vit_t
@@ -140,7 +141,8 @@ def parser():
                                                                             "vit",
                                                                             "swin_v1",
                                                                             "swin_v2",
-                                                                            "resnet50"])
+                                                                            "resnet50",
+                                                                            "baseline"])
     return args.parse_args()
 
 
@@ -193,6 +195,21 @@ if __name__ == "__main__":
                                  std=(0.229, 0.224, 0.225)),
         ])
         model = ft_net(dataset.num_train_pids).cuda()
+    elif params.backbone == "baseline":
+        transform_test = transforms.Compose([transforms.Resize((256, 128)),
+                                             transforms.ToTensor(),
+                                             transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                                                  std=(0.229, 0.224, 0.225)),
+                                             ]
+                                            )
+        transform_test_flip = transforms.Compose([
+            transforms.Resize((256, 128)),
+            transforms.RandomHorizontalFlip(p=1.0),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                 std=(0.229, 0.224, 0.225)),
+        ])
+        model = ft_baseline(dataset.num_train_pids).cuda()
     elif params.backbone == "vit":
         transform_test = transforms.Compose([transforms.Resize((448, 224)),
                                              transforms.ToTensor(),
