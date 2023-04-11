@@ -1,73 +1,19 @@
 __author__ = "Mingzhe Hu"
 
-import glob
-
-from PIL import Image
 import numpy as np
 import torch
 torch.autograd.set_detect_anomaly(True)
 import torch.nn as nn
-from prefetch_generator import BackgroundGenerator
 import torchvision.utils as vutils
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-from tqdm import tqdm
 import os
 import matplotlib.animation as animation
 from IPython.display import HTML
 import argparse
 
-
-class DataLoaderX(DataLoader):
-    def __iter__(self):
-        return BackgroundGenerator(super().__iter__())
-
-
-def fetch_rawdata(*paths):
-    total_images = list()
-    for path in paths:
-        query = glob.glob(path + "*.jpg")
-        query = list(map(lambda x: "/".join(x.split("/")[-3:]), query))
-        query = list(filter(lambda x: x.split("/")[-1][:4] != "0000" or x.split("/")[-1][0] != "-", query))
-        total_images.extend(query)
-    return np.asarray(total_images)
-
-
-def construct_raw_dataset(query_images):
-    query_images = list(filter(lambda x: x.split("/")[2][0] != "-", query_images))
-    labels = np.empty((len(query_images),), dtype=np.int32)
-    cnt = 0
-    cur = 1
-    for i in range(len(query_images)):
-        image_info = query_images[i].split("/")[2][:4]
-        id = int(image_info)
-        if id != cur:
-            cur = id
-            cnt += 1
-        labels[i] = cnt
-    raw_dataset = list(zip(query_images, labels))
-    return np.asarray(raw_dataset), cnt + 1  # number of classes
-
-
-class DataSet4GAN(Dataset):
-    def __init__(self, raw_dataset, transform=None, group=-1):
-        super(DataSet4GAN, self).__init__()
-        if group >= 0:
-            raw_dataset = filter(lambda x: x[-1] == group, raw_dataset)
-        self.raw_dataset = raw_dataset
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.raw_dataset)
-
-    def __getitem__(self, item):
-        image_path, label = self.raw_dataset[item][:2]
-        img_data = Image.open(image_path).convert("RGB")
-        if self.transform:
-            img_data = self.transform(img_data)
-        label = torch.tensor(int(label)).float()
-        return img_data, label
+from gan_utils import *
+from kmeans_ import get_groups
 
 
 class EMA:
@@ -287,13 +233,13 @@ def load_model(nz, device="cuda:0", lr=0.0002):
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD
 
 
-def load_dataset(raw_dataset, batch_size=32):
+def load_dataset(raw_dataset, batch_size=32, group=-1):
     transform = transforms.Compose([
         transforms.Resize((128, 64)),
         transforms.ToTensor(),
         transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
     ])
-    reid_dataset = DataSet4GAN(raw_dataset, transform)
+    reid_dataset = DataSet4GAN(raw_dataset, transform, group=group)
     data_loader = DataLoaderX(reid_dataset,
                               shuffle=True,
                               batch_size=batch_size,
@@ -418,9 +364,8 @@ def train_VAE_GAN(raw_dataset,
     optim_Dis = torch.optim.RMSprop(discrim.parameters(), lr=lr * alpha)
 
     lamda = 10
-
+    dataloader = load_dataset(raw_dataset, batch_size)
     for epoch in range(epochs):
-        dataloader = load_dataset(raw_dataset, batch_size)
         if epoch % 5 == 0:
             lamda -= 1
         for i, data in enumerate(dataloader):
@@ -448,87 +393,88 @@ def train(raw_dataset,
         return netG, checkpoint
     # Lists to keep track of progress
     img_list = []
-    G_losses = []
-    D_losses = []
-    iters = 0
     real_label = 1.
     fake_label = 0.
     fixed_noise = torch.randn(batch_size, nz, 1, 1, device=device)
 
-    print("Starting Training Loop...")
-    # For each epoch
-    for epoch in range(epochs):
-        # For each batch in the dataloader
-        dataloader = load_dataset(raw_dataset, batch_size)
-        for i, data in enumerate(dataloader, 0):
+    for g in range(params.k):
+        G_losses = []
+        D_losses = []
+        iters = 0
+        dataloader = load_dataset(raw_dataset, batch_size, g)
+        print("Starting Training Loop for group{}...".format(g))
+        # For each epoch
+        for epoch in range(epochs):
+            # For each batch in the dataloader
+            for i, data in enumerate(dataloader, 0):
+                ############################
+                # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+                ###########################
+                # Train with all-real batch
+                netD.zero_grad()
+                # Format batch
+                real_cpu = data[0].to(device)
+                b_size = real_cpu.size(0)
+                Valid_label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
+                Fake_label = torch.full((b_size,), fake_label, dtype=torch.float, device=device)
+                # Forward pass real batch through D
+                output = netD(real_cpu).view(-1)
+                # Calculate loss on all-real batch
+                errD_real = criterion(output, Valid_label)
+                # Calculate gradients for D in backward pass
+                D_x = output.mean().item()
 
-            ############################
-            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
-            ###########################
-            ## Train with all-real batch
-            netD.zero_grad()
-            # Format batch
-            real_cpu = data[0].to(device)
-            b_size = real_cpu.size(0)
-            Valid_label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
-            Fake_label = torch.full((b_size,), fake_label, dtype=torch.float, device=device)
-            # Forward pass real batch through D
-            output = netD(real_cpu).view(-1)
-            # Calculate loss on all-real batch
-            errD_real = criterion(output, Valid_label)
-            # Calculate gradients for D in backward pass
-            D_x = output.mean().item()
+                ## Train with all-fake batch
+                # Generate batch of latent vectors
+                noise = torch.randn(b_size, nz, 1, 1, device=device)
+                # Generate fake image batch with G
+                fake = netG(noise)
+                # Classify all fake batch with D
+                output = netD(fake.detach()).view(-1)
+                # Calculate D's loss on the all-fake batch
+                errD_fake = criterion(output, Fake_label)
+                # Calculate the gradients for this batch, accumulated (summed) with previous gradients
+                D_G_z1 = output.mean().item()
+                # Compute error of D as sum over the fake and the real batches
+                errD = errD_real + errD_fake
+                errD.backward()
+                # Update D
+                optimizerD.step()
 
-            ## Train with all-fake batch
-            # Generate batch of latent vectors
-            noise = torch.randn(b_size, nz, 1, 1, device=device)
-            # Generate fake image batch with G
-            fake = netG(noise)
-            # Classify all fake batch with D
-            output = netD(fake.detach()).view(-1)
-            # Calculate D's loss on the all-fake batch
-            errD_fake = criterion(output, Fake_label)
-            # Calculate the gradients for this batch, accumulated (summed) with previous gradients
-            D_G_z1 = output.mean().item()
-            # Compute error of D as sum over the fake and the real batches
-            errD = errD_real + errD_fake
-            errD.backward()
-            # Update D
-            optimizerD.step()
+                ############################
+                # (2) Update G network: maximize log(D(G(z)))
+                ###########################
+                netG.zero_grad()
+                # Since we just updated D, perform another forward pass of all-fake batch through D
+                output = netD(fake).view(-1)
+                # Calculate G's loss based on this output
+                errG = criterion(output, Valid_label)
+                # Calculate gradients for G
+                errG.backward()
+                D_G_z2 = output.mean().item()
+                # Update G
+                optimizerG.step()
 
-            ############################
-            # (2) Update G network: maximize log(D(G(z)))
-            ###########################
-            netG.zero_grad()
-            # Since we just updated D, perform another forward pass of all-fake batch through D
-            output = netD(fake).view(-1)
-            # Calculate G's loss based on this output
-            errG = criterion(output, Valid_label)
-            # Calculate gradients for G
-            errG.backward()
-            D_G_z2 = output.mean().item()
-            # Update G
-            optimizerG.step()
+                # Output training stats
+                if i % 50 == 0:
+                    print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
+                          % (epoch, epochs, i, len(dataloader),
+                             errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
 
-            # Output training stats
-            if i % 50 == 0:
-                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
-                      % (epoch, epochs, i, len(dataloader),
-                         errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
+                # Save Losses for plotting later
+                G_losses.append(errG.item())
+                D_losses.append(errD.item())
 
-            # Save Losses for plotting later
-            G_losses.append(errG.item())
-            D_losses.append(errD.item())
-
-            # Check how the generator is doing by saving G's output on fixed_noise
-            if (iters % 500 == 0) or ((epoch == 4) and (i == len(dataloader) - 1)):
-                with torch.no_grad():
-                    fake = netG(fixed_noise).detach().cpu()
-                img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
-            iters += 1
-    torch.save(netG.state_dict(), "Generate_model_trained.t7")
-    torch.cuda.empty_cache()
-    return G_losses, D_losses, netG, img_list
+                # Check how the generator is doing by saving G's output on fixed_noise
+                if (iters % 500 == 0) or ((epoch == 4) and (i == len(dataloader) - 1)):
+                    with torch.no_grad():
+                        fake = netG(fixed_noise).detach().cpu()
+                    img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
+                iters += 1
+        torch.save(netG.state_dict(), "Generate_model_trained_group{}.t7".format(g))
+        torch.cuda.empty_cache()
+        plot(G_losses, D_losses)
+    return netG, img_list
 
 
 def plot(G_losses, D_losses):
@@ -570,6 +516,7 @@ def generate(modelG_checkpoint, modelG, device="cuda:0"):
 
 def parser():
     args = argparse.ArgumentParser()
+    args.add_argument("--k", type=int, default=1, help="number of clusters in k-means")
     args.add_argument("--vae", action="store_true")
     args.add_argument("--Wassertein", action="store_true")
     args.add_argument("--gp", action="store_true")
@@ -580,9 +527,16 @@ if __name__ == "__main__":
     params = parser()
     query_images = fetch_rawdata("Market1501/bounding_box_train/", "Market1501/bounding_box_test/")
     raw_dataset, num_classes = construct_raw_dataset(query_images)
+    if params.k > 1:
+        reid_dataset = DataSet4GAN(raw_dataset, transform=transforms.Compose([
+                transforms.Resize((128, 64)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            ]))
+        groups = get_groups(reid_dataset, params.k)
+        raw_dataset = list(zip(*raw_dataset, groups))
     if params.vae:
         train_VAE_GAN(raw_dataset, epochs=20, Wassertein=params.Wassertein, gp=params.gp)
     else:
-        G_losses, D_losses, netG, img_list = train(raw_dataset, epochs=20)
-        plot(G_losses, D_losses)
+        netG, img_list = train(raw_dataset, epochs=20)
         plot_imglist(img_list)

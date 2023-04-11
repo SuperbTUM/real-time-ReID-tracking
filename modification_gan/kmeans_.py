@@ -1,27 +1,23 @@
-from synthetic_generate import DataSet4GAN, fetch_rawdata, construct_raw_dataset, DataLoaderX
+from gan_utils import *
 try:
     from faiss import Kmeans  # faiss should be faster
 except ImportError:
     from sklearn.cluster import KMeans
 
-from torchvision import transforms, models
+from torchvision import models
 import torch
 import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-def get_repres(query_images):
-    raw_dataset, num_classes = construct_raw_dataset(query_images)
-    transform = transforms.Compose([
-        transforms.Resize((128, 64)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-    ])
-    reid_dataset = DataSet4GAN(raw_dataset, transform)
-    backbone = models.resnet50(pretrained=True)
-    backbone = nn.Sequential(*list(backbone.children())[:-1]).to(device)
+
+def get_repres(reid_dataset):
+    backbone = models.resnet50(weights="IMAGENET1K_V2").to(device)
+    backbone = nn.Sequential(*list(backbone.children())[:-1])
     backbone.eval()
+    backbone = torch.jit.script(backbone)  # torchscript
     data_loader = DataLoaderX(reid_dataset,
                               shuffle=False,
                               batch_size=1,
@@ -48,10 +44,7 @@ def get_labels(repres, n_clusters=2):
         return kmeans.fit_predict(repres)
 
 
-if __name__ == "__main__":
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    # We will split them to 2 sub-datasets
-
-    query_images = fetch_rawdata("Market1501/bounding_box_train/", "Market1501/bounding_box_test/")
-    repres = get_repres(query_images)
-    labels = get_labels(repres)
+def get_groups(reid_dataset, k=2):
+    repres = get_repres(reid_dataset)
+    labels = get_labels(repres, k)
+    return labels
