@@ -1,4 +1,5 @@
-__all__ = ["swin_transformer",
+__all__ = ["baseline_lite",
+           "swin_transformer",
            "vision_transformer",
            "SERes18_IBN",
            "plr_osnet",

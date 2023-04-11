@@ -29,7 +29,7 @@
 
 ## Introduction
 
-This is a project of real-time multiple object tracking in person re-identification. The proposal is to re-design the Re-ID model and try to obtain a stronger backbone. Several thoughts were applied and will be discussed throughly in the following chapters. 
+This is a project of real-time re-identification & multiple object tracking. The proposal is to re-design the Re-ID model and try to obtain a stronger backbone. Several thoughts were applied and will be discussed throughly in the following chapters. 
 
 The baseline is a Yolov5(now is YoloV8!) based DeepSort(now is DeepOCSort!) algorithm and can be found [here](https://github.com/mikel-brostrom/Yolov5_DeepSort_Pytorch). The author has updated his repository with import of fast-reid package. I developed my code with Dec. 2021 version when the re-id model from scratch existed. The baseline backbone was ResNet-18(now is OSNet!).
 
@@ -98,7 +98,7 @@ python reid/video_reid_train.py --crop_factor 1.0
 
 To fit with `yolov8_tracking`, please copy your model and checkpoints to `trackers/strongsort/models` and `trackers/strongsort/checkpoint`, and modify `reid_model_factory.py` accordingly.
 
-If you want to train the Re-ID model with video dataset, please refer to the [video_train](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_deepsort/mot16_train.py) script.
+If you want to train the Re-ID model with video dataset, please refer to the [video_train](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid/video_reid_train.py) script.
 
 **Tracking evaluation**
 

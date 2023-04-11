@@ -2,6 +2,7 @@ import torch.onnx
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+from backbones.baseline_lite import ft_baseline
 from backbones.plr_osnet import plr_osnet
 from backbones.SERes18_IBN import seres18_ibn
 from backbones.vision_transformer import vit_t
@@ -268,6 +269,12 @@ def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> l
 
 
 def parser():
+    def range_type(astr, min=-1., max=1.):
+        value = float(astr)
+        if min <= value <= max:
+            return value
+        else:
+            raise argparse.ArgumentTypeError('value not in range %s-%s' % (min, max))
     args = argparse.ArgumentParser()
     args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
     args.add_argument("--ckpt", help="where the checkpoint of vit is, can either be a onnx or pt", type=str,
@@ -277,9 +284,10 @@ def parser():
                                                                             "plr_osnet",
                                                                             "vit",
                                                                             "swin_v1",
-                                                                            "swin_v2"])
+                                                                            "swin_v2",
+                                                                            "baseline"])
     args.add_argument("--epochs", type=int, default=50)
-    args.add_argument("--epsilon", help="for polyloss, 0 by default", type=float, default=0.0)
+    args.add_argument("--epsilon", help="for polyloss, 0 by default", type=range_type, default=0.0, metavar="[-1, 1]")
     args.add_argument("--margin", help="for triplet loss", default=0.0, type=float)
     args.add_argument("--center_lamda", help="for center loss", default=0.0, type=float)
     args.add_argument("--continual", action="store_true")
@@ -292,7 +300,7 @@ if __name__ == "__main__":
     params = parser()
     dataset = Market1501(root="/".join((params.root, "Market1501")))
 
-    if params.backbone in ("plr_osnet", "seres18"):
+    if params.backbone in ("plr_osnet", "seres18", "baseline"):
         # No need for cross-domain retrain
         transform_train = transforms.Compose([
             transforms.Resize((256, 128)),
@@ -311,7 +319,10 @@ if __name__ == "__main__":
             model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                                 params.accelerate)
         else:
-            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm).cuda()
+            if params.backbone == "seres18":
+                model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm).cuda()
+            else:
+                model = ft_baseline(dataset.num_train_pids).cuda()
             model = nn.DataParallel(model)
             model, loss_stats = train_cnn(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                           params.accelerate)
