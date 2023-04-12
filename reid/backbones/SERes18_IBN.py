@@ -22,14 +22,22 @@ def weights_init_kaiming(m):
 
 # This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):
-    def __init__(self, c_in):
+    def __init__(self, c_in, se_attn=False):
         super().__init__()
-        self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
+        if se_attn:
+            self.globalavgpooling = GeM()
+        else:
+            self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
         self.fc1 = nn.Linear(c_in, max(1, c_in // 16))
         self.relu = nn.ReLU(inplace=True)
         self.fc2 = nn.Linear(max(1, c_in // 16), c_in)
         self.sigmoid = nn.Sigmoid()
         self.c_in = c_in
+
+        torch.nn.init.kaiming_normal_(self.fc1.weight.data, a=0, mode='fan_out')
+        torch.nn.init.constant_(self.fc1.bias.data, 0.0)
+        torch.nn.init.kaiming_normal_(self.fc2.weight.data, a=0, mode='fan_out')
+        torch.nn.init.constant_(self.fc2.bias.data, 0.0)
 
     def forward(self, x):
         x = self.globalavgpooling(x)
@@ -79,7 +87,38 @@ class IBN(nn.Module):
         return out
 
 
-class SEDense18_IBN(nn.Module):
+class SEBasicBlock(nn.Module):
+    def __init__(self, block, dim, renorm, ibn, se_attn, restride=False):
+        super(SEBasicBlock, self).__init__()
+        if restride:
+            block.conv1 = nn.Conv2d(dim >> 1, dim, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            block.downsample[0] = nn.Conv2d(dim >> 1, dim, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        if renorm:
+            block.bn1 = BatchRenormalization2D(dim)
+            block.bn2 = BatchRenormalization2D(dim)
+        if ibn:
+            # bn1 will be covered
+            block.bn1 = IBN(dim)
+        if list(block.named_children())[-1][0] == "downsample":
+            self.block_pre = nn.Sequential(*list(block.children())[:-1])
+            self.block_post = block.downsample
+        else:
+            self.block_pre = block
+            self.block_post = None
+        self.seblock = SEBlock(dim, se_attn)
+
+    def forward(self, x):
+        branch = x
+        x = self.block_pre(x)
+        scale = self.seblock(x)
+        x = scale * x
+        if self.block_post:
+            branch = self.block_post(branch)
+        x += branch
+        return x
+
+
+class SERse18_IBN(nn.Module):
     """
     Additionally, we would like to test the network with local average pooling
     i.e. Divide into eight and concatenate them
@@ -90,6 +129,7 @@ class SEDense18_IBN(nn.Module):
                  needs_norm=True,
                  pooling="gem",
                  renorm=False,
+                 se_attn=False,
                  is_reid=False):
         super().__init__()
         model = models.resnet18(weights=resnet18_pretrained, progress=False)
@@ -101,67 +141,25 @@ class SEDense18_IBN(nn.Module):
         self.relu0 = model.relu
         self.pooling0 = model.maxpool
 
-        model.layer1[0].bn1 = IBN(64)
-        self.basicBlock11 = model.layer1[0]
-        if renorm:
-            self.basicBlock11.bn2 = BatchRenormalization2D(64)
-        self.seblock1 = SEBlock(64)
+        self.basicBlock11 = SEBasicBlock(model.layer1[0], 64, renorm, True, se_attn)
 
-        self.basicBlock12 = model.layer1[1]
-        if renorm:
-            self.basicBlock12.bn1 = BatchRenormalization2D(64)
-            self.basicBlock12.bn2 = BatchRenormalization2D(64)
-        self.seblock2 = SEBlock(64)
+        self.basicBlock12 = SEBasicBlock(model.layer1[1], 64, renorm, False, se_attn)
 
-        model.layer2[0].bn1 = IBN(128)
-        self.basicBlock21 = model.layer2[0]
-        if renorm:
-            self.basicBlock21.bn2 = BatchRenormalization2D(128)
-        self.seblock3 = SEBlock(128)
-        self.ancillaryconv3 = nn.Conv2d(64, 128, 1, 2, 0)
-        self.optionalNorm2dconv3 = nn.BatchNorm2d(128)
+        self.basicBlock21 = SEBasicBlock(model.layer2[0], 128, renorm, True, se_attn)
 
-        self.basicBlock22 = model.layer2[1]
-        if renorm:
-            self.basicBlock22.bn1 = BatchRenormalization2D(128)
-            self.basicBlock22.bn2 = BatchRenormalization2D(128)
-        self.seblock4 = SEBlock(128)
+        self.basicBlock22 = SEBasicBlock(model.layer2[1], 128, renorm, False, se_attn)
 
-        model.layer3[0].bn1 = IBN(256)
-        self.basicBlock31 = model.layer3[0]
-        if renorm:
-            self.basicBlock31.bn2 = BatchRenormalization2D(256)
-        self.seblock5 = SEBlock(256)
-        self.ancillaryconv5 = nn.Conv2d(128, 256, 1, 2, 0)
-        self.optionalNorm2dconv5 = nn.BatchNorm2d(256)
+        self.basicBlock31 = SEBasicBlock(model.layer3[0], 256, renorm, True, se_attn)
 
-        self.basicBlock32 = model.layer3[1]
-        if renorm:
-            self.basicBlock32.bn1 = BatchRenormalization2D(256)
-            self.basicBlock32.bn2 = BatchRenormalization2D(256)
-        self.seblock6 = SEBlock(256)
+        self.basicBlock32 = SEBasicBlock(model.layer3[1], 256, renorm, False, se_attn)
 
-        model.layer4[0].bn1 = IBN(512)
-        self.basicBlock41 = model.layer4[0]
-        if renorm:
-            self.basicBlock41.bn2 = BatchRenormalization2D(512)
         # last stride = 1
-        self.basicBlock41.conv1 = nn.Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-        self.basicBlock41.downsample[0] = nn.Conv2d(256, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
-        self.seblock7 = SEBlock(512)
-        self.ancillaryconv7 = nn.Conv2d(256, 512, 1, 1, 0)
-        self.optionalNorm2dconv7 = nn.BatchNorm2d(512)
+        self.basicBlock41 = SEBasicBlock(model.layer4[0], 512, renorm, True, se_attn, True)
 
-        self.basicBlock42 = model.layer4[1]
-        if renorm:
-            self.basicBlock42.bn1 = BatchRenormalization2D(512)
-            self.basicBlock42.bn2 = BatchRenormalization2D(512)
-        self.seblock8 = SEBlock(512)
+        self.basicBlock42 = SEBasicBlock(model.layer4[1], 512, renorm, False, se_attn)
 
         if pooling == "gem":
             self.avgpooling = GeM()
-        elif pooling == "attn":
-            self.avgpooling = AttentionPooling(512)  # not working so well
         else:
             self.avgpooling = model.avgpool
 
@@ -175,7 +173,7 @@ class SEDense18_IBN(nn.Module):
             nn.Dropout(),
             nn.Linear(256, num_class),
         )
-        self.needs_norm = needs_norm
+        # self.needs_norm = needs_norm
         self.is_reid = is_reid
 
     def forward(self, x):
@@ -183,54 +181,15 @@ class SEDense18_IBN(nn.Module):
         x = self.bn0(x)
         x = self.relu0(x)
         x = self.pooling0(x)
-        branch1 = x
+
         x = self.basicBlock11(x)
-        scale1 = self.seblock1(x)
-        x = scale1 * x + branch1
-
-        branch2 = x
         x = self.basicBlock12(x)
-        scale2 = self.seblock2(x)
-        x = scale2 * x + branch2
-
-        branch3 = x
         x = self.basicBlock21(x)
-        scale3 = self.seblock3(x)
-        if self.needs_norm:
-            x = scale3 * x + self.optionalNorm2dconv3(self.ancillaryconv3(branch3))
-        else:
-            x = scale3 * x + self.ancillaryconv3(branch3)
-
-        branch4 = x
         x = self.basicBlock22(x)
-        scale4 = self.seblock4(x)
-        x = scale4 * x + branch4
-
-        branch5 = x
         x = self.basicBlock31(x)
-        scale5 = self.seblock5(x)
-        if self.needs_norm:
-            x = scale5 * x + self.optionalNorm2dconv5(self.ancillaryconv5(branch5))
-        else:
-            x = scale5 * x + self.ancillaryconv5(branch5)
-
-        branch6 = x
         x = self.basicBlock32(x)
-        scale6 = self.seblock6(x)
-        x = scale6 * x + branch6
-
-        branch7 = x
         x = self.basicBlock41(x)
-        scale7 = self.seblock7(x)
-        if self.needs_norm:
-            x = scale7 * x + self.optionalNorm2dconv7(self.ancillaryconv7(branch7))
-        else:
-            x = scale7 * x + self.ancillaryconv7(branch7)
-
-        branch8 = x
         x = self.basicBlock42(x)
-        scale8 = self.seblock8(x)
-        x = scale8 * x + branch8
 
         x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
@@ -249,8 +208,8 @@ def seres18_ibn(num_classes=751, pretrained="IMAGENET1K_V1", loss="triplet", **k
         is_reid = True
     else:
         raise NotImplementedError
-    model = SEDense18_IBN(num_class=num_classes,
-                          resnet18_pretrained=pretrained,
-                          is_reid=is_reid,
-                          **kwargs)
+    model = SERse18_IBN(num_class=num_classes,
+                        resnet18_pretrained=pretrained,
+                        is_reid=is_reid,
+                        **kwargs)
     return model
