@@ -219,12 +219,21 @@ def side_info_only(model):
     return model
 
 
-def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> list:
+def representation_only(model):
+    # for seres18
+    model.train()
+    model.module.classifier.requires_grad_ = False
+    model.module.bnneck.requires_grad_ = False
+    return model
+
+
+def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, use_side=False) -> list:
     model.eval()
     labels = []
     if not use_onnx:
+        dataloader = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True)
         with torch.no_grad():
-            for sample in dataloader:
+            for iteration, sample in enumerate(dataloader, 0):
                 if len(sample) == 2:
                     img, _ = sample
                     cam = seq = None
@@ -234,20 +243,24 @@ def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> l
                 else:
                     img, _, cam, seq = sample
                 img = img.cuda(non_blocking=True)
-                if cam is not None and any(cam) >= 0 and seq is not None and any(seq) >= 0:
+                if use_side:
                     _, preds = model(img, cam * all_cam + seq)
                 else:
                     _, preds = model(img)
                 preds = preds.softmax(dim=-1)
-                conf = preds.max(dim=-1)
-                candidates = preds.argmax(dim=-1).cpu().numpy()
+                conf, candidates = preds.max(dim=-1)  # (bs, )
+                candidates = candidates.cpu().numpy()
                 cam = cam.cpu().numpy()
                 seq = seq.cpu().numpy()
                 for i, c in enumerate(conf):
                     if c > conf_thres:
-                        labels.append((img[i], candidates[i], cam[i] if cam else None, seq[i] if seq else None))
+                        labels.append((dataset.gallery[i+iteration*params.bs][0],
+                                       candidates[i]+dataset.num_train_pids,
+                                       cam[i],
+                                       seq[i]))
     else:
-        for sample in dataloader:
+        dataloader = DataLoaderX(dataset_test, batch_size=1, shuffle=False, num_workers=4, pin_memory=True)
+        for iteration, sample in enumerate(dataloader, 0):
             if len(sample) == 2:
                 img, _ = sample
                 cam = seq = None
@@ -256,16 +269,63 @@ def inference(model, dataloader, all_cam=6, conf_thres=0.7, use_onnx=False) -> l
                 seq = None
             else:
                 img, _, cam, seq = sample
-            ort_inputs = {'input': to_numpy(img),
-                          "index": to_numpy(cam * all_cam + seq)}
+            if use_side:
+                ort_inputs = {'input': to_numpy(img),
+                              "index": to_numpy(cam * all_cam + seq)}
+            else:
+                ort_inputs = {'input': to_numpy(img)}
             preds = ort_session.run(["embeddings", "outputs"], ort_inputs)[1]
             preds = softmax(preds, axis=-1)
             conf = preds.max(axis=-1)
             candidates = preds.argmax(axis=-1)
             for i, c in enumerate(conf):
                 if c > conf_thres:
-                    labels.append((img[i], candidates[i], cam[i] if cam else None, seq[i] if seq else None))
+                    labels.append((dataset.gallery[i+iteration][0],
+                                   candidates[i]+dataset.num_train_pids,
+                                   cam[i],
+                                   seq[i]))
+    print("Inference completed! {} more pseudo-labels obtained!".format(len(labels)))
     return labels
+
+
+def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
+    model.train()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    loss_func = WeightedRegularizedTriplet()
+    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+    if accelerate:
+        res_dict = accelerate_train(model, dataloader, optimizer)
+        model, dataloader, optimizer = res_dict["accelerated"]
+        accelerator = res_dict["accelerator"]
+    loss_stats = []
+    # Additionally train 5 epochs
+    for epoch in range(5):
+        iterator = tqdm(dataloader)
+        for sample in iterator:
+            images, label = sample[:2]
+            optimizer.zero_grad()
+            images = images.cuda(non_blocking=True)
+            label = Variable(label).cuda(non_blocking=True)
+            embeddings, _ = model(images)
+            loss = loss_func(embeddings, label)
+            loss_stats.append(loss.cpu().item())
+            nn.utils.clip_grad_norm_(model.parameters(), 10)
+            if accelerate:
+                accelerator.backward(loss)
+            else:
+                loss.backward()
+            optimizer.step()
+            description = "epoch: {}, softTriplet loss: {:.4f}".format(epoch, loss)
+            iterator.set_description(description)
+    model.eval()
+    try:
+        to_onnx(model.module,
+                torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
+                output_names=["embeddings", "outputs"])
+    except RuntimeError:
+        pass
+    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint.pt")
+    return model, loss_stats
 
 
 def parser():
@@ -299,6 +359,7 @@ def parser():
 if __name__ == "__main__":
     params = parser()
     dataset = Market1501(root="/".join((params.root, "Market1501")))
+    providers = ["CUDAExecutionProvider"]
 
     if params.backbone in ("plr_osnet", "seres18", "baseline"):
         # No need for cross-domain retrain
@@ -327,23 +388,22 @@ if __name__ == "__main__":
             model, loss_stats = train_cnn(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                           params.accelerate)
 
-        # if params.continual:
-        #     transform_test = transforms.Compose([transforms.Resize((256, 128)),
-        #                                          transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        #                                          transforms.ToTensor(),
-        #                                          ]
-        #                                         )
-        #     dataset_test = MarketDataset(dataset.gallery, transform_test)
-        #     dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True)
-        #
-        #     pseudo_labeled_data = inference(model, dataloader_test)
-        #     del dataset_test
-        #     market_dataset.add_pseudo(pseudo_labeled_data)
-        #     market_dataset.set_cross_domain()
-        #     model = side_info_only(model)
-        #     model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
-        #                                         params.accelerate)
-        #     market_dataset.reset_cross_domain()
+            if params.continual:
+                transform_test = transforms.Compose([transforms.Resize((256, 128)),
+                                                     transforms.ToTensor(),
+                                                     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                                                     ]
+                                                    )
+                dataset_test = MarketDataset(dataset.gallery, transform_test)
+
+                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
+                pseudo_labeled_data = inference(model, dataset_test, use_onnx=True)
+                del dataset_test
+                market_dataset.add_pseudo(pseudo_labeled_data)
+                market_dataset.set_cross_domain()
+                model = representation_only(model)
+                model, loss_stats = train_cnn_continual(model, market_dataset, params.bs, params.accelerate)
+                market_dataset.reset_cross_domain()
 
     else:
         transform_train = transforms.Compose([
@@ -363,7 +423,6 @@ if __name__ == "__main__":
                                              ]
                                             )
         market_dataset = MarketDataset(dataset.train, transform_train)
-        providers = ["TensorrtExecutionProvider", "CUDAExecutionProvider"]
 
         if params.backbone.startswith("vit"):
             model = vit_t(img_size=(448, 224), num_classes=dataset.num_train_pids, loss="triplet",
@@ -378,12 +437,12 @@ if __name__ == "__main__":
                                                          params.accelerate)
             if params.continual:
                 dataset_test = MarketDataset(dataset.gallery, transform_test)
-                dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
-                                              pin_memory=True)
+                # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
+                #                               pin_memory=True)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
 
-                pseudo_labeled_data = inference(model, dataloader_test, dataset.num_train_cams, use_onnx=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_train_cams, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
@@ -409,11 +468,11 @@ if __name__ == "__main__":
 
             if params.continual:
                 dataset_test = MarketDataset(dataset.gallery, transform_test)
-                dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
-                                              pin_memory=True)
+                # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
+                #                               pin_memory=True)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = inference(model, dataloader_test, dataset.num_train_cams, use_onnx=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_train_cams, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
