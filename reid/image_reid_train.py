@@ -222,6 +222,17 @@ def side_info_only(model):
 def representation_only(model):
     # for seres18
     model.train()
+    model.module.conv0.requires_grad_ = False
+    model.module.bn0.requires_grad_ = False
+    model.module.relu0.requires_grad_ = False
+    model.module.pooling0.requires_grad_ = False
+    model.module.basicBlock11.requires_grad_ = False
+    model.module.basicBlock12.requires_grad_ = False
+    model.module.basicBlock21.requires_grad_ = False
+    model.module.basicBlock22.requires_grad_ = False
+    model.module.basicBlock31.requires_grad_ = False
+    model.module.basicBlock32.requires_grad_ = False
+
     model.module.classifier.requires_grad_ = False
     model.module.bnneck.requires_grad_ = False
     return model
@@ -256,8 +267,8 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
                     if c > conf_thres:
                         labels.append((dataset.gallery[i+iteration*params.bs][0],
                                        candidates[i]+dataset.num_train_pids,
-                                       cam[i],
-                                       seq[i]))
+                                       cam[i].item(),
+                                       seq[i].item()))
     else:
         dataloader = DataLoaderX(dataset_test, batch_size=1, shuffle=False, num_workers=4, pin_memory=True)
         for iteration, sample in enumerate(dataloader, 0):
@@ -282,8 +293,8 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
                 if c > conf_thres:
                     labels.append((dataset.gallery[i+iteration][0],
                                    candidates[i]+dataset.num_train_pids,
-                                   cam[i],
-                                   seq[i]))
+                                   cam[i].item(),
+                                   seq[i].item()))
     print("Inference completed! {} more pseudo-labels obtained!".format(len(labels)))
     return labels
 
@@ -291,7 +302,7 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
 def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    loss_func = WeightedRegularizedTriplet()
+    loss_func = TripletLoss(alpha=0.01)#WeightedRegularizedTriplet()
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer)
@@ -353,6 +364,7 @@ def parser():
     args.add_argument("--continual", action="store_true")
     args.add_argument("--accelerate", action="store_true")
     args.add_argument("--renorm", action="store_true")
+    args.add_argument("--conf_thres", type=float, default=0.5)
     return args.parse_args()
 
 
@@ -397,7 +409,7 @@ if __name__ == "__main__":
                 dataset_test = MarketDataset(dataset.gallery, transform_test)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = inference(model, dataset_test, use_onnx=True)
+                pseudo_labeled_data = inference(model, dataset_test, params.conf_thres, use_onnx=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
@@ -442,7 +454,7 @@ if __name__ == "__main__":
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
 
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_train_cams, use_onnx=True, use_side=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_train_cams, params.conf_thres, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
@@ -472,7 +484,7 @@ if __name__ == "__main__":
                 #                               pin_memory=True)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_train_cams, use_onnx=True, use_side=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_train_cams, params.conf_thres, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()

@@ -1,4 +1,5 @@
 import torch
+from torch import Tensor
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 from torch.autograd import Variable
@@ -13,6 +14,7 @@ import random
 import math
 from PIL import Image
 from bisect import bisect_right
+from typing import Tuple
 
 cudnn.deterministic = True
 cudnn.benchmark = True
@@ -159,6 +161,15 @@ class WeightedRegularizedTriplet(object):
         return loss
 
 
+def cosine_dist(x, y):
+    bs1, bs2 = x.shape[0], y.shape[0]
+    frac_up = torch.matmul(x, y.transpose(0, 1))
+    frac_down = (torch.sqrt(torch.sum(torch.pow(x, 2), 1))).view(bs1, 1).repeat(1, bs2) * \
+            (torch.sqrt(torch.sum(torch.pow(y, 2), 1))).view(1, bs2).repeat(bs1, 1)
+    cosine = frac_up / frac_down
+    return (1 - cosine) / 2
+
+
 class TripletLoss(nn.Module):
     """Triplet loss with hard positive/negative mining.
 
@@ -191,6 +202,8 @@ class TripletLoss(nn.Module):
         # dist.addmm_(1, -2, inputs, inputs.t())
         dist.addmm_(inputs, inputs.t(), beta=1, alpha=-2)
         dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
+
+        # dist = 0.9 * dist + 0.1 * cosine_dist(inputs, inputs)
         # For each anchor, find the hardest positive and negative
         mask = targets.expand(n, n).eq(targets.expand(n, n).t())
         dist_ap, dist_an = [], []
@@ -240,6 +253,43 @@ class HybridLoss(nn.Module):
         triplet_loss = self.triplet(embeddings, targets)
         center_loss = self.center(embeddings, targets)
         return smooth_loss + triplet_loss + self.lamda * center_loss
+
+
+class CircleLoss(nn.Module):
+    def __init__(self, m: float, gamma: float) -> None:
+        super(CircleLoss, self).__init__()
+        self.m = m
+        self.gamma = gamma
+        self.soft_plus = nn.Softplus()
+
+    @staticmethod
+    def convert_label_to_similarity(normed_feature: Tensor, label: Tensor) -> Tuple[Tensor, Tensor]:
+        similarity_matrix = normed_feature @ normed_feature.transpose(1, 0)
+        label_matrix = label.unsqueeze(1) == label.unsqueeze(0)
+
+        positive_matrix = label_matrix.triu(diagonal=1)
+        negative_matrix = label_matrix.logical_not().triu(diagonal=1)
+
+        similarity_matrix = similarity_matrix.view(-1)
+        positive_matrix = positive_matrix.view(-1)
+        negative_matrix = negative_matrix.view(-1)
+        return similarity_matrix[positive_matrix], similarity_matrix[negative_matrix]
+
+    def forward(self, normed_feature: Tensor, label: Tensor) -> Tensor:
+
+        sp, sn = self.convert_label_to_similarity(normed_feature, label)
+        ap = torch.clamp_min(- sp.detach() + 1 + self.m, min=0.)
+        an = torch.clamp_min(sn.detach() + self.m, min=0.)
+
+        delta_p = 1 - self.m
+        delta_n = self.m
+
+        logit_p = - ap * (sp - delta_p) * self.gamma
+        logit_n = an * (sn - delta_n) * self.gamma
+
+        loss = self.soft_plus(torch.logsumexp(logit_n, dim=0) + torch.logsumexp(logit_p, dim=0))
+
+        return loss
 
 
 def to_onnx(model, input_dummy, input_names=["input"], output_names=["outputs"]):
