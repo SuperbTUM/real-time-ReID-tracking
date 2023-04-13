@@ -302,7 +302,7 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
 def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    loss_func = TripletLoss(alpha=0.01)#WeightedRegularizedTriplet()
+    loss_func = TripletLoss()#WeightedRegularizedTriplet()
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer)
@@ -326,7 +326,7 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
             else:
                 loss.backward()
             optimizer.step()
-            description = "epoch: {}, softTriplet loss: {:.4f}".format(epoch, loss)
+            description = "epoch: {}, Triplet loss: {:.4f}".format(epoch, loss)
             iterator.set_description(description)
     model.eval()
     try:

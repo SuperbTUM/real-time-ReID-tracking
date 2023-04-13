@@ -170,6 +170,24 @@ def cosine_dist(x, y):
     return (1 - cosine) / 2
 
 
+class TripletLossPenalty(nn.Module):
+    def __init__(self, beta, margin=0.3):
+        super(TripletLossPenalty, self).__init__()
+        self.beta = beta
+        self.margin = margin
+
+    def forward(self, x1, x2, y):
+        """
+        :param x1: negative
+        :param x2: positive
+        :param y:
+        :return:
+        """
+        penalized_margin = (1-self.beta)*self.margin / (1+self.beta)
+        loss = torch.maximum(torch.zeros_like(y), -y * ((1-self.beta)*x1 - (1+self.beta)*x2) + penalized_margin)
+        return loss.mean()
+
+
 class TripletLoss(nn.Module):
     """Triplet loss with hard positive/negative mining.
 
@@ -182,10 +200,13 @@ class TripletLoss(nn.Module):
         margin (float, optional): margin for triplet. Default is 0.3.
     """
 
-    def __init__(self, margin=0.3, alpha=0., smooth=False):
+    def __init__(self, margin=0.3, alpha=0.4, smooth=False):
         super(TripletLoss, self).__init__()
         self.margin = margin
-        self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+        if alpha == 0:
+            self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+        else:
+            self.ranking_loss = TripletLossPenalty(alpha, margin)
         self.alpha = alpha
         self.smooth = smooth
 
@@ -218,7 +239,7 @@ class TripletLoss(nn.Module):
         y.fill_(1)
         y = Variable(y)
         loss = self.ranking_loss(dist_an, dist_ap, y)
-        loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
+        # loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
         if self.smooth:
             loss = F.softplus(loss)
         else:
