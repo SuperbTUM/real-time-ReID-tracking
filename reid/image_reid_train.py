@@ -409,7 +409,7 @@ if __name__ == "__main__":
                 dataset_test = MarketDataset(dataset.gallery, transform_test)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = inference(model, dataset_test, params.conf_thres, use_onnx=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, params.conf_thres, use_onnx=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
@@ -454,7 +454,7 @@ if __name__ == "__main__":
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
 
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_train_cams, params.conf_thres, use_onnx=True, use_side=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, params.conf_thres, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
@@ -484,7 +484,7 @@ if __name__ == "__main__":
                 #                               pin_memory=True)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_train_cams, params.conf_thres, use_onnx=True, use_side=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, params.conf_thres, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
