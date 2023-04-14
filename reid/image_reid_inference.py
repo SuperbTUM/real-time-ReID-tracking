@@ -87,12 +87,12 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                     cam = seq = None
                 elif len(sample) == 3:
                     img, true_label, cam = sample
-                    seq = None
+                    seq = 0
                 else:
                     img, true_label, cam, seq = sample
                 img = img.cuda(non_blocking=True)
                 if use_side:
-                    embeddings, _ = model(img, cam * all_cam + seq)
+                    embeddings, _ = model(img, cam + all_cam * seq)
                 else:
                     embeddings, _ = model(img)
                 embeddings_total.append(embeddings)
@@ -105,14 +105,14 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                 cam = seq = None
             elif len(sample) == 3:
                 img, true_label, cam = sample
-                seq = None
+                seq = 0
             else:
                 img, true_label, cam, seq = sample
             if not use_side:
                 ort_inputs = {'input': to_numpy(img)}
             else:
                 ort_inputs = {'input': to_numpy(img),
-                              "index": to_numpy(cam * all_cam + seq)}
+                              "index": to_numpy(cam + all_cam * seq)}
             embeddings = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
             embeddings = torch.from_numpy(embeddings)
             embeddings_total.append(embeddings)
@@ -143,6 +143,7 @@ def parser():
                                                                             "swin_v2",
                                                                             "resnet50",
                                                                             "baseline"])
+    args.add_argument("--use_side", action="store_true")
     return args.parse_args()
 
 
@@ -257,14 +258,12 @@ if __name__ == "__main__":
     market_gallery = MarketDataset(dataset.gallery, transform_test)
     dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True
-    if params.ckpt.endswith("onnx") else False, True
-                    if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    if params.ckpt.endswith("onnx") else False, params.use_side)
     gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
     market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip)
     dataloader = DataLoaderX(market_gallery_augment, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     gallery_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_gallery_cams, True
-    if params.ckpt.endswith("onnx") else False, True
-    if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    if params.ckpt.endswith("onnx") else False, params.use_side)
     gallery_embeddings_augment = F.normalize(gallery_embeddings_augment, dim=1)
 
     gallery_embeddings = (gallery_embeddings + gallery_embeddings_augment) / 2.0
@@ -272,15 +271,13 @@ if __name__ == "__main__":
     market_query = MarketDataset(dataset.query, transform_test)
     dataloader = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True
-    if params.ckpt.endswith("onnx") else False, True
-    if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    if params.ckpt.endswith("onnx") else False, params.use_side)
     query_embeddings = F.normalize(query_embeddings, dim=1)
     market_query_augment = MarketDataset(dataset.query, transform_test_flip)
     dataloader = DataLoaderX(market_query_augment, batch_size=params.bs, num_workers=4, shuffle=False,
                              pin_memory=True)
     query_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_query_cams, True
-    if params.ckpt.endswith("onnx") else False, True
-    if params.backbone.startswith("vit") or params.backbone.startswith("swin") else False)
+    if params.ckpt.endswith("onnx") else False, params.use_side)
     query_embeddings_augment = F.normalize(query_embeddings_augment, dim=1)
 
     query_embeddings = (query_embeddings + query_embeddings_augment) / 2.0

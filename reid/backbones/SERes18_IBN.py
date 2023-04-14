@@ -126,6 +126,7 @@ class SERse18_IBN(nn.Module):
     def __init__(self,
                  resnet18_pretrained="IMAGENET1K_V1",
                  num_class=751,
+                 num_cams=6,
                  needs_norm=True,
                  pooling="gem",
                  renorm=False,
@@ -175,8 +176,9 @@ class SERse18_IBN(nn.Module):
         )
         # self.needs_norm = needs_norm
         self.is_reid = is_reid
+        self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
 
-    def forward(self, x):
+    def forward(self, x, cam=None):
         x = self.conv0(x)
         x = self.bn0(x)
         x = self.relu0(x)
@@ -193,6 +195,8 @@ class SERse18_IBN(nn.Module):
 
         x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
+        if cam is not None:
+            feature = feature + self.cam_bias[cam]
         if self.is_reid:
             return feature
         x = self.bnneck(feature)

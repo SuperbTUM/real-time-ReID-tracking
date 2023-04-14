@@ -79,11 +79,11 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
         for sample in iterator:
-            images, label = sample[:2]
+            images, label, cams = sample[:3]
             optimizer.zero_grad()
             images = images.cuda(non_blocking=True)
             label = Variable(label).cuda(non_blocking=True)
-            embeddings, outputs = model(images)
+            embeddings, outputs = model(images)#, cams)
             loss = loss_func(embeddings, outputs, label)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
@@ -99,6 +99,8 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     try:
         to_onnx(model.module,
                 torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
+                # torch.ones(1, dtype=torch.long)),
+                # input_names=["input", "index"],
                 output_names=["embeddings", "outputs"])
     except RuntimeError:
         pass
@@ -250,12 +252,12 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
                     cam = seq = None
                 elif len(sample) == 3:
                     img, _, cam = sample
-                    seq = None
+                    seq = 0
                 else:
                     img, _, cam, seq = sample
                 img = img.cuda(non_blocking=True)
                 if use_side:
-                    _, preds = model(img, cam * all_cam + seq)
+                    _, preds = model(img, cam + all_cam * seq)
                 else:
                     _, preds = model(img)
                 preds = preds.softmax(dim=-1)
@@ -277,12 +279,12 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
                 cam = seq = None
             elif len(sample) == 3:
                 img, _, cam = sample
-                seq = None
+                seq = 0
             else:
                 img, _, cam, seq = sample
             if use_side:
                 ort_inputs = {'input': to_numpy(img),
-                              "index": to_numpy(cam * all_cam + seq)}
+                              "index": to_numpy(cam + all_cam * seq)}
             else:
                 ort_inputs = {'input': to_numpy(img)}
             preds = ort_session.run(["embeddings", "outputs"], ort_inputs)[1]
@@ -393,7 +395,7 @@ if __name__ == "__main__":
                                                 params.accelerate)
         else:
             if params.backbone == "seres18":
-                model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm).cuda()
+                model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
             else:
                 model = ft_baseline(dataset.num_train_pids).cuda()
             model = nn.DataParallel(model)
