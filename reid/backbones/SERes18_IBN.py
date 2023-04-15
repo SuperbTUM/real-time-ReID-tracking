@@ -176,7 +176,7 @@ class SERse18_IBN(nn.Module):
         )
         # self.needs_norm = needs_norm
         self.is_reid = is_reid
-        self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
+        # self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
 
     def forward(self, x, cam=None):
         x = self.conv0(x)
@@ -195,8 +195,8 @@ class SERse18_IBN(nn.Module):
 
         x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
-        if cam is not None:
-            feature = feature + self.cam_bias[cam]
+        # if cam is not None:
+        #     feature = feature + self.cam_bias[cam]
         if self.is_reid:
             return feature
         x = self.bnneck(feature)

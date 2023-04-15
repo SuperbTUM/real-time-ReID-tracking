@@ -9,7 +9,7 @@ from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
 from train_utils import *
 from dataset_market import Market1501
-from train_prepare import WarmupMultiStepLR
+from train_prepare import WarmupMultiStepLR, RandomIdentitySampler
 
 import argparse
 import onnxruntime
@@ -70,7 +70,13 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 30], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
-    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+
+    if params.instance > 0:
+        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+    else:
+        custom_sampler = None
+    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
+                             pin_memory=True, sampler=custom_sampler)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
         model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
@@ -304,7 +310,7 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
 def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    loss_func = TripletLoss()#WeightedRegularizedTriplet()
+    loss_func = TripletLoss(alpha=0.0)#WeightedRegularizedTriplet()
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer)
@@ -367,6 +373,7 @@ def parser():
     args.add_argument("--accelerate", action="store_true")
     args.add_argument("--renorm", action="store_true")
     args.add_argument("--conf_thres", type=float, default=0.5)
+    args.add_argument("--instance", type=int, default=0)
     return args.parse_args()
 
 

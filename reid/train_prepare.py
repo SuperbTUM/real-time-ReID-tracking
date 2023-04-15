@@ -15,6 +15,7 @@ import math
 from PIL import Image
 from bisect import bisect_right
 from typing import Tuple
+from collections import defaultdict
 
 cudnn.deterministic = True
 cudnn.benchmark = True
@@ -171,10 +172,11 @@ def cosine_dist(x, y):
 
 
 class TripletLossPenalty(nn.Module):
-    def __init__(self, beta, margin=0.3):
+    def __init__(self, beta, margin=0.3, reduction="mean"):
         super(TripletLossPenalty, self).__init__()
         self.beta = beta
         self.margin = margin
+        self.reduction = reduction
 
     def forward(self, x1, x2, y):
         """
@@ -185,7 +187,12 @@ class TripletLossPenalty(nn.Module):
         """
         penalized_margin = (1-self.beta)*self.margin / (1+self.beta)
         loss = torch.maximum(torch.zeros_like(y), -y * ((1-self.beta)*x1 - (1+self.beta)*x2) + penalized_margin)
-        return loss.mean()
+        if self.reduction == "mean":
+            return loss.mean()
+        elif self.reduction == "sum":
+            return loss.sum()
+        else:
+            return loss
 
 
 class TripletLoss(nn.Module):
@@ -200,13 +207,13 @@ class TripletLoss(nn.Module):
         margin (float, optional): margin for triplet. Default is 0.3.
     """
 
-    def __init__(self, margin=0.3, alpha=0.4, smooth=False):
+    def __init__(self, margin=0.3, alpha=0.4, smooth=False, reduction="mean"):
         super(TripletLoss, self).__init__()
         self.margin = margin
         if alpha == 0:
-            self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+            self.ranking_loss = nn.MarginRankingLoss(margin=margin, reduction=reduction)
         else:
-            self.ranking_loss = TripletLossPenalty(alpha, margin)
+            self.ranking_loss = TripletLossPenalty(alpha, margin, reduction)
         self.alpha = alpha
         self.smooth = smooth
 
@@ -394,6 +401,36 @@ class LGT(object):
                 return transforms.ToTensor()(img)
 
         return transforms.ToTensor()(img)
+
+
+# @credit to Alibaba
+class RandomIdentitySampler(torch.utils.data.sampler.Sampler):
+    def __init__(self, data_source, num_instances=16):
+        super(RandomIdentitySampler, self).__init__(data_source)
+        self.data_source = data_source
+        self.num_instances = num_instances
+        self.index_dic = defaultdict(list)
+        for index, data_info in enumerate(data_source):
+            pid = data_info[1].item()
+            self.index_dic[pid].append(index)
+        self.pids = list(self.index_dic.keys())
+        self.num_samples = len(self.pids)
+
+    def __len__(self):
+        return self.num_samples * self.num_instances
+
+    def __iter__(self):
+        indices = torch.randperm(self.num_samples).tolist()
+        ret = []
+        for i in indices:
+            pid = self.pids[i]
+            t = self.index_dic[pid]
+            if len(t) >= self.num_instances:
+                t = np.random.choice(t, size=self.num_instances, replace=False)
+            else:
+                t = np.random.choice(t, size=self.num_instances, replace=True)
+            ret.extend(t)
+        return iter(ret)
 
 
 class WarmupMultiStepLR(torch.optim.lr_scheduler._LRScheduler):
