@@ -3,7 +3,7 @@ import torch.nn as nn
 from torchvision import models
 from torch.nn import functional as F
 
-from .batchrenorm import BatchRenormalization2D
+from .batchrenorm import BatchRenormalization2D, BatchRenormalization1D
 from .attention_pooling import AttentionPooling
 
 
@@ -165,6 +165,7 @@ class SERse18_IBN(nn.Module):
             self.avgpooling = model.avgpool
 
         self.bnneck = nn.BatchNorm1d(512)
+        # self.bnneck = BatchRenormalization1D(512)
         self.bnneck.bias.requires_grad_(False)
 
         self.classifier = nn.Sequential(
