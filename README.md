@@ -122,13 +122,13 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
     | ------ |--------|--------|--------|--------|
     | Value  | 0.7812 | 0.9112 | 0.9406 | 0.5609 |
 
-* SeRes18-IBN-BatchReNorm(Important!)-PolyLoss(Important; epsilon=1.0)+TripletPenalty+Center-Continual
+* SeRes18-IBN-BatchReNorm(Important!)-PolyLoss(Important; epsilon=1.0)+TripletPenalty+Center-Continual(thres=0.3)
 
     [Checkpoint](https://drive.google.com/file/d/1jYa38ujTvOXhcjPUbkxY7lOe9SXsLrfh/view?usp=share_link)
 
     | Metric | Acc@1  | Acc@5  | Acc@10 | mAP   |
     |--------|--------|--------|-------|--------|
-    | Value  | 0.8334 | 0.9376 | 0.9646 | 0.6127 |
+    | Value  | 0.8364 | 0.9400 | 0.9647 | 0.6127 |
 
 * SeRes18-IBN-BatchReNorm(Important!)-PolyLoss(Important; epsilon=1.0)+TripletPenalty+Center
 
