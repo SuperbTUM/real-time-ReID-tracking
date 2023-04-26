@@ -75,11 +75,11 @@ class BatchRenormalization1D(nn.Module):
         self.eps = eps
         self.momentum = torch.tensor(momentum)
 
-        self.gamma = torch.nn.Parameter(torch.ones((1, num_features, 1)), requires_grad=True)
-        self.beta = torch.nn.Parameter(torch.zeros((1, num_features, 1)), requires_grad=True)
+        self.gamma = torch.nn.Parameter(torch.ones((1, num_features)), requires_grad=True)
+        self.beta = torch.nn.Parameter(torch.zeros((1, num_features)), requires_grad=True)
 
-        self.running_avg_mean = torch.ones((1, num_features, 1), requires_grad=False)
-        self.running_avg_std = torch.zeros((1, num_features, 1), requires_grad=False)
+        self.running_avg_mean = torch.ones((1, num_features), requires_grad=False)
+        self.running_avg_std = torch.zeros((1, num_features), requires_grad=False)
 
         self.max_r_max = 3.0
         self.max_d_max = 5.0
@@ -103,8 +103,8 @@ class BatchRenormalization1D(nn.Module):
         self.r_max = self.r_max.to(device)
         self.d_max = self.d_max.to(device)
 
-        batch_ch_mean = torch.mean(x, dim=(0, 2), keepdim=True)
-        batch_ch_std = torch.clamp(torch.std(x, dim=(0, 2), keepdim=True), self.eps, 1e10)
+        batch_ch_mean = torch.mean(x, dim=0, keepdim=True)
+        batch_ch_std = torch.clamp(torch.std(x, dim=0, keepdim=True), self.eps, 1e10)
 
         if self.training:
             r = torch.clamp(batch_ch_std / self.running_avg_std, 1.0 / self.r_max, self.r_max).data

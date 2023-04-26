@@ -70,7 +70,7 @@ class ft_baseline(nn.Module):
         # avg pooling to global pooling
         if stride == 1:
             self.model.layer4[0].downsample[0].stride = (1,1)
-            self.model.layer4[0].conv2.stride = (1,1)
+            self.model.layer4[0].conv1.stride = (1,1)
         model_ft.avgpool = nn.AdaptiveAvgPool2d((1,1))
         self.model = model_ft
         self.classifier = ClassBlock(512, class_num, droprate)

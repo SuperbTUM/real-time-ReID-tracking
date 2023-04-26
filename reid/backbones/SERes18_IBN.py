@@ -93,12 +93,15 @@ class SEBasicBlock(nn.Module):
         if restride:
             block.conv1 = nn.Conv2d(dim >> 1, dim, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
             block.downsample[0] = nn.Conv2d(dim >> 1, dim, kernel_size=(1, 1), stride=(1, 1), bias=False)
+            # block.conv1.stride = (1, 1)
+            # block.downsample[0].stride = (1, 1)
         if renorm:
             block.bn1 = BatchRenormalization2D(dim)
             block.bn2 = BatchRenormalization2D(dim)
         if ibn:
             # bn1 will be covered
             block.bn1 = IBN(dim)
+        # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
             self.block_pre = nn.Sequential(*list(block.children())[:-1])
             self.block_post = block.downsample
@@ -116,6 +119,22 @@ class SEBasicBlock(nn.Module):
             branch = self.block_post(branch)
         x += branch
         return x
+
+
+class AconC(nn.Module):
+    r""" ACON activation (activate or not).
+    # AconC: (p1*x-p2*x) * sigmoid(beta*(p1*x-p2*x)) + p2*x, beta is a learnable parameter
+    # according to "Activate or Not: Learning Customized Activation" <https://arxiv.org/pdf/2009.04759.pdf>.
+    """
+
+    def __init__(self, width):
+        super().__init__()
+        self.p1 = nn.Parameter(torch.randn(1, width, 1, 1))
+        self.p2 = nn.Parameter(torch.randn(1, width, 1, 1))
+        self.beta = nn.Parameter(torch.ones(1, width, 1, 1))
+
+    def forward(self, x):
+        return (self.p1 * x - self.p2 * x) * torch.sigmoid(self.beta * (self.p1 * x - self.p2 * x)) + self.p2 * x
 
 
 class SERse18_IBN(nn.Module):
