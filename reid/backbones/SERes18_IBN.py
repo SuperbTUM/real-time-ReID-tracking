@@ -91,10 +91,10 @@ class SEBasicBlock(nn.Module):
     def __init__(self, block, dim, renorm, ibn, se_attn, restride=False):
         super(SEBasicBlock, self).__init__()
         if restride:
-            block.conv1 = nn.Conv2d(dim >> 1, dim, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-            block.downsample[0] = nn.Conv2d(dim >> 1, dim, kernel_size=(1, 1), stride=(1, 1), bias=False)
-            # block.conv1.stride = (1, 1)
-            # block.downsample[0].stride = (1, 1)
+            # block.conv1 = nn.Conv2d(dim >> 1, dim, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            # block.downsample[0] = nn.Conv2d(dim >> 1, dim, kernel_size=(1, 1), stride=(1, 1), bias=False)
+            block.conv1.stride = (1, 1)
+            block.downsample[0].stride = (1, 1)
         if renorm:
             block.bn1 = BatchRenormalization2D(dim)
             block.bn2 = BatchRenormalization2D(dim)
@@ -118,7 +118,7 @@ class SEBasicBlock(nn.Module):
         if self.block_post:
             branch = self.block_post(branch)
         x += branch
-        return x
+        return F.relu(x)
 
 
 class AconC(nn.Module):
