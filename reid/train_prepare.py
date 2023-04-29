@@ -26,6 +26,23 @@ class DataLoaderX(DataLoader):
         return BackgroundGenerator(super().__iter__())
 
 
+class FocalLoss(nn.Module):
+    def __init__(self, smoothing=0.1, epsilon=0., alpha=1.0, gamma=2.0):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.smoothing = smoothing
+
+    def forward(self, outputs, targets):
+        ce_loss = F.cross_entropy(outputs, targets, reduction='none', label_smoothing=self.smoothing)
+        pt = torch.exp(-ce_loss)
+        # mean over the batch
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        poly_loss = focal_loss + self.epsilon * torch.pow(1-pt, self.gamma+1)
+        return poly_loss.mean()
+
+
 class LabelSmoothing(nn.Module):
     """ NLL loss with label smoothing. """
 
@@ -269,7 +286,7 @@ class HybridLoss(nn.Module):
             self.triplet = TripletLoss(margin, alpha, triplet_smooth)  # Smooth only works for hard triplet loss now
         else:
             self.triplet = WeightedRegularizedTriplet()
-        self.smooth = LabelSmoothing(smoothing, epsilon)
+        self.smooth = FocalLoss(smoothing, epsilon)#LabelSmoothing(smoothing, epsilon)
         self.lamda = lamda
 
     def forward(self, embeddings, outputs, targets):

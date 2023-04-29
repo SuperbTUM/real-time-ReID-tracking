@@ -4,7 +4,7 @@
 
 - [x] To debug and tune a VAE-(W)GAN model for Market1501.
 
-- [x] To check if triplet loss w/. penalty is helpful in object reidentification/image retrivial/person search.
+- [x] To check if triplet loss w/. penalty is helpful in object re-identification/image retrieval/person search.
 
 - [ ] To work with sequential side information on ViT and Swin-transformer.
 
@@ -56,11 +56,11 @@ conda install -c pytorch faiss-cpu
 
 ## Dataset
 
-We use MOT16 evaluation as benchmark and Market1501 to train our re-id network.
+We use MOT16 evaluation as benchmark and Market1501 to pre-train our re-id network.
 
 Videos: [MOT16](https://motchallenge.net/data/MOT16/) => This dataset could be evaluated with completed bash scripts.
 
-Person gallery: [Market1501](https://www.kaggle.com/pengcw1/market-1501/data) => We only use the training set for training. (It is expected to use all the images but we just want to have 751 classes.)
+Person gallery: [Market1501](https://www.kaggle.com/pengcw1/market-1501/data) => We use the training set for training.
 
 
 
@@ -82,9 +82,9 @@ python modification_gan/synthetic_generate.py --vae --Wassertein --gp
 
 You will need to train your Re-ID model with Market1501. In the [reid](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid) folder, you can see how we build the model as well train the model. There are a few versions of models.
 
-The intuition is to apply bag of tricks. We considered random erasing augmentation, last stride reduction, center loss, SE block, batch norm neck, etc. We found that IBN and GeM modules are critical, so we also include this in our backbone. We have our checkpoint available [here](https://drive.google.com/file/d/1Ta89D7WXhL_H2lR_eYEyLuWfZEFdNEXo/view?usp=sharing). 
+The intuition is to construct a lite backbone for mobile development and real-time tracking. 
 
-We also have plr_osnet, vision transformer from Trans-ReID, and swin transformer.
+We include a model zoo, with CNN-based re-id models, and vision transformer based models, where you can access all of them in the [backbones](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid/backbones) folder.
 
 We train the model on both image-based dataset and video-based dataset(w/. ground truth), and the scripts can be access under the same folder.
 
@@ -151,6 +151,12 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
     | Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
     |--------|--------|--------|------|--------|
     | Value  | 0.7939 | 0.9195 | 0.9552 | 0.5620 |
+
+* SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(Important!)+SoftTriplet+Center
+
+    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP |
+    |--------|--------|--------|-----|--------|
+    | Value  | 0.8189 | 0.9317 | 0.9507 | 0.6002 |
 
 * SeRes18-IBN-BatchReNorm(Important!)-Softmax+SoftTriplet+Center-ContinualLearning
     
