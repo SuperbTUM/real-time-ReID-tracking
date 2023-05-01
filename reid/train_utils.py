@@ -2,11 +2,13 @@ from train_prepare import *
 import torch.onnx
 import torch.distributed as dist
 import h5py
+from PIL import Image
 import cv2
 import os
 import matplotlib.pyplot as plt
 
 from accelerate import Accelerator
+from ultralytics import YOLO
 
 
 def transform_dataset_hdf5(gt_paths, img_width, img_height):
@@ -79,3 +81,32 @@ def plot_loss(loss_stats):
         os.mkdir("images/")
     plt.savefig("images/loss_curve.png")
     plt.show()
+
+
+def redetection(image, format="pil", conf=0.3):
+    model = YOLO("yolov8n.pt")
+    result = model(image)
+    bbox = None
+    for r in result:
+        boxes = r.boxes
+        if boxes.cls.item() == 0 and boxes.conf.item() > conf:
+            conf = boxes.conf.item()
+            bbox = boxes.xyxy[0]
+    if bbox is not None:
+        if format == "pil":
+            width, height = image.size
+            image = np.array(image)
+        else:
+            height, width = image.shape[:2]
+        x1 = int(max(0, bbox[0]))
+        y1 = int(max(0, bbox[1]))
+        x2 = int(min(width, bbox[2]))
+        y2 = int(min(height, bbox[3]))
+        image = image[y1:y2, x1:x2, :]
+        if format == "opencv":
+            return image # np.ndarray
+        elif format == "pil":
+            return Image.fromarray(image)
+        else:
+            raise NotImplementedError
+    return image
