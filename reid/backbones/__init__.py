@@ -6,6 +6,6 @@ __all__ = ["baseline_lite",
            "osnet",
            "video_model",
            "AGW_MODEL",
-           "SEDense18",
+           "CARes18",
            "resnet50"]
 __version__ = "0.1.0"

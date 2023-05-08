@@ -51,6 +51,8 @@ class MarketDataset(Dataset):
         else:
             detailed_info = list(self.images[item])
         detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
+        # if np.random.random() > 0.5:
+        #    detailed_info[0] = redetection(detailed_info[0], "pil")
         if self.transform:
             detailed_info[0] = self.transform(detailed_info[0])
         detailed_info[1] = torch.tensor(detailed_info[1])
