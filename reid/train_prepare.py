@@ -224,7 +224,7 @@ class TripletLoss(nn.Module):
         margin (float, optional): margin for triplet. Default is 0.3.
     """
 
-    def __init__(self, margin=0.3, alpha=0.4, smooth=False, reduction="mean"):
+    def __init__(self, margin=0.3, alpha=0.4, sigma=1.0, smooth=False, reduction="mean"):
         super(TripletLoss, self).__init__()
         self.margin = margin
         if alpha == 0:
@@ -233,6 +233,7 @@ class TripletLoss(nn.Module):
             self.ranking_loss = TripletLossPenalty(alpha, margin, reduction)
         self.alpha = alpha
         self.smooth = smooth
+        self.sigma = sigma
 
     def forward(self, inputs, targets):
         """
@@ -262,7 +263,10 @@ class TripletLoss(nn.Module):
         y.resize_as_(dist_an.data)
         y.fill_(1)
         y = Variable(y)
-        loss = self.ranking_loss(dist_an, dist_ap, y)
+        if self.sigma < 1.:
+            loss = self.ranking_loss(torch.exp(dist_an / self.sigma), torch.exp(dist_ap / self.sigma), y)
+        else:
+            loss = self.ranking_loss(dist_an, dist_ap, y)
         # loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
         if self.smooth:
             loss = F.softplus(loss)

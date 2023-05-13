@@ -61,7 +61,7 @@ class CABasicBlock(nn.Module):
         else:
             self.block_pre = block
             self.block_post = None
-        self.cablock = CABlock(dim, se_attn)
+        self.cablock = CABlock(dim)
 
     def forward(self, x):
         branch = x
