@@ -30,7 +30,7 @@ class CABlock(nn.Module):
 
         x_cat_conv_relu = self.relu(self.conv_1x1(torch.cat((x_h, x_w), 3)))
 
-        x_cat_conv_split_h, x_cat_conv_split_w = x_cat_conv_relu.split([self.h, self.w], 3)
+        x_cat_conv_split_h, x_cat_conv_split_w = x_cat_conv_relu.split([h, w], 3)
 
         s_h = self.sigmoid_h(self.F_h(x_cat_conv_split_h.permute(0, 1, 3, 2)))
         s_w = self.sigmoid_w(self.F_w(x_cat_conv_split_w))
@@ -159,12 +159,12 @@ class CARes18_IBN(nn.Module):
 
         x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
+        if cam is not None:
+            feature = feature + self.cam_factor * self.cam_bias[cam]
+            trunc_normal_(feature, std=0.02)
         if self.is_reid:
             return feature
         x = self.bnneck(feature)
-        if cam is not None:
-            x = x + self.cam_factor * self.cam_bias[cam]
-            trunc_normal_(x, std=0.02)
         x = self.classifier(x)
 
         return feature, x
