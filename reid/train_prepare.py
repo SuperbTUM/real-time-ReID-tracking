@@ -224,7 +224,7 @@ class TripletLoss(nn.Module):
         margin (float, optional): margin for triplet. Default is 0.3.
     """
 
-    def __init__(self, margin=0.3, alpha=0.4, sigma=1.0, smooth=False, reduction="mean"):
+    def __init__(self, margin=0.3, alpha=0.4, smooth=False, sigma=1.0, reduction="mean"):
         super(TripletLoss, self).__init__()
         self.margin = margin
         if alpha == 0:
@@ -282,7 +282,7 @@ class HybridLoss(nn.Module):
                  smoothing=0.1,
                  epsilon=0,
                  lamda=0.0005,
-                 alpha=0.,
+                 alpha=0.4,
                  triplet_smooth=False):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)

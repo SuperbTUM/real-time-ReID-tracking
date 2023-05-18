@@ -5,3 +5,4 @@ accelerate
 madgrad
 onnxruntime-gpu
 ultralytics
+prefetch_generator

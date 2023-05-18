@@ -27,6 +27,12 @@ class MarketDataset(Dataset):
         self.transform = transform
         self.images_pseudo = []
         self._continual = False
+        self.cropped = []
+        self.cropped_pseudo = []
+        for detailed_info in tqdm(images):
+            image = Image.open(detailed_info[0]).convert("RGB")
+            cropped_img = redetection(image, "pil")
+            self.cropped.append(cropped_img)
 
     def set_cross_domain(self):
         self._continual = True
@@ -41,6 +47,10 @@ class MarketDataset(Dataset):
 
     def add_pseudo(self, pseudo_labeled_data):
         self.images_pseudo.extend(pseudo_labeled_data)
+        for detailed_info in tqdm(self.images_pseudo):
+            image = Image.open(detailed_info[0]).convert("RGB")
+            cropped_img = redetection(image, "pil")
+            self.cropped_pseudo.append(cropped_img)
 
     def __getitem__(self, item):
         if self._continual:
@@ -52,7 +62,10 @@ class MarketDataset(Dataset):
             detailed_info = list(self.images[item])
         detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
         # if np.random.random() > 0.5:
-        #    detailed_info[0] = redetection(detailed_info[0], "pil")
+        #     if item < len(self.images):
+        #         detailed_info[0] = self.cropped[item]
+        #     else:
+        #         detailed_info[0] = self.cropped_pseudo[item]
         if self.transform:
             detailed_info[0] = self.transform(detailed_info[0])
         detailed_info[1] = torch.tensor(detailed_info[1])

@@ -85,13 +85,15 @@ def plot_loss(loss_stats):
 
 def redetection(image, format="pil", conf=0.3):
     model = YOLO("yolov8n.pt")
-    result = model(image)
+    result = model(image, verbose=False, device=0)
     bbox = None
     for r in result:
         boxes = r.boxes
-        if boxes.cls.item() == 0 and boxes.conf.item() > conf:
-            conf = boxes.conf.item()
-            bbox = boxes.xyxy[0]
+        if boxes:
+            for klass, konf in zip(boxes.cls, boxes.conf):
+                if klass.item() == 0 and konf.item() > conf:
+                    conf = konf.item()
+                    bbox = boxes.xyxy[0]
     if bbox is not None:
         if format == "pil":
             width, height = image.size
