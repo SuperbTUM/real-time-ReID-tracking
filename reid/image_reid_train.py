@@ -1,4 +1,4 @@
-import torch.onnx
+import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
@@ -20,6 +20,7 @@ import madgrad
 cudnn.deterministic = True
 cudnn.benchmark = True
 
+# assert export_yolo()
 
 class MarketDataset(Dataset):
     def __init__(self, images, transform=None):
@@ -65,7 +66,7 @@ class MarketDataset(Dataset):
         #     if item < len(self.images):
         #         detailed_info[0] = self.cropped[item]
         #     else:
-        #         detailed_info[0] = self.cropped_pseudo[item]
+        #         detailed_info[0] = self.cropped_pseudo[item - len(self.images)]
         if self.transform:
             detailed_info[0] = self.transform(detailed_info[0])
         detailed_info[1] = torch.tensor(detailed_info[1])
@@ -438,6 +439,7 @@ if __name__ == "__main__":
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
                 model = representation_only(model)
+                torch.cuda.empty_cache()
                 model, loss_stats = train_cnn_continual(model, market_dataset, params.bs, params.accelerate)
                 market_dataset.reset_cross_domain()
 

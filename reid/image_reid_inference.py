@@ -75,6 +75,7 @@ def compute_mAP(index, good_index, junk_index):
 
 
 def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
+    torch.cuda.empty_cache()
     model.eval()
     embeddings_total = []
     true_labels = []

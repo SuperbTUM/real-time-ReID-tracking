@@ -6,6 +6,7 @@ from PIL import Image
 import cv2
 import os
 import matplotlib.pyplot as plt
+import onnxruntime
 
 from accelerate import Accelerator
 from ultralytics import YOLO
@@ -83,9 +84,27 @@ def plot_loss(loss_stats):
     plt.show()
 
 
+def export_yolo(sz=(256, 128)):
+    model = YOLO("yolov8n.pt")
+    if os.path.exists("yolov8n.onnx"):
+        return True
+    success = model.export(format="onnx", imgsz=sz, dynamic=True, device=0)
+    return success
+
+
 def redetection(image, format="pil", conf=0.3):
     model = YOLO("yolov8n.pt")
-    result = model(image, verbose=False, device=0)
+    # # success = model.export(format="onnx")
+    # processed_image = np.array(image, dtype=np.float32) / 255.
+    # processed_image = np.expand_dims(processed_image.transpose((2, 0, 1)), axis=0)
+    # providers = ["CUDAExecutionProvider"]
+    # ort_session = onnxruntime.InferenceSession("yolov8n.onnx", providers=providers)
+    # model_inputs = ort_session.get_inputs()
+    # model_outputs = ort_session.get_outputs()
+    # input_names = [model_inputs[i].name for i in range(len(model_inputs))]
+    # output_names = [model_outputs[i].name for i in range(len(model_outputs))]
+    # outputs = np.squeeze(ort_session.run(output_names, {input_names[0]: processed_image})[0]).T
+    result = model(image, verbose=False, device="0")
     bbox = None
     for r in result:
         boxes = r.boxes
@@ -94,21 +113,26 @@ def redetection(image, format="pil", conf=0.3):
                 if klass.item() == 0 and konf.item() > conf:
                     conf = konf.item()
                     bbox = boxes.xyxy[0]
+    # for output in outputs:
+    #     klasses = np.argmax(output[:, 4:], axis=1)
+    #     konfs = np.max(output[:, 4:], axis=1)
+    #     for klass, konf in zip(klasses, konfs):
+    #         if klass == 0 and konf > conf:
+    #             conf = konf
+    #             bbox = output[klass, :4]
     if bbox is not None:
         if format == "pil":
             width, height = image.size
-            image = np.array(image)
         else:
             height, width = image.shape[:2]
         x1 = int(max(0, bbox[0]))
         y1 = int(max(0, bbox[1]))
         x2 = int(min(width, bbox[2]))
         y2 = int(min(height, bbox[3]))
-        image = image[y1:y2, x1:x2, :]
         if format == "opencv":
-            return image # np.ndarray
+            image = image[y1:y2, x1:x2, :]
         elif format == "pil":
-            return Image.fromarray(image)
+            image = image.crop((x1, y1, x2, y2))
         else:
             raise NotImplementedError
     return image
