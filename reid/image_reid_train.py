@@ -32,10 +32,16 @@ class MarketDataset(Dataset):
         self.cropped_pseudo = []
         self.get_crop = get_crop
         if get_crop:
-            for detailed_info in tqdm(images):
-                image = Image.open(detailed_info[0]).convert("RGB")
-                cropped_img = redetection(image, "pil")
-                self.cropped.append(cropped_img)
+            pure_images = list(map(lambda x: x[0], images))
+            i = 0
+            while i < len(pure_images):
+                local_batch = []
+                end = min(i+64, len(pure_images))
+                for j in range(i, end):
+                    local_batch.append(Image.open(pure_images[i]).convert("RGB"))
+                cropped_imgs = redetection(local_batch, "pil")
+                self.cropped.extend(cropped_imgs)
+                i = end
 
     def set_cross_domain(self):
         self._continual = True
@@ -51,10 +57,16 @@ class MarketDataset(Dataset):
     def add_pseudo(self, pseudo_labeled_data):
         self.images_pseudo.extend(pseudo_labeled_data)
         if self.get_crop:
-            for detailed_info in tqdm(self.images_pseudo):
-                image = Image.open(detailed_info[0]).convert("RGB")
-                cropped_img = redetection(image, "pil")
-                self.cropped_pseudo.append(cropped_img)
+            pure_images = list(map(lambda x: x[0], self.images_pseudo))
+            i = 0
+            while i < len(pure_images):
+                local_batch = []
+                end = min(i + 64, len(pure_images))
+                for j in range(i, end):
+                    local_batch.append(Image.open(pure_images[i]).convert("RGB"))
+                cropped_imgs = redetection(local_batch, "pil")
+                self.cropped_pseudo.extend(cropped_imgs)
+                i = end
 
     def __getitem__(self, item):
         if self._continual:
