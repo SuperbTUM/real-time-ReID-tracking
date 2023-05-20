@@ -102,7 +102,7 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
     else:
         # experimental
         input_example = np.random.rand(1, 3, 256, 128).astype(np.float32)  # (1, 3, 448, 224)
-        index_example = np.zeros((1, ), dtype=np.int)
+        index_example = np.zeros((1, ), dtype=int)
         embeddings_example = np.random.rand(1, 512).astype(np.float32) # seres18
         outputs_example = np.random.rand(1, 751).astype(np.float32) # market1501
         input_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(input_example, 'cuda', 0)
@@ -276,12 +276,12 @@ if __name__ == "__main__":
     else:
         providers = [("CUDAExecutionProvider", {'enable_cuda_graph': True})]
         ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
-    market_gallery = MarketDataset(dataset.gallery, transform_test)
+    market_gallery = MarketDataset(dataset.gallery, transform_test, False)
     dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True
     if params.ckpt.endswith("onnx") else False, params.use_side)
     gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
-    market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip)
+    market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip, False)
     dataloader = DataLoaderX(market_gallery_augment, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     gallery_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_gallery_cams, True
     if params.ckpt.endswith("onnx") else False, params.use_side)
@@ -289,12 +289,12 @@ if __name__ == "__main__":
 
     gallery_embeddings = (gallery_embeddings + gallery_embeddings_augment) / 2.0
 
-    market_query = MarketDataset(dataset.query, transform_test)
+    market_query = MarketDataset(dataset.query, transform_test, False)
     dataloader = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True
     if params.ckpt.endswith("onnx") else False, params.use_side)
     query_embeddings = F.normalize(query_embeddings, dim=1)
-    market_query_augment = MarketDataset(dataset.query, transform_test_flip)
+    market_query_augment = MarketDataset(dataset.query, transform_test_flip, False)
     dataloader = DataLoaderX(market_query_augment, batch_size=params.bs, num_workers=4, shuffle=False,
                              pin_memory=True)
     query_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_query_cams, True

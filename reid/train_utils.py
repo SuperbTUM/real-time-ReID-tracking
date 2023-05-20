@@ -93,6 +93,7 @@ def export_yolo(sz=(256, 128)):
 
 
 def redetection(image, format="pil", conf=0.3):
+    # yolov8 is weak in person detection
     model = YOLO("yolov8n.pt")
     # # success = model.export(format="onnx")
     # processed_image = np.array(image, dtype=np.float32) / 255.

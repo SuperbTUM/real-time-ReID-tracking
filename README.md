@@ -60,7 +60,7 @@ We use MOT16 evaluation as benchmark and Market1501 to pre-train our re-id netwo
 
 Videos: [MOT16](https://motchallenge.net/data/MOT16/) => This dataset could be evaluated with completed bash scripts.
 
-Person gallery: [Market1501](https://www.kaggle.com/pengcw1/market-1501/data) => We use the training set for training.
+Person gallery: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eEozWG9COHM/view?resourcekey=0-8nyl7K9_x37HlQm34MmrYQ) => We use the training set for training.
 
 
 
