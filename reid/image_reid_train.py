@@ -5,6 +5,7 @@ from tqdm import tqdm
 from backbones.baseline_lite import ft_baseline
 from backbones.plr_osnet import plr_osnet
 from backbones.SERes18_IBN import seres18_ibn
+from backbones.CARes18 import cares18_ibn
 from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
 from train_utils import *
@@ -391,6 +392,7 @@ def parser():
                       default="vision_transformer_checkpoint.pt")
     args.add_argument("--bs", type=int, default=64)
     args.add_argument("--backbone", type=str, default="plr_osnet", choices=["seres18",
+                                                                            "cares18",
                                                                             "plr_osnet",
                                                                             "vit",
                                                                             "swin_v1",
@@ -413,7 +415,7 @@ if __name__ == "__main__":
     dataset = Market1501(root="/".join((params.root, "Market1501")))
     providers = ["CUDAExecutionProvider"]
 
-    if params.backbone in ("plr_osnet", "seres18", "baseline"):
+    if params.backbone in ("plr_osnet", "seres18", "baseline", "cares18"):
         # No need for cross-domain retrain
         transform_train = transforms.Compose([
             transforms.Resize((256, 128)),
@@ -435,6 +437,8 @@ if __name__ == "__main__":
         else:
             if params.backbone == "seres18":
                 model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
+            elif params.backbone == "cares18":
+                model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
             else:
                 model = ft_baseline(dataset.num_train_pids).cuda()
             model = nn.DataParallel(model)

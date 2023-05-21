@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from backbones.baseline_lite import ft_baseline
 from backbones.SERes18_IBN import seres18_ibn
+from backbones.CARes18 import cares18_ibn
 from backbones.plr_osnet import plr_osnet
 from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
@@ -101,21 +102,21 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                 true_cams.append(cam)
     else:
         # experimental
-        input_example = np.random.rand(1, 3, 256, 128).astype(np.float32)  # (1, 3, 448, 224)
-        index_example = np.zeros((1, ), dtype=int)
-        embeddings_example = np.random.rand(1, 512).astype(np.float32) # seres18
-        outputs_example = np.random.rand(1, 751).astype(np.float32) # market1501
-        input_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(input_example, 'cuda', 0)
-        index_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(index_example, 'cuda', 0)
-        embeddings_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(embeddings_example, 'cuda', 0)
-        outputs_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(outputs_example, 'cuda', 0)
-        io_binding = ort_session.io_binding()
-        io_binding.bind_ortvalue_input('input', input_ortvalue)
-        if use_side:
-            io_binding.bind_ortvalue_input('index', index_ortvalue)
-        io_binding.bind_ortvalue_output('embeddings', embeddings_ortvalue)
-        io_binding.bind_ortvalue_output('outputs', outputs_ortvalue)
-        ort_session.run_with_iobinding(io_binding)
+        # input_example = np.random.rand(1, 3, 256, 128).astype(np.float32)  # (1, 3, 448, 224)
+        # index_example = np.zeros((1, ), dtype=int)
+        # embeddings_example = np.random.rand(1, 512).astype(np.float32) # seres18
+        # outputs_example = np.random.rand(1, 751).astype(np.float32) # market1501
+        # input_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(input_example, 'cuda', 0)
+        # index_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(index_example, 'cuda', 0)
+        # embeddings_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(embeddings_example, 'cuda', 0)
+        # outputs_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(outputs_example, 'cuda', 0)
+        # io_binding = ort_session.io_binding()
+        # io_binding.bind_ortvalue_input('input', input_ortvalue)
+        # if use_side:
+        #     io_binding.bind_ortvalue_input('index', index_ortvalue)
+        # io_binding.bind_ortvalue_output('embeddings', embeddings_ortvalue)
+        # io_binding.bind_ortvalue_output('outputs', outputs_ortvalue)
+        # ort_session.run_with_iobinding(io_binding)
         for sample in tqdm(dataloader):
             if len(sample) == 2:
                 img, true_label = sample
@@ -126,15 +127,15 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
             else:
                 img, true_label, cam, seq = sample
             if not use_side:
-                # ort_inputs = {'input': to_numpy(img)}
-                input_ortvalue.update_inplace(to_numpy(img))
+                ort_inputs = {'input': to_numpy(img)}
+                # input_ortvalue.update_inplace(to_numpy(img))
             else:
-                # ort_inputs = {'input': to_numpy(img),
-                #               "index": to_numpy(cam + all_cam * seq)}
-                input_ortvalue.update_inplace(to_numpy(img))
-                index_ortvalue.update_inplace(to_numpy(cam + all_cam * seq))
-            ort_session.run_with_iobinding(io_binding)
-            embeddings = embeddings_ortvalue.numpy()#ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
+                ort_inputs = {'input': to_numpy(img),
+                              "index": to_numpy(cam + all_cam * seq)}
+                # input_ortvalue.update_inplace(to_numpy(img))
+                # index_ortvalue.update_inplace(to_numpy(cam + all_cam * seq))
+            # ort_session.run_with_iobinding(io_binding)
+            embeddings = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]#embeddings_ortvalue.numpy()#ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
             embeddings = torch.from_numpy(embeddings)
             embeddings_total.append(embeddings)
             true_labels.append(true_label)
@@ -158,6 +159,7 @@ def parser():
                       default="vision_transformer_checkpoint.pt")
     args.add_argument("--bs", type=int, default=64)
     args.add_argument("--backbone", type=str, default="plr_osnet", choices=["seres18",
+                                                                            "cares18",
                                                                             "plr_osnet",
                                                                             "vit",
                                                                             "swin_v1",
@@ -187,7 +189,7 @@ if __name__ == "__main__":
                                  std=(0.229, 0.224, 0.225)),
         ])
         model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
-    elif params.backbone == "seres18":
+    elif params.backbone in ("seres18", "cares18"):
         transform_test = transforms.Compose([transforms.Resize((256, 128)),
                                              transforms.ToTensor(),
                                              transforms.Normalize(mean=(0.485, 0.456, 0.406),
@@ -201,7 +203,10 @@ if __name__ == "__main__":
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                  std=(0.229, 0.224, 0.225)),
         ])
-        model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=True).cuda()
+        if params.backbone == "seres18":
+            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=True).cuda()
+        else:
+            model = cares18_ibn(dataset.num_train_pids, renorm=True).cuda()
     elif params.backbone == "resnet50":
         transform_test = transforms.Compose([transforms.Resize((256, 128)),
                                              transforms.ToTensor(),
@@ -274,7 +279,8 @@ if __name__ == "__main__":
     if params.ckpt.endswith("pt") or params.ckpt.endswith("pth"):
         model.load_state_dict(torch.load(params.ckpt), strict=False)
     else:
-        providers = [("CUDAExecutionProvider", {'enable_cuda_graph': True})]
+        # providers = [("CUDAExecutionProvider", {'enable_cuda_graph': True})]
+        providers = ["CUDAExecutionProvider"]
         ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
     market_gallery = MarketDataset(dataset.gallery, transform_test, False)
     dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
