@@ -38,7 +38,7 @@ class MarketDataset(Dataset):
                 local_batch = []
                 end = min(i+64, len(pure_images))
                 for j in range(i, end):
-                    local_batch.append(Image.open(pure_images[i]).convert("RGB"))
+                    local_batch.append(Image.open(pure_images[j]).convert("RGB"))
                 cropped_imgs = redetection(local_batch, "pil")
                 self.cropped.extend(cropped_imgs)
                 i = end
@@ -63,7 +63,7 @@ class MarketDataset(Dataset):
                 local_batch = []
                 end = min(i + 64, len(pure_images))
                 for j in range(i, end):
-                    local_batch.append(Image.open(pure_images[i]).convert("RGB"))
+                    local_batch.append(Image.open(pure_images[j]).convert("RGB"))
                 cropped_imgs = redetection(local_batch, "pil")
                 self.cropped_pseudo.extend(cropped_imgs)
                 i = end

@@ -93,7 +93,7 @@ def export_yolo(sz=(256, 128)):
 
 model = torch.hub.load('ultralytics/yolov5', "custom", path="crowdhuman_yolov5m.pt", source="local", _verbose=False)
 
-def redetection(images, format="pil", conf=0.3):
+def redetection(images, format="pil", base_conf=0.5):
     """
     batched detection
     """
@@ -107,11 +107,12 @@ def redetection(images, format="pil", conf=0.3):
     # input_names = [model_inputs[i].name for i in range(len(model_inputs))]
     # output_names = [model_outputs[i].name for i in range(len(model_outputs))]
     # outputs = np.squeeze(ort_session.run(output_names, {input_names[0]: processed_image})[0]).T
-    result = model(images)
+    result = model(images, size=(256, 128), augment=True)
     result = result.xyxy
     bboxes = []
     for res in result:
         bbox = None
+        conf = base_conf
         for r in res:
             klass = r[-1]
             konf = r[-2]
