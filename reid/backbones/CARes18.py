@@ -15,7 +15,7 @@ class CABlock(nn.Module):
         # self.conv_1x1 = nn.Linear(channel, channel//reduction)
 
         self.relu = nn.ReLU(inplace=True)
-        self.bn = nn.BatchNorm2d(channel//reduction)
+        self.bn = BatchRenormalization2D(channel//reduction)#nn.BatchNorm2d(channel//reduction)
 
         self.F_h = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
         self.F_w = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
