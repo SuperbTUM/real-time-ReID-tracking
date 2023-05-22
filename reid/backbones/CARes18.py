@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -24,6 +25,13 @@ class CABlock(nn.Module):
 
         self.sigmoid_h = nn.Sigmoid()
         self.sigmoid_w = nn.Sigmoid()
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                if m.bias is not None:
+                    m.bias.data.zero_()
 
         # torch.nn.init.kaiming_normal_(self.conv_1x1.weight.data, a=0, mode='fan_out')
         # torch.nn.init.constant_(self.conv_1x1.bias.data, 0.0)

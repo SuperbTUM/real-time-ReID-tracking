@@ -147,3 +147,14 @@ def redetection(images, format="pil", base_conf=0.5):
         images_cropped.append(image)
     return images_cropped
 
+
+def check_parameters(model):
+    # credit to https://discuss.pytorch.org/t/finding-model-size/130275
+    param_size = 0
+    for param in model.parameters():
+        param_size += param.nelement() * param.element_size()
+    buffer_size = 0
+    for buffer in model.buffers():
+        buffer_size += buffer.nelement() * buffer.element_size()
+    size_all_mb = (param_size + buffer_size) / 1024 ** 2
+    return size_all_mb

@@ -441,6 +441,7 @@ if __name__ == "__main__":
                 model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
             else:
                 model = ft_baseline(dataset.num_train_pids).cuda()
+            print("model size: {:.3f} MB".format(check_parameters(model)))
             model = nn.DataParallel(model)
             model, loss_stats = train_cnn(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                           params.accelerate)
