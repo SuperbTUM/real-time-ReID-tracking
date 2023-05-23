@@ -15,6 +15,7 @@ from tqdm import tqdm
 from gan_utils import *
 from kmeans_ import get_groups
 
+device = "cuda"
 
 class EMA:
     def __init__(self, model, decay):
@@ -256,10 +257,19 @@ def load_everything(nz=100, device="cuda:0", lr=1e-2):
     emaG.register()
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD, emaG
 
-device = "cuda"
+
 def VAE_GAN_train_one_epoch(iterator,
-        data, gen, discrim, criterion, optim_Dis, optim_E, optim_D,
-        Wassertein, gp=False, gamma=15, lamda=10):
+                            data,
+                            gen,
+                            discrim,
+                            criterion,
+                            optim_Dis,
+                            optim_E,
+                            optim_D,
+                            Wassertein,
+                            gp=False,
+                            gamma=15,
+                            lamda=10):
     bs, width, height = data.size(0), data.size(3), data.size(2)
 
     ones_label = torch.ones((bs, ), device=device)
@@ -296,6 +306,8 @@ def VAE_GAN_train_one_epoch(iterator,
         output3 = discrim(rec_enc)[0]
         dis_loss = errD_real + errD_rec_noise + torch.mean(output3.squeeze())
     optim_Dis.zero_grad()
+    if dis_loss.item() < 0:
+        print("Warning! Dis loss is below 0!")
     dis_loss.backward(retain_graph=True)
     optim_Dis.step()
 
@@ -321,6 +333,8 @@ def VAE_GAN_train_one_epoch(iterator,
     rec_loss = ((x_l_tilda - x_l) ** 2).mean()
     err_dec = gamma * rec_loss - gan_loss
     optim_D.zero_grad()
+    if err_dec.item() < 0:
+        print("Warning! Decoder loss is below 0!")
     err_dec.backward(retain_graph=True)
     optim_D.step()
 
@@ -333,6 +347,8 @@ def VAE_GAN_train_one_epoch(iterator,
     err_enc = prior_loss + 5 * rec_loss
 
     optim_E.zero_grad()
+    if err_enc.item() < 0:
+        print("Warning! Encoder loss is below 0!")
     err_enc.backward(retain_graph=True)
     optim_E.step()
     desc = "discriminator loss: {:.4f}, encoder loss: {:.4f}, decoder loss: {:.4f}".format(
@@ -348,6 +364,7 @@ def train_VAE_GAN(raw_dataset,
                   batch_size=64,
                   device="cuda:0",
                   lr=1e-3,
+                  gamma=20,
                   training=True,
                   Wassertein=False,
                   gp=False,
@@ -355,13 +372,15 @@ def train_VAE_GAN(raw_dataset,
                     ):
     if not training:
         return checkpoint
-    alpha = 0.1
     gen = VAE().to(device)
     discrim = Discriminator(VAE=True, Wassertein=Wassertein).to(device)
     criterion = nn.BCELoss().to(device)
-    optim_E = torch.optim.RMSprop(gen.encoder.parameters(), lr=lr)
-    optim_D = torch.optim.RMSprop(gen.decoder.parameters(), lr=lr)
-    optim_Dis = torch.optim.RMSprop(discrim.parameters(), lr=lr * alpha)
+    optim_E = torch.optim.RMSprop(gen.encoder.parameters(), lr=lr, alpha=0.9, eps=1e-8, centered=False)
+    optim_D = torch.optim.RMSprop(gen.decoder.parameters(), lr=lr, alpha=0.9, eps=1e-8, centered=False)
+    optim_Dis = torch.optim.RMSprop(discrim.parameters(), lr=lr, alpha=0.9, eps=1e-8, centered=False)
+    scheduler_E = torch.optim.lr_scheduler.ExponentialLR(optim_E, gamma=0.75)
+    scheduler_D = torch.optim.lr_scheduler.ExponentialLR(optim_D, gamma=0.75)
+    scheduler_Dis = torch.optim.lr_scheduler.ExponentialLR(optim_Dis, gamma=0.75)
 
     lamda = 10
     dataloader = load_dataset(raw_dataset, batch_size)
@@ -371,13 +390,27 @@ def train_VAE_GAN(raw_dataset,
         iterator = tqdm(dataloader)
         for data in iterator:
             img, label = data  # label here is not so important
-            VAE_GAN_train_one_epoch(iterator, img, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein, gp, lamda=lamda)
+            VAE_GAN_train_one_epoch(iterator,
+                                    img,
+                                    gen,
+                                    discrim,
+                                    criterion,
+                                    optim_Dis,
+                                    optim_E,
+                                    optim_D,
+                                    Wassertein,
+                                    gp,
+                                    gamma,
+                                    lamda=lamda)
             if Wassertein:
                 for dis in discrim.main:
                     if dis.__class__.__name__ == ('Linear' or 'Conv2d'):
                         dis.weight.requires_grad_ = False
                         dis.weight.data.clamp_(-threshold, threshold)
                         dis.weight.requires_grad_ = True
+            scheduler_E.step()
+            scheduler_D.step()
+            scheduler_Dis.step()
     if not os.path.exists("checkpoint"):
         os.mkdir("checkpoint")
     torch.save(gen.decoder.state_dict(), "checkpoint/Generate_model.pt")
@@ -540,6 +573,7 @@ def parser():
     args.add_argument("--Wassertein", action="store_true")
     args.add_argument("--gp", action="store_true")
     args.add_argument("--instances", default=1000, type=int)
+    args.add_argument("--gamma", default=20, type=int)
     return args.parse_args()
 
 
@@ -558,7 +592,7 @@ if __name__ == "__main__":
         groups = get_groups(reid_dataset, params.k)
         raw_dataset = list(zip(*raw_dataset, groups))
     if params.vae:
-        netG = train_VAE_GAN(raw_dataset, epochs=params.epochs, batch_size=params.bs, Wassertein=params.Wassertein, gp=params.gp)
+        netG = train_VAE_GAN(raw_dataset, epochs=params.epochs, batch_size=params.bs, gamma=params.gamma, Wassertein=params.Wassertein, gp=params.gp)
     else:
         netG, img_list = train(raw_dataset, epochs=params.epochs, batch_size=params.bs)
         plot_imglist(img_list)
