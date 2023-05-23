@@ -1,7 +1,7 @@
 from gan_utils import *
 try:
     from faiss import Kmeans  # faiss should be faster
-except ImportError:
+except ImportError or ModuleNotFoundError:
     from sklearn.cluster import KMeans
 
 from torchvision import models

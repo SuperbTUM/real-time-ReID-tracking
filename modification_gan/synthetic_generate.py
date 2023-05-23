@@ -1,6 +1,5 @@
 __author__ = "Mingzhe Hu"
 
-import numpy as np
 import torch
 torch.autograd.set_detect_anomaly(True)
 import torch.nn as nn
@@ -11,6 +10,7 @@ import os
 import matplotlib.animation as animation
 from IPython.display import HTML
 import argparse
+from tqdm import tqdm
 
 from gan_utils import *
 from kmeans_ import get_groups
@@ -239,7 +239,7 @@ def load_dataset(raw_dataset, batch_size=32, group=-1):
         transforms.ToTensor(),
         transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
     ])
-    reid_dataset = DataSet4GAN(raw_dataset, transform, group=group)
+    reid_dataset = DataSet4GAN(raw_dataset, params.root, transform, group=group)
     data_loader = DataLoaderX(reid_dataset,
                               shuffle=True,
                               batch_size=batch_size,
@@ -257,7 +257,7 @@ def load_everything(nz=100, device="cuda:0", lr=1e-2):
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD, emaG
 
 device = "cuda"
-def VAE_GAN_train_one_epoch(
+def VAE_GAN_train_one_epoch(iterator,
         data, gen, discrim, criterion, optim_Dis, optim_E, optim_D,
         Wassertein, gp=False, gamma=15, lamda=10):
     bs, width, height = data.size(0), data.size(3), data.size(2)
@@ -335,11 +335,11 @@ def VAE_GAN_train_one_epoch(
     optim_E.zero_grad()
     err_enc.backward(retain_graph=True)
     optim_E.step()
-
-    print("discriminator loss: {:.4f}, encoder loss: {:.4f}, decoder loss: {:.4f}".format(
+    desc = "discriminator loss: {:.4f}, encoder loss: {:.4f}, decoder loss: {:.4f}".format(
         dis_loss.detach().cpu().item(),
         err_enc.detach().cpu().item(),
-        err_dec.detach().cpu().item()))
+        err_dec.detach().cpu().item())
+    iterator.set_description(desc=desc)
 
 
 def train_VAE_GAN(raw_dataset,
@@ -368,15 +368,20 @@ def train_VAE_GAN(raw_dataset,
     for epoch in range(epochs):
         if epoch % 5 == 0:
             lamda -= 1
-        for i, data in enumerate(dataloader):
+        iterator = tqdm(dataloader)
+        for data in iterator:
             img, label = data  # label here is not so important
-            VAE_GAN_train_one_epoch(img, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein, gp, lamda=lamda)
+            VAE_GAN_train_one_epoch(iterator, img, gen, discrim, criterion, optim_Dis, optim_E, optim_D, Wassertein, gp, lamda=lamda)
             if Wassertein:
                 for dis in discrim.main:
                     if dis.__class__.__name__ == ('Linear' or 'Conv2d'):
                         dis.weight.requires_grad_ = False
                         dis.weight.data.clamp_(-threshold, threshold)
                         dis.weight.requires_grad_ = True
+    if not os.path.exists("checkpoint"):
+        os.mkdir("checkpoint")
+    torch.save(gen.decoder.state_dict(), "checkpoint/Generate_model.pt")
+    return gen.decoder
 
 
 def train(raw_dataset,
@@ -471,7 +476,9 @@ def train(raw_dataset,
                         fake = netG(fixed_noise).detach().cpu()
                     img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
                 iters += 1
-        torch.save(netG.state_dict(), "Generate_model_trained_group{}.t7".format(g))
+        if not os.path.exists("checkpoint"):
+            os.mkdir("checkpoint")
+        torch.save(netG.state_dict(), "checkpoint/Generate_model_trained_group{}.pt".format(g))
         torch.cuda.empty_cache()
         plot(G_losses, D_losses)
     return netG, img_list
@@ -500,27 +507,39 @@ def generate(modelG_checkpoint, modelG, device="cuda:0"):
     # emaG.apply_shadow()
     print("-----------------------------------Start Generating New Image-------------------------------------")
     width, height = 64, 128
-    if os.path.exists(modelG_checkpoint):
+    modelG.eval()
+    if modelG_checkpoint and os.path.exists(modelG_checkpoint):
         modelG.load_state_dict(torch.load(modelG_checkpoint), strict=False)
-        modelG.eval()
-    with torch.no_grad():
-        fixed_noise = torch.randn(1, 100, 1, 1).to(device)
-        generated_image = modelG(fixed_noise)
-    # emaG.restore()
+    # experimental
+    modelG = torch.jit.script(modelG)
+    if not os.path.exists("synthetic_images/"):
+        os.mkdir("synthetic_images/")
+    for i in range(params.instances):
+        with torch.no_grad():
+            if params.vae:
+                fixed_noise = torch.randn(1, 128).to(device)
+            else:
+                fixed_noise = torch.randn(1, 100, 1, 1).to(device)
+            generated_image = modelG(fixed_noise)
+        # emaG.restore()
 
-    generated_image = generated_image.squeeze()
-    generated_image = transforms.Resize((width, height))(generated_image)
-    generated_image = generated_image.cpu().detach().numpy().transpose(1, 2, 0)
-    return generated_image
+        generated_image = generated_image.squeeze()
+        generated_image = transforms.Resize((width, height))(generated_image)
+        generated_image = generated_image.cpu().detach().numpy().transpose(1, 2, 0)
+        generated_image = Image.fromarray(generated_image, "RGB")
+        generated_image.save("synthetic_images/synthetic_image{}.jpg".format(str(i).zfill(5)))
 
 
 def parser():
     args = argparse.ArgumentParser()
     args.add_argument("--root", type=str, default="~")
+    args.add_argument("--epochs", type=int, default=20)
+    args.add_argument("--bs", type=int, default=64)
     args.add_argument("--k", type=int, default=1, help="number of clusters in k-means")
     args.add_argument("--vae", action="store_true")
     args.add_argument("--Wassertein", action="store_true")
     args.add_argument("--gp", action="store_true")
+    args.add_argument("--instances", default=1000, type=int)
     return args.parse_args()
 
 
@@ -529,8 +548,9 @@ if __name__ == "__main__":
     query_images = fetch_rawdata("/".join((params.root, "Market1501/bounding_box_train/")),
                                  "/".join((params.root, "Market1501/bounding_box_test/")))
     raw_dataset, num_classes = construct_raw_dataset(query_images)
+    torch.cuda.empty_cache()
     if params.k > 1:
-        reid_dataset = DataSet4GAN(raw_dataset, transform=transforms.Compose([
+        reid_dataset = DataSet4GAN(raw_dataset, params.root, transform=transforms.Compose([
                 transforms.Resize((128, 64)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
@@ -538,7 +558,8 @@ if __name__ == "__main__":
         groups = get_groups(reid_dataset, params.k)
         raw_dataset = list(zip(*raw_dataset, groups))
     if params.vae:
-        train_VAE_GAN(raw_dataset, epochs=20, Wassertein=params.Wassertein, gp=params.gp)
+        netG = train_VAE_GAN(raw_dataset, epochs=params.epochs, batch_size=params.bs, Wassertein=params.Wassertein, gp=params.gp)
     else:
-        netG, img_list = train(raw_dataset, epochs=20)
+        netG, img_list = train(raw_dataset, epochs=params.epochs, batch_size=params.bs)
         plot_imglist(img_list)
+    generate(None, netG)
