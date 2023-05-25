@@ -41,6 +41,8 @@ class MarketDataset(Dataset):
                 for j in range(i, end):
                     local_batch.append(Image.open(pure_images[j]).convert("RGB"))
                 cropped_imgs = redetection(local_batch, "pil")
+                cropped_imgs = map(lambda x, y: (x, y[0], y[1], y[2]), cropped_imgs, list(map(lambda z: z[1:], images[i:end])))
+                cropped_imgs = list(filter(lambda item: item[0] is not None, cropped_imgs))
                 self.cropped.extend(cropped_imgs)
                 i = end
 
@@ -52,7 +54,11 @@ class MarketDataset(Dataset):
 
     def __len__(self):
         if self._continual:
+            if self.get_crop:
+                return len(self.cropped) + len(self.cropped_pseudo)
             return len(self.images_pseudo) + len(self.images)
+        if self.get_crop:
+            return len(self.cropped)
         return len(self.images)
 
     def add_pseudo(self, pseudo_labeled_data):
@@ -66,23 +72,30 @@ class MarketDataset(Dataset):
                 for j in range(i, end):
                     local_batch.append(Image.open(pure_images[j]).convert("RGB"))
                 cropped_imgs = redetection(local_batch, "pil")
+                cropped_imgs = map(lambda x, y: (x, y[0], y[1], y[2]),
+                                   cropped_imgs, list(map(lambda z: z[1:], self.images_pseudo[i:end])))
+                cropped_imgs = list(filter(lambda item: item[0] is not None, cropped_imgs))
                 self.cropped_pseudo.extend(cropped_imgs)
                 i = end
 
     def __getitem__(self, item):
         if self._continual:
             if item < len(self.images):
-                detailed_info = list(self.images[item])
+                if self.get_crop:
+                    detailed_info = list(self.cropped[item])
+                else:
+                    detailed_info = list(self.images[item])
             else:
-                detailed_info = list(self.images_pseudo[item - len(self.images)])
+                if self.get_crop:
+                    detailed_info = list(self.cropped_pseudo[item - len(self.cropped)])
+                else:
+                    detailed_info = list(self.images_pseudo[item - len(self.images)])
         else:
-            detailed_info = list(self.images[item])
+            if self.get_crop:
+                detailed_info = list(self.cropped[item])
+            else:
+                detailed_info = list(self.images[item])
         detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
-        # if self.get_crop and np.random.random() > 0.5:
-        #     if item < len(self.images):
-        #         detailed_info[0] = self.cropped[item]
-        #     else:
-        #         detailed_info[0] = self.cropped_pseudo[item - len(self.images)]
         if self.transform:
             detailed_info[0] = self.transform(detailed_info[0])
         detailed_info[1] = torch.tensor(detailed_info[1])

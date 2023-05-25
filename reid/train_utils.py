@@ -113,12 +113,16 @@ def redetection(images, format="pil", base_conf=0.5):
     for res in result:
         bbox = None
         conf = base_conf
+        klass_include = set()
         for r in res:
             klass = r[-1]
+            klass_include.add(klass.item())
             konf = r[-2]
             if klass.item() == 0 and konf.item() > conf:
                 conf = konf.item()
                 bbox = r[:4]
+        if 0 not in klass_include:
+            bbox = [-1, -1, -1, -1]
         bboxes.append(bbox)
     # for output in outputs:
     #     klasses = np.argmax(output[:, 4:], axis=1)
@@ -129,7 +133,9 @@ def redetection(images, format="pil", base_conf=0.5):
     #             bbox = output[klass, :4]
     images_cropped = []
     for bbox, image in zip(bboxes, images):
-        if bbox is not None:
+        if bbox == [-1, -1, -1, -1]:
+            image = None
+        elif bbox is not None:
             if format == "pil":
                 width, height = image.size
             else:
