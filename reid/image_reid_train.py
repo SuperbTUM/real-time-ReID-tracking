@@ -85,17 +85,20 @@ class MarketDataset(Dataset):
                     detailed_info = list(self.cropped[item])
                 else:
                     detailed_info = list(self.images[item])
+                    detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
             else:
                 if self.get_crop:
                     detailed_info = list(self.cropped_pseudo[item - len(self.cropped)])
                 else:
                     detailed_info = list(self.images_pseudo[item - len(self.images)])
+                    detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
         else:
             if self.get_crop:
                 detailed_info = list(self.cropped[item])
             else:
                 detailed_info = list(self.images[item])
-        detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
+                detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
+
         if self.transform:
             detailed_info[0] = self.transform(detailed_info[0])
         detailed_info[1] = torch.tensor(detailed_info[1])
