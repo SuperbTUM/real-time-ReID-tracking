@@ -54,7 +54,7 @@ conda install -c pytorch faiss-cpu
 ```
 
 
-## Dataset
+## PreDownload
 
 We use MOT16 evaluation as benchmark and Market1501 to pre-train our re-id network.
 
@@ -62,6 +62,7 @@ Videos: [MOT16](https://motchallenge.net/data/MOT16/) => This dataset could be e
 
 Person gallery: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eEozWG9COHM/view?resourcekey=0-8nyl7K9_x37HlQm34MmrYQ) => We use the training set for training.
 
+YoloV8 Human Detector: [YoloV8s](https://github.com/truong11062002/yolov8_for_human_detection/releases/tag/weights_yolov8_human_detection)
 
 
 ## Quick Start

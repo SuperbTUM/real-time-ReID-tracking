@@ -91,22 +91,12 @@ def export_yolo(sz=(256, 128)):
     success = model.export(format="onnx", imgsz=sz, dynamic=True, device=0)
     return success
 
+model = YOLO("best.pt")  # credit to @truong11062002
 
 def redetection(images, format="pil", base_conf=0.5):
     """
     batched detection
     """
-    # # success = model.export(format="onnx")
-    # processed_image = np.array(image, dtype=np.float32) / 255.
-    # processed_image = np.expand_dims(processed_image.transpose((2, 0, 1)), axis=0)
-    # providers = ["CUDAExecutionProvider"]
-    # ort_session = onnxruntime.InferenceSession("yolov8n.onnx", providers=providers)
-    # model_inputs = ort_session.get_inputs()
-    # model_outputs = ort_session.get_outputs()
-    # input_names = [model_inputs[i].name for i in range(len(model_inputs))]
-    # output_names = [model_outputs[i].name for i in range(len(model_outputs))]
-    # outputs = np.squeeze(ort_session.run(output_names, {input_names[0]: processed_image})[0]).T
-    model = YOLO("best.pt")  # credit to @jahongir7174
     results = model(images, imgsz=(256, 128), classes=0, verbose=False)
     bboxes = []
     for result in results:
