@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
+import time
 
 from backbones.baseline_lite import ft_baseline
 from backbones.plr_osnet import plr_osnet
@@ -33,11 +34,19 @@ class MarketDataset(Dataset):
         self.cropped_pseudo = []
         self.get_crop = get_crop
         if get_crop:
+            start = time.monotonic()
             pure_images = list(map(lambda x: x[0], images))
-            for pure_image in tqdm(pure_images):
-                cropped_pending = Image.open(pure_image).convert("RGB")
-                cropped_img = redetection(cropped_pending, "pil")
-                self.cropped.append(cropped_img)
+            i = 0
+            while i < len(pure_images):
+                local_batch = []
+                end = min(i+64, len(pure_images))
+                for j in range(i, end):
+                    local_batch.append(Image.open(pure_images[j]).convert("RGB"))
+                cropped_imgs = redetection(local_batch, "pil")
+                self.cropped.extend(cropped_imgs)
+                i = end
+            end = time.monotonic()
+            print("Image recrop costs {:.3f} seconds.".format(end-start))
 
     def set_cross_domain(self):
         self._continual = True
@@ -54,10 +63,15 @@ class MarketDataset(Dataset):
         self.images_pseudo.extend(pseudo_labeled_data)
         if self.get_crop:
             pure_images = list(map(lambda x: x[0], self.images_pseudo))
-            for pure_image in tqdm(pure_images):
-                cropped_pending = Image.open(pure_image).convert("RGB")
-                cropped_img = redetection(cropped_pending, "pil")
-                self.cropped_pseudo.append(cropped_img)
+            i = 0
+            while i < len(pure_images):
+                local_batch = []
+                end = min(i + 64, len(pure_images))
+                for j in range(i, end):
+                    local_batch.append(Image.open(pure_images[j]).convert("RGB"))
+                cropped_imgs = redetection(local_batch, "pil")
+                self.cropped_pseudo.extend(cropped_imgs)
+                i = end
 
     def __getitem__(self, item):
         if self._continual:
