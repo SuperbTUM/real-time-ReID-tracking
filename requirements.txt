@@ -3,7 +3,10 @@ timm
 h5py
 accelerate
 madgrad
+onnx
 onnxruntime-gpu
 ultralytics
 prefetch_generator
 gdown
+IPython
+scikit-learn
