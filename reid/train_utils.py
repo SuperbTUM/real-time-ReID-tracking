@@ -91,9 +91,8 @@ def export_yolo(sz=(256, 128)):
     success = model.export(format="onnx", imgsz=sz, dynamic=True, device=0)
     return success
 
-model = torch.hub.load('ultralytics/yolov5', "custom", path="crowdhuman_yolov5m.pt", source="local", _verbose=False)
 
-def redetection(images, format="pil", base_conf=0.5):
+def redetection(image, format="pil", base_conf=0.5):
     """
     batched detection
     """
@@ -107,51 +106,34 @@ def redetection(images, format="pil", base_conf=0.5):
     # input_names = [model_inputs[i].name for i in range(len(model_inputs))]
     # output_names = [model_outputs[i].name for i in range(len(model_outputs))]
     # outputs = np.squeeze(ort_session.run(output_names, {input_names[0]: processed_image})[0]).T
-    result = model(images, size=(256, 128), augment=True)
-    result = result.xyxy
-    bboxes = []
-    for res in result:
-        bbox = None
-        conf = base_conf
-        klass_include = set()
-        for r in res:
-            klass = r[-1]
-            klass_include.add(klass.item())
-            konf = r[-2]
-            if klass.item() == 0 and konf.item() > conf:
-                conf = konf.item()
-                bbox = r[:4]
-        if 0 not in klass_include:
-            bbox = [-1, -1, -1, -1]
-        bboxes.append(bbox)
-    # for output in outputs:
-    #     klasses = np.argmax(output[:, 4:], axis=1)
-    #     konfs = np.max(output[:, 4:], axis=1)
-    #     for klass, konf in zip(klasses, konfs):
-    #         if klass == 0 and konf > conf:
-    #             conf = konf
-    #             bbox = output[klass, :4]
-    images_cropped = []
-    for bbox, image in zip(bboxes, images):
-        if bbox == [-1, -1, -1, -1]:
-            image = None
-        elif bbox is not None:
-            if format == "pil":
-                width, height = image.size
-            else:
-                height, width = image.shape[:2]
-            x1 = int(max(0, bbox[0]))
-            y1 = int(max(0, bbox[1]))
-            x2 = int(min(width, bbox[2]))
-            y2 = int(min(height, bbox[3]))
-            if format == "opencv":
-                image = image[y1:y2, x1:x2, :]
-            elif format == "pil":
-                image = image.crop((x1, y1, x2, y2))
-            else:
-                raise NotImplementedError
-        images_cropped.append(image)
-    return images_cropped
+    model = YOLO("best.pt")  # credit to @jahongir7174
+    results = model(image, imgsz=(256, 128), classes=0, verbose=False)
+    bbox = None
+    for result in results[0]:
+        outputs = result.boxes.data
+        for output in outputs:
+            klass = output[-1].item()
+            konf = output[-2].item()
+            if klass == 0 and konf > base_conf:
+                base_conf = konf
+                bbox = output[:4]
+
+    if bbox is not None:
+        if format == "pil":
+            width, height = image.size
+        else:
+            height, width = image.shape[:2]
+        x1 = int(max(0, bbox[0]))
+        y1 = int(max(0, bbox[1]))
+        x2 = int(min(width, bbox[2]))
+        y2 = int(min(height, bbox[3]))
+        if format == "opencv":
+            image = image[y1:y2, x1:x2, :]
+        elif format == "pil":
+            image = image.crop((x1, y1, x2, y2))
+        else:
+            raise NotImplementedError
+    return image
 
 
 def check_parameters(model):

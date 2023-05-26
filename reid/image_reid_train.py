@@ -34,17 +34,10 @@ class MarketDataset(Dataset):
         self.get_crop = get_crop
         if get_crop:
             pure_images = list(map(lambda x: x[0], images))
-            i = 0
-            while i < len(pure_images):
-                local_batch = []
-                end = min(i+64, len(pure_images))
-                for j in range(i, end):
-                    local_batch.append(Image.open(pure_images[j]).convert("RGB"))
-                cropped_imgs = redetection(local_batch, "pil")
-                cropped_imgs = map(lambda x, y: (x, y[0], y[1], y[2]), cropped_imgs, list(map(lambda z: z[1:], images[i:end])))
-                cropped_imgs = list(filter(lambda item: item[0] is not None, cropped_imgs))
-                self.cropped.extend(cropped_imgs)
-                i = end
+            for pure_image in tqdm(pure_images):
+                cropped_pending = Image.open(pure_image).convert("RGB")
+                cropped_img = redetection(cropped_pending, "pil")
+                self.cropped.append(cropped_img)
 
     def set_cross_domain(self):
         self._continual = True
@@ -54,50 +47,32 @@ class MarketDataset(Dataset):
 
     def __len__(self):
         if self._continual:
-            if self.get_crop:
-                return len(self.cropped) + len(self.cropped_pseudo)
             return len(self.images_pseudo) + len(self.images)
-        if self.get_crop:
-            return len(self.cropped)
         return len(self.images)
 
     def add_pseudo(self, pseudo_labeled_data):
         self.images_pseudo.extend(pseudo_labeled_data)
         if self.get_crop:
             pure_images = list(map(lambda x: x[0], self.images_pseudo))
-            i = 0
-            while i < len(pure_images):
-                local_batch = []
-                end = min(i + 64, len(pure_images))
-                for j in range(i, end):
-                    local_batch.append(Image.open(pure_images[j]).convert("RGB"))
-                cropped_imgs = redetection(local_batch, "pil")
-                cropped_imgs = map(lambda x, y: (x, y[0], y[1], y[2]),
-                                   cropped_imgs, list(map(lambda z: z[1:], self.images_pseudo[i:end])))
-                cropped_imgs = list(filter(lambda item: item[0] is not None, cropped_imgs))
-                self.cropped_pseudo.extend(cropped_imgs)
-                i = end
+            for pure_image in tqdm(pure_images):
+                cropped_pending = Image.open(pure_image).convert("RGB")
+                cropped_img = redetection(cropped_pending, "pil")
+                self.cropped_pseudo.append(cropped_img)
 
     def __getitem__(self, item):
         if self._continual:
             if item < len(self.images):
-                if self.get_crop:
-                    detailed_info = list(self.cropped[item])
-                else:
-                    detailed_info = list(self.images[item])
-                    detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
-            else:
-                if self.get_crop:
-                    detailed_info = list(self.cropped_pseudo[item - len(self.cropped)])
-                else:
-                    detailed_info = list(self.images_pseudo[item - len(self.images)])
-                    detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
-        else:
-            if self.get_crop:
-                detailed_info = list(self.cropped[item])
-            else:
                 detailed_info = list(self.images[item])
-                detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
+            else:
+                detailed_info = list(self.images_pseudo[item - len(self.images)])
+        else:
+            detailed_info = list(self.images[item])
+        detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
+        if self.get_crop:
+            if item < len(self.images):
+                detailed_info[0] = self.cropped[item]
+            else:
+                detailed_info[0] = self.cropped_pseudo[item - len(self.images)]
 
         if self.transform:
             detailed_info[0] = self.transform(detailed_info[0])
