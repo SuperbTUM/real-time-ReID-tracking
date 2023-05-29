@@ -94,7 +94,8 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                     img, true_label, cam, seq = sample
                 img = img.cuda(non_blocking=True)
                 if use_side:
-                    embeddings, _ = model(img, cam + all_cam * seq)
+                    side_index = (cam + all_cam * seq).cuda(non_blocking=True)
+                    embeddings, _ = model(img, side_index)
                 else:
                     embeddings, _ = model(img)
                 embeddings_total.append(embeddings)
@@ -156,7 +157,7 @@ def parser():
     args = argparse.ArgumentParser()
     args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
     args.add_argument("--ckpt", help="where the checkpoint of vit is, can either be a onnx or pt", type=str,
-                      default="vision_transformer_checkpoint.pt")
+                      default="checkpoint/vision_transformer_checkpoint.pt")
     args.add_argument("--bs", type=int, default=64)
     args.add_argument("--backbone", type=str, default="plr_osnet", choices=["seres18",
                                                                             "cares18",
@@ -287,8 +288,9 @@ if __name__ == "__main__":
     gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True
     if params.ckpt.endswith("onnx") else False, params.use_side)
     gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
-    market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip, False)
-    dataloader = DataLoaderX(market_gallery_augment, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
+    # market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip, False)
+    market_gallery.transform = transform_test_flip
+    dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     gallery_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_gallery_cams, True
     if params.ckpt.endswith("onnx") else False, params.use_side)
     gallery_embeddings_augment = F.normalize(gallery_embeddings_augment, dim=1)
@@ -300,8 +302,9 @@ if __name__ == "__main__":
     query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True
     if params.ckpt.endswith("onnx") else False, params.use_side)
     query_embeddings = F.normalize(query_embeddings, dim=1)
-    market_query_augment = MarketDataset(dataset.query, transform_test_flip, False)
-    dataloader = DataLoaderX(market_query_augment, batch_size=params.bs, num_workers=4, shuffle=False,
+    # market_query_augment = MarketDataset(dataset.query, transform_test_flip, False)
+    market_query.transform = transform_test_flip
+    dataloader = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False,
                              pin_memory=True)
     query_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_query_cams, True
     if params.ckpt.endswith("onnx") else False, params.use_side)

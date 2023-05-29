@@ -279,14 +279,16 @@ class SERse18_IBN(nn.Module):
 
         x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
+        x = self.bnneck(feature)
+        x = self.classifier(x)
+        if cam is not None:
+            cam_feature = feature + self.cam_factor * self.cam_bias[cam]
+            trunc_normal_(cam_feature, std=0.02)
+            if self.is_reid:
+                return cam_feature
+            return cam_feature, x
         if self.is_reid:
             return feature
-        x = self.bnneck(feature)
-        if cam is not None:
-            x = x + self.cam_factor * self.cam_bias[cam]
-            trunc_normal_(x, std=0.02)
-        x = self.classifier(x)
-
         return feature, x
 
 

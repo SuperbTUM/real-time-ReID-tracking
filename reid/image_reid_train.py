@@ -121,6 +121,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             optimizer.zero_grad()
             images = images.cuda(non_blocking=True)
             label = Variable(label).cuda(non_blocking=True)
+            # cams = cams.cuda(non_blocking=True)
             embeddings, outputs = model(images)#, cams)
             loss = loss_func(embeddings, outputs, label)
             loss_stats.append(loss.cpu().item())
@@ -140,7 +141,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
                 # torch.ones(1, dtype=torch.long)),
                 # input_names=["input", "index"],
                 output_names=["embeddings", "outputs"])
-    except RuntimeError:
+    except: # There may be op issue
         pass
     torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint.pt")
     return model, loss_stats
