@@ -275,6 +275,59 @@ class TripletLoss(nn.Module):
         return loss
 
 
+class TripletBeta(TripletLoss):
+    def __init__(self, margin=0.3, alpha=0.4, smooth=False, sigma=1.0, reduction="mean"):
+        super(TripletBeta, self).__init__(margin, alpha, smooth, sigma, reduction)
+
+    def forward(self, inputs, targets, inputs_augment):
+        """
+        Args:
+            inputs (torch.Tensor): feature matrix with shape (batch_size, feat_dim).
+            targets (torch.LongTensor): ground truth labels with shape (num_classes).
+            inputs_augment:
+        """
+        n = inputs.size(0)
+        # Compute pairwise distance, replace by the official when merged
+        dist = torch.pow(inputs, 2).sum(dim=1, keepdim=True).expand(n, n)
+        dist = dist + dist.t()
+        # dist.addmm_(1, -2, inputs, inputs.t())
+        dist.addmm_(inputs, inputs.t(), beta=1, alpha=-2)
+        dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
+
+        dist_augment = (inputs * inputs_augment).sum(dim=1, keepdim=True).expand(n, n)
+        dist_augment = dist_augment + dist_augment.t()
+        dist_augment.addmm_(inputs, inputs_augment.t(), beta=1, alpha=-2)
+        dist_augment = dist_augment.clamp(min=1e-12).sqrt()
+
+        # dist = 0.9 * dist + 0.1 * cosine_dist(inputs, inputs)
+        # For each anchor, find the hardest positive and negative
+        mask = targets.expand(n, n).eq(targets.expand(n, n).t())
+        dist_ap, dist_an = [], []
+        for i in range(n):
+            positive = dist[i][mask[i]].max()
+            if positive < 1e-6:
+                positive = dist_augment[i].max()
+            dist_ap.append(positive)
+            dist_an.append(dist[i][mask[i] == 0].min())
+        dist_ap = torch.stack(dist_ap)
+        dist_an = torch.stack(dist_an)
+        # Compute ranking hinge loss
+        y = dist_an.data.new()
+        y.resize_as_(dist_an.data)
+        y.fill_(1)
+        y = Variable(y)
+        if self.sigma < 1.:
+            loss = self.ranking_loss(torch.exp(dist_an / self.sigma), torch.exp(dist_ap / self.sigma), y)
+        else:
+            loss = self.ranking_loss(dist_an, dist_ap, y)
+        # loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
+        if self.smooth:
+            loss = F.softplus(loss)
+        else:
+            loss = F.relu(loss)
+        return loss
+
+
 class SemiHardTriplet(nn.Module):
     def __init__(self, margin, device="cuda"):
         super(SemiHardTriplet, self).__init__()
@@ -403,19 +456,21 @@ class HybridLoss(nn.Module):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
         if margin > 0.:
-            self.triplet = TripletLoss(margin, alpha, triplet_smooth)  # Smooth only works for hard triplet loss now
+            # self.triplet = TripletLoss(margin, alpha, triplet_smooth)  # Smooth only works for hard triplet loss now
+            self.triplet = TripletBeta(margin, alpha, triplet_smooth)
         else:
             self.triplet = WeightedRegularizedTriplet()
         self.smooth = FocalLoss(smoothing, epsilon)#LabelSmoothing(smoothing, epsilon)
         self.lamda = lamda
 
-    def forward(self, embeddings, outputs, targets):
+    def forward(self, embeddings, outputs, targets, embeddings_augment=None):
         """
         features: feature vectors
         targets: ground truth labels
         """
         smooth_loss = self.smooth(outputs, targets)
-        triplet_loss = self.triplet(embeddings, targets)
+        # triplet_loss = self.triplet(embeddings, targets)
+        triplet_loss = self.triplet(embeddings, targets, embeddings_augment)
         center_loss = self.center(embeddings, targets)
         return smooth_loss + triplet_loss + self.lamda * center_loss
 

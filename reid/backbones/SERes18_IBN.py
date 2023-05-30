@@ -282,7 +282,7 @@ class SERse18_IBN(nn.Module):
         x = self.bnneck(feature)
         x = self.classifier(x)
         if cam is not None:
-            cam_feature = feature + self.cam_factor * self.cam_bias[cam]
+            cam_feature = feature + self.cam_factor * self.cam_bias[cam] # This is not good
             trunc_normal_(cam_feature, std=0.02)
             if self.is_reid:
                 return cam_feature

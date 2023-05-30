@@ -114,16 +114,21 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
         accelerator = res_dict["accelerator"]
     loss_stats = []
+    transforms_augment = nn.Sequential(transforms.RandomHorizontalFlip(p=1))
+    scripted_transforms_augment = torch.jit.script(transforms_augment)
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label, cams = sample[:3]
+            images_flip = scripted_transforms_augment(images)
             optimizer.zero_grad()
             images = images.cuda(non_blocking=True)
             label = Variable(label).cuda(non_blocking=True)
             # cams = cams.cuda(non_blocking=True)
             embeddings, outputs = model(images)#, cams)
-            loss = loss_func(embeddings, outputs, label)
+            embeddings_augment, _ = model(images_flip)
+            # loss = loss_func(embeddings, outputs, label)
+            loss = loss_func(embeddings, outputs, label, embeddings_augment)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:
