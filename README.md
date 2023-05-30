@@ -128,19 +128,37 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
     | ------ |--------|--------|--------|-----------|--------|
     | Value  | 0.7812 | 0.9112 | 0.9406 | 0.5609 | 45.870 MB |
 
-* SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(Important!)+TripletPenalty+Center-Continual
+* CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
 
-    | Metric | Acc@1      | Acc@5  | Acc@10 | mAP   | Size |
-    |------------|--------|--------|-------|--------|------|
-    | Value  | **0.8593** | 0.9501 | 0.9697 | 0.6493 | 44.246 MB|
+    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
+    |--------|--------|--------|------|--------|
+    | Value  | <mark>0.8631</mark> | 0.9516 | 0.9700 | 0.6625 |
+
+* CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
+
+    | Metric | Acc@1 | Acc@5  | Acc@10 | mAP    |
+    |-------|--------|--------|--------|--------|
+    | Value  | 0.8593 | 0.9507 | 0.9664 | 0.6545 |
 
 * CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center-Continual
 
-    | Metric      | Acc@1      | Acc@5  | Acc@10 | mAP        |
-    |------------|--------|--------|------------|--------|
-    | W/o. Center | 0.8587     | 0.9516 | 0.9730 | **0.6639** |
-    | W/. Center  | **0.8599** | 0.9522 | 0.9727 | 0.6617     |
-    | Weighted    | 0.8584     | 0.9504 | 0.9727 | 0.6607     |
+    | Metric      | Acc@1  | Acc@5  | Acc@10 | mAP                 |
+    |--------|--------|--------|---------------------|--------|
+    | W/o. Center | 0.8587 | 0.9516 | 0.9730 | <mark>0.6639</mark> |
+    | W/. Center  | 0.8599 | 0.9522 | 0.9727 | **0.6617**          |
+    | Weighted    | 0.8584 | 0.9504 | 0.9727 | 0.6607              |
+
+* CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center
+
+    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
+    |--------|--------|--------|------|--------|
+    | Value  | 0.8575 | 0.9489 | 0.9721 | 0.6546 |
+
+* SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
+
+    | Metric | Acc@1      | Acc@5  | Acc@10 | mAP  |
+    |------------|--------------------|--------|------|--------|
+    | Value  | **0.8625** | 0.9519 | 0.9685 | 0.6522 |
 
 * SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
     
@@ -150,17 +168,17 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
     |--------|--------|--------|-------|--------|
     | Value  | 0.8581 | 0.9504 | 0.9679 | 0.6433 |
 
+* SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(Important!)+TripletPenalty+Center-Continual
+
+    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP   | Size |
+    |--------|--------|--------|-------|--------|------|
+    | Value  | 0.8593 | 0.9501 | 0.9697 | 0.6493 | 44.246 MB|
+
 * SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(Important!)+TripletPenalty+Center
 
     | Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
     |--------|--------|--------|--------|--------|
     | Value  | 0.8530 | 0.9483 | 0.9667 | 0.6409 |
-
-* CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center
-
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
-    |--------|--------|--------|------|--------|
-    | Value  | 0.8575 | 0.9489 | 0.9721 | 0.6546 |
 
 * SeRes18-IBN-BatchReNorm(Important!)-PolyLoss(Important; epsilon=1.0)+TripletPenalty+Center-Continual(thres=0.3)
 
