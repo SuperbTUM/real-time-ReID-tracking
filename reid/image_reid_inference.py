@@ -153,6 +153,46 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
     return embeddings_total, true_labels, true_cams
 
 
+def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=False):
+    """Only support onnx inference"""
+    torch.cuda.empty_cache()
+    model.eval()
+    embeddings_total = []
+    true_labels = []
+    true_cams = []
+    for sample1, sample2 in tqdm(zip(dataloader1, dataloader2), total=len(dataloader1)):
+        assert len(sample1) == len(sample2)
+        if len(sample1) == 2:
+            img1, true_label = sample1
+            cam = seq = None
+        elif len(sample1) == 3:
+            img1, true_label, cam = sample1
+            seq = 0
+        else:
+            img1, true_label, cam, seq = sample1
+        img2 = sample2[0]
+        img = torch.cat((img1, img2), dim=0)
+        if not use_side:
+            ort_inputs = {'input': to_numpy(img)}
+            # input_ortvalue.update_inplace(to_numpy(img))
+        else:
+            ort_inputs = {'input': to_numpy(img),
+                          "index": np.repeat(to_numpy(cam + all_cam * seq), 2)}
+            # input_ortvalue.update_inplace(to_numpy(img))
+            # index_ortvalue.update_inplace(to_numpy(cam + all_cam * seq))
+        # ort_session.run_with_iobinding(io_binding)
+        embeddings = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]  # embeddings_ortvalue.numpy()#ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
+        embeddings = torch.from_numpy(embeddings)
+        embeddings_total.append(embeddings)
+        true_labels.append(true_label)
+        true_cams.append(cam)
+
+    embeddings_total = torch.stack(embeddings_total)
+    true_labels = torch.stack(true_labels).flatten()
+    true_cams = torch.stack(true_cams).flatten()
+    return embeddings_total, true_labels, true_cams
+
+
 def parser():
     args = argparse.ArgumentParser()
     args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
@@ -283,34 +323,39 @@ if __name__ == "__main__":
         # providers = [("CUDAExecutionProvider", {'enable_cuda_graph': True})]
         providers = ["CUDAExecutionProvider"]
         ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
+    # experimental, needs batch size of 2
     market_gallery = MarketDataset(dataset.gallery, transform_test, False)
-    dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True
-    if params.ckpt.endswith("onnx") else False, params.use_side)
-    gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
+    dataloader1 = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
+    # gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True
+    # if params.ckpt.endswith("onnx") else False, params.use_side)
+    # gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
     # market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip, False)
     market_gallery.transform = transform_test_flip
-    dataloader = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    gallery_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_gallery_cams, True
-    if params.ckpt.endswith("onnx") else False, params.use_side)
-    gallery_embeddings_augment = F.normalize(gallery_embeddings_augment, dim=1)
+    dataloader2 = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
+    gallery_embeddings, gallery_labels, gallery_cams = inference_efficient(model, dataloader1, dataloader2, dataset.num_gallery_cams, params.use_side)
+    gallery_embeddings1 = torch.stack([i[0].squeeze() for i in gallery_embeddings])
+    gallery_embeddings2 = torch.stack([i[1].squeeze() for i in gallery_embeddings])
+    gallery_embeddings1 = F.normalize(gallery_embeddings1, dim=1)
+    gallery_embeddings2 = F.normalize(gallery_embeddings2, dim=1)
 
-    gallery_embeddings = (gallery_embeddings + gallery_embeddings_augment) / 2.0
+    gallery_embeddings = (gallery_embeddings1 + gallery_embeddings2) / 2.0
 
     market_query = MarketDataset(dataset.query, transform_test, False)
-    dataloader = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True
-    if params.ckpt.endswith("onnx") else False, params.use_side)
-    query_embeddings = F.normalize(query_embeddings, dim=1)
+    dataloader1 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
+    # query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True
+    # if params.ckpt.endswith("onnx") else False, params.use_side)
+    # query_embeddings = F.normalize(query_embeddings, dim=1)
     # market_query_augment = MarketDataset(dataset.query, transform_test_flip, False)
     market_query.transform = transform_test_flip
-    dataloader = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False,
-                             pin_memory=True)
-    query_embeddings_augment, _, _ = inference(model, dataloader, dataset.num_query_cams, True
-    if params.ckpt.endswith("onnx") else False, params.use_side)
-    query_embeddings_augment = F.normalize(query_embeddings_augment, dim=1)
+    dataloader2 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False,
+                              pin_memory=True)
+    query_embeddings, query_labels, query_cams = inference_efficient(model, dataloader1, dataloader2, dataset.num_query_cams, params.use_side)
+    query_embeddings1 = torch.stack([i[0].squeeze() for i in query_embeddings])
+    query_embeddings2 = torch.stack([i[1].squeeze() for i in query_embeddings])
+    query_embeddings1 = F.normalize(query_embeddings1, dim=1)
+    query_embeddings2 = F.normalize(query_embeddings2, dim=1)
 
-    query_embeddings = (query_embeddings + query_embeddings_augment) / 2.0
+    query_embeddings = (query_embeddings1 + query_embeddings2) / 2.0
 
     CMC = torch.IntTensor(gallery_embeddings.size(0)).zero_()
     ap = 0.0

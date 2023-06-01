@@ -142,7 +142,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     model.eval()
     try:
         to_onnx(model.module,
-                torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
+                torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"), # bs=2, experimental
                 # torch.ones(1, dtype=torch.long)),
                 # input_names=["input", "index"],
                 output_names=["embeddings", "outputs"])
@@ -316,7 +316,8 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
                                        cam[i].item(),
                                        seq[i].item()))
     else:
-        dataloader = DataLoaderX(dataset_test, batch_size=1, shuffle=False, num_workers=4, pin_memory=True)
+        # experiment
+        dataloader = DataLoaderX(dataset_test, batch_size=2, shuffle=False, num_workers=4, pin_memory=True, drop_last=True)
         for iteration, sample in enumerate(dataloader, 0):
             if len(sample) == 2:
                 img, _ = sample
@@ -377,7 +378,7 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
     model.eval()
     try:
         to_onnx(model.module,
-                torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
+                torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),
                 output_names=["embeddings", "outputs"])
     except RuntimeError:
         pass
