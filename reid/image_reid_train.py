@@ -31,6 +31,10 @@ class MarketDataset(Dataset):
         self._continual = False
         self.cropped = []
         self.cropped_pseudo = []
+        self.class_stats = [0 for _ in range(751)]
+        for image in images:
+            if image[1] < 751:
+                self.class_stats[image[1]] += 1
         self.get_crop = get_crop
         if get_crop:
             pure_images = list(map(lambda x: x[0], images))
@@ -43,6 +47,9 @@ class MarketDataset(Dataset):
                 cropped_imgs = redetection(local_batch, "pil")
                 self.cropped.extend(cropped_imgs)
                 i = end
+
+    def get_class_stats(self):
+        return self.class_stats
 
     def set_cross_domain(self):
         self._continual = True
@@ -94,6 +101,8 @@ class MarketDataset(Dataset):
 
 
 def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
+    class_stats = dataset.get_class_stats()
+    class_stats = F.softmax(torch.stack([torch.tensor(1./stat) for stat in class_stats])).cuda() * num_classes
     if params.ckpt and os.path.exists(params.ckpt):
         model.eval()
         model_state_dict = torch.load(params.ckpt)
@@ -101,7 +110,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 30], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
-    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
+    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
 
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(dataset, params.instance)

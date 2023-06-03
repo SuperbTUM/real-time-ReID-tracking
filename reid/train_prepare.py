@@ -27,7 +27,7 @@ class DataLoaderX(DataLoader):
 
 
 class FocalLoss(nn.Module):
-    def __init__(self, smoothing=0.1, epsilon=0., alpha=1.0, gamma=2.0):
+    def __init__(self, smoothing=0.1, epsilon=0., alpha=None, gamma=2.0):
         super(FocalLoss, self).__init__()
         self.alpha = alpha
         self.gamma = gamma
@@ -35,10 +35,10 @@ class FocalLoss(nn.Module):
         self.smoothing = smoothing
 
     def forward(self, outputs, targets):
-        ce_loss = F.cross_entropy(outputs, targets, reduction='none', label_smoothing=self.smoothing)
+        ce_loss = F.cross_entropy(outputs, targets, self.alpha, reduction='none', label_smoothing=self.smoothing)
         pt = torch.exp(-ce_loss)
         # mean over the batch
-        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        focal_loss = (1 - pt) ** self.gamma * ce_loss
         poly_loss = focal_loss + self.epsilon * torch.pow(1-pt, self.gamma+1)
         return poly_loss.mean()
 
@@ -452,7 +452,8 @@ class HybridLoss(nn.Module):
                  epsilon=0,
                  lamda=0.0005,
                  alpha=0.4,
-                 triplet_smooth=False):
+                 triplet_smooth=False,
+                 class_stats=None):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
         if margin > 0.:
@@ -460,7 +461,7 @@ class HybridLoss(nn.Module):
             self.triplet = TripletBeta(margin, alpha, triplet_smooth)
         else:
             self.triplet = WeightedRegularizedTriplet()
-        self.smooth = FocalLoss(smoothing, epsilon)#LabelSmoothing(smoothing, epsilon)
+        self.smooth = FocalLoss(smoothing, epsilon, class_stats)#LabelSmoothing(smoothing, epsilon)
         self.lamda = lamda
 
     def forward(self, embeddings, outputs, targets, embeddings_augment=None):

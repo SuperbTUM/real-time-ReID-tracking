@@ -79,6 +79,7 @@ class IBN(nn.Module):
         self.half = int(self.in_channels * ratio)
         self.IN = nn.InstanceNorm2d(self.half, affine=True)
         self.BN = nn.BatchNorm2d(self.in_channels - self.half)
+        # self.BN = BatchRenormalization2D(self.in_channels - self.half) # experimental
 
     def forward(self, x):
         split = torch.split(x, self.half, 1)

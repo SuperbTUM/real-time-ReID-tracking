@@ -2,7 +2,7 @@
 
 - [x] To work with latest YoloV8-DeepOCSort implementation towards a new benchmark(important!) and apply necessary changes on current repository.
 
-- [x] To debug and tune a VAE-(W)GAN model for Market1501.
+- [ ] To debug and tune a VAE-(W)GAN model for Market1501.
 
 - [x] To check if triplet loss w/. penalty is helpful in object re-identification/image retrieval/person search.
 
@@ -128,12 +128,25 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
     | ------ |--------|--------|--------|-----------|--------|
     | Value  | 0.7812 | 0.9112 | 0.9406 | 0.5609 | 45.870 MB |
 
+* CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
+
+    | Metric    | Acc@1  | Acc@5  | Acc@10 | mAP   |
+    |--------|--------|--------|-------|--------|
+    | Value  | `0.8723` | 0.9519 | 0.9721 | `0.6690` |
+
+* CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
+
+    | Metric    | Acc@1  | Acc@5  | Acc@10 | mAP   |
+    |--------|--------|--------|-------|--------|
+    | Value  | 0.8708 | 0.9519 | 0.9721 | 0.6635 |
+
 * CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
-    | Metric | Acc@1      | Acc@5  | Acc@10 | mAP    |
-    |------------|--------|--------|--------|--------|
-    | Regular  | **0.8631** | 0.9516 | 0.9700 | 0.6625 |
-    | Efficient | `0.8667`   | 0.9513 | 0.9664 | `0.6650` |
+    | Metric | Acc@1      | Acc@5  | Acc@10 | mAP        |
+    |------------|--------|--------|------------|--------|
+    | Regular  | 0.8631     | 0.9516 | 0.9700 | 0.6625     |
+    | Efficient | **0.8667** | 0.9513 | 0.9664 | **0.6650** |
+    | IBrN   | 0.8622     | 0.9477 | 0.9694 | 0.6662     |
 
 * CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
 
@@ -141,6 +154,7 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
     |-------|--------|--------|--------|--------|
     | Regular   | 0.8593 | 0.9507 | 0.9664 | 0.6545 |
     | Efficient | 0.8614 | 0.9507 | 0.9664 | 0.6603 |
+    | IBrN      | 0.8602 | 0.9474 | 0.9685 | 0.6618 |
 
 * CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center-Continual
 
