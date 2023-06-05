@@ -29,9 +29,11 @@
 
 ## Introduction
 
-This is a project of real-time re-identification & multiple object tracking. The proposal is to re-design the Re-ID model and try to obtain a stronger backbone. Several thoughts were applied and will be discussed throughly in the following chapters. 
-
-The baseline is a Yolov5(now is YoloV8!) based DeepSort(now is DeepOCSort!) algorithm and can be found [here](https://github.com/mikel-brostrom/Yolov5_DeepSort_Pytorch). The author has updated his repository with import of fast-reid package. I developed my code with Dec. 2021 version when the re-id model from scratch existed. The baseline backbone was ResNet-18(now is OSNet!).
+From Sort to OCSort, we become aware that deep feature extractor is crucial in both re-identification and multiple object tracking.
+The project combines Yolo detection, deep feature extractor for re-identification and MOT. The baseline is a Yolov5(now is YoloV8!) based DeepSort(now is DeepOCSort & StrongSort) algorithm.
+Everything can be found [here](https://github.com/mikel-brostrom/yolo_tracking). 
+The author has updated the repository with import of fast-reid package.  
+The baseline backbone for re-identification is simply ResNet-18.
 
 
 
@@ -39,7 +41,14 @@ The baseline is a Yolov5(now is YoloV8!) based DeepSort(now is DeepOCSort!) algo
 
 Python >= 3.8 is recommended.
 
-All code was developed with PyTorch and Numpy. Please download and install the latest stable version with CUDA 11.x. All codes are tested with one single GPU. If you wish to accelerate training, [mixed-precision training](https://github.com/NVIDIA/apex) should be a great option. It can save training time as well as reduce memory cost. Distributed training is also available. If you wish to accelerate inference, you may refer to TorchScript or TensorRT. A major reference is [this](https://developer.nvidia.com/blog/accelerating-inference-up-to-6x-faster-in-pytorch-with-torch-tensorrt/).
+All code was developed with latest version of PyTorch(2.0!) and Numpy. 
+Please download and install the latest stable version with CUDA 11.x(ex. 11.8). 
+All codes are tested with one single GPU. 
+If you wish to accelerate training, you are advised to apply [mixed-precision training](https://github.com/NVIDIA/apex). 
+It is estimated to save training time as well as reduce memory cost. 
+Distributed training is also available. 
+If you wish to accelerate inference, you may refer to TorchScript, ONNX or TensorRT. 
+A major reference is [this](https://developer.nvidia.com/blog/accelerating-inference-up-to-6x-faster-in-pytorch-with-torch-tensorrt/).
 
 You are suggested to install other dependencies with
 
@@ -54,9 +63,10 @@ conda install -c pytorch faiss-cpu
 ```
 
 
-## Dataset
+## Datasets
 
-We use MOT16 evaluation as benchmark and Market1501 to pre-train our re-id network.
+The current datasets are a bit outdated. You are advised to use MOT16, MOT20 instead.
+Now we primarily use MOT16 evaluation as benchmark and Market1501 to pre-train our re-id network.
 
 Videos: [MOT16](https://motchallenge.net/data/MOT16/) => This dataset could be evaluated with completed bash scripts.
 
@@ -70,7 +80,14 @@ Person gallery: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eE
 
 **GAN training**
 
-You can try to have generated images with GAN. That means you need additional training on the GAN. We have a few selections: DC-GAN, VAE-GAN and VAE-WGANGP. Explicitly, to train DC-GAN, please refer to the instructions on [this](https://github.com/qiaoguan/Person-reid-GAN-pytorch/tree/master/DCGAN-tensorflow). Please pay attention that this is an out-of-fashion repo w/. certain file missing. You can also refer to the `ipynb` file in [modification_gan](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/modification_gan) folder. Before that, make sure you properly execute `prepare.py`, `changeIndex.py` as well as the customized `re_index.py` before conducting training. We trained the backbone with `Market-1501/bounding_box_train` plus generated images. You can refer to the script files in our repo. 
+You can try to generate synthetic images with GAN. 
+That means you need additional training on the GAN. 
+We have a few selections: DC-GAN, VAE-GAN and VAE-WGANGP. We don't have diffusion model at this moment.
+Explicitly, to train DC-GAN, please refer to the instructions on [this](https://github.com/qiaoguan/Person-reid-GAN-pytorch/tree/master/DCGAN-tensorflow). 
+Please pay attention that this is an out-of-fashion repo w/. certain file missing. 
+You can also refer to the `ipynb` file in [modification_gan](https://github.com/SuperbTUM/real-time-ReID-tracking/tree/main/modification_gan) folder. 
+Before that, make sure you properly execute `prepare.py`, `changeIndex.py` as well as the customized `re_index.py` before conducting training. 
+We trained the backbone with `Market-1501/bounding_box_train` plus generated images. You can refer to the script files in our repo. 
 
 In a general scenario, you can simply execute the training script:
 
@@ -80,12 +97,13 @@ python modification_gan/synthetic_generate.py --vae --Wassertein --gp
 
 **ReID training**
 
-You will need to train your Re-ID model with Market1501. In the [reid](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid) folder, you can see how we build the model as well train the model. There are a few versions of models.
+Although some checkpoints are available, you are still advised to train your Re-ID model with Market1501.
+Due to privacy issue, some datasets are no longer open to the public and not acceptable to the academy as well.
+In the [reid](https://github.com/SuperbTUM/real-time-ReID-tracking/tree/main/reid) folder, you can see how we build the model as well train the model. 
+There are a few versions of models.
 
-The intuition is to construct a lite backbone for mobile development and real-time tracking. 
-
-We include a model zoo, with CNN-based re-id models, and vision transformer based models, where you can access all of them in the [backbones](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid/backbones) folder.
-
+The main focus of the project is to construct a lite backbone for mobile development and real-time tracking. 
+But still, we include a model zoo, with CNN-based re-id models, and vision transformer based models, where you can access all of them in the [backbones](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid/backbones) folder.
 We train the model on both image-based dataset and video-based dataset(w/. ground truth), and the scripts can be access under the same folder.
 
 ```python
@@ -97,12 +115,12 @@ python reid/video_reid_train.py --crop_factor 1.0
 ```
 
 To fit with `yolov8_tracking`, please copy your model and checkpoints to `trackers/strongsort/models` and `trackers/strongsort/checkpoint`, and modify `reid_model_factory.py` accordingly.
-
 If you want to train the Re-ID model with video dataset, please refer to the [video_train](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid/video_reid_train.py) script.
 
 **Tracking evaluation**
 
-For the final evaluation, please refer to [this Wiki](https://github.com/mikel-brostrom/Yolov5_DeepSort_Pytorch/wiki/Evaluation) for details. We also have our script file for tracking (May not reliable as running in Colab).
+For the final evaluation, please refer to [this Wiki](https://github.com/mikel-brostrom/yolo_tracking/wiki/MOT-16-evaluation) for details. 
+We also have our script file for tracking (May not reliable as running in Colab).
 
 
 
@@ -116,145 +134,98 @@ The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The 
 
 **Re-identification**
 
-* Model Size Comparison
+More can be found on [wiki](https://github.com/SuperbTUM/real-time-ReID-tracking/wiki).
 
-    | Model | Res18  | CARes18 | SERes18 |
-    |--------|---------|--------|--------|
-    | Size (MB) | 45.870 | 44.420  | 44.246 |
+Model Size Comparison
 
-* Baseline: Res18(ImageNet1k-pretrained)-Softmax+SoftTriplet+Center
+| Model | Res18  | CARes18 | CARes18-IBrN | SERes18 |
+|--------|---------|--------|--------------|--------|
+| Size (MB) | 45.870 | 44.420  | 44.417       | 44.246 |
+
+Baseline: Res18(ImageNet1k-pretrained)-Softmax+SoftTriplet+Center
     
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP    | Size      |
-    | ------ |--------|--------|--------|-----------|--------|
-    | Value  | 0.7812 | 0.9112 | 0.9406 | 0.5609 | 45.870 MB |
+| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    | Size      |
+| ------ |--------|--------|--------|-----------|--------|
+| Value  | 0.7812 | 0.9112 | 0.9406 | 0.5609 | 45.870 MB |
 
-* CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
+CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=0.1)+TripletPenalty(W/. augment)+Center-Continual; 
+[Checkpoint](https://drive.google.com/file/d/1u9zdzY5Ui8npyibPSXh-VxyIHn7vN39S/view?usp=sharing)
 
-    | Metric    | Acc@1  | Acc@5  | Acc@10 | mAP   |
-    |--------|--------|--------|-------|--------|
-    | Value  | `0.8723` | 0.9519 | 0.9721 | `0.6690` |
+| Metric    | Acc@1  | Acc@5  | Acc@10 | mAP      |
+|--------|--------|--------|--------|----------|
+| Value  | `0.8747` | 0.9546 | 0.9733 | `0.6771` |
 
-* CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
+CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=0.1)+TripletPenalty(W/. augment)+Center
 
-    | Metric    | Acc@1  | Acc@5  | Acc@10 | mAP   |
-    |--------|--------|--------|-------|--------|
-    | Value  | 0.8708 | 0.9519 | 0.9721 | 0.6635 |
+| Metric    | Acc@1    | Acc@5  | Acc@10 | mAP      |
+|--------|----------|--------|--------|----------|
+| Value  | *0.8723* | 0.9522 | 0.9727 | *0.6712* |
 
-* CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
+CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
-    | Metric | Acc@1      | Acc@5  | Acc@10 | mAP        |
-    |------------|--------|--------|------------|--------|
-    | Regular  | 0.8631     | 0.9516 | 0.9700 | 0.6625     |
-    | Efficient | **0.8667** | 0.9513 | 0.9664 | **0.6650** |
-    | IBrN   | 0.8622     | 0.9477 | 0.9694 | 0.6662     |
+| Metric    | Acc@1  | Acc@5  | Acc@10 | mAP   |
+|--------|--------|--------|-------|--------|
+| Value  | 0.8723 | 0.9519 | 0.9721 | 0.6690 |
 
-* CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
+CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
 
-    | Metric    | Acc@1 | Acc@5  | Acc@10 | mAP    |
-    |-------|--------|--------|--------|--------|
-    | Regular   | 0.8593 | 0.9507 | 0.9664 | 0.6545 |
-    | Efficient | 0.8614 | 0.9507 | 0.9664 | 0.6603 |
-    | IBrN      | 0.8602 | 0.9474 | 0.9685 | 0.6618 |
+| Metric    | Acc@1  | Acc@5  | Acc@10 | mAP   |
+|--------|--------|--------|-------|--------|
+| Value  | 0.8708 | 0.9519 | 0.9721 | 0.6635 |
 
-* CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center-Continual
+CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
-    | Metric      | Acc@1  | Acc@5  | Acc@10 | mAP        |
-    |--------|--------|--------|------------|--------|
-    | W/o. Center | 0.8587 | 0.9516 | 0.9730 | **0.6639** |
-    | W/. Center  | 0.8599 | 0.9522 | 0.9727 | 0.6617     |
-    | Weighted    | 0.8584 | 0.9504 | 0.9727 | 0.6607     |
+| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
+|------------|--------|--------|------------|--------|
+| Regular  | 0.8631 | 0.9516 | 0.9700 | 0.6625 |
+| Efficient | 0.8667 | 0.9513 | 0.9664 | 0.6650 |
+| IBrN   | 0.8622 | 0.9477 | 0.9694 | 0.6662 |
 
-* CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center
+CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
 
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
-    |--------|--------|--------|------|--------|
-    | Value  | 0.8575 | 0.9489 | 0.9721 | 0.6546 |
+| Metric    | Acc@1 | Acc@5  | Acc@10 | mAP    |
+|-------|--------|--------|--------|--------|
+| Regular   | 0.8593 | 0.9507 | 0.9664 | 0.6545 |
+| Efficient | 0.8614 | 0.9507 | 0.9664 | 0.6603 |
+| IBrN      | 0.8602 | 0.9474 | 0.9685 | 0.6618 |
 
-* SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
+CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center-Continual
 
-    | Metric | Acc@1      | Acc@5  | Acc@10 | mAP  |
-    |------------|--------------------|--------|------|--------|
-    | Value  | **0.8625** | 0.9519 | 0.9685 | 0.6522 |
+| Metric      | Acc@1  | Acc@5  | Acc@10 | mAP        |
+|--------|--------|--------|------------|--------|
+| W/o. Center | 0.8587 | 0.9516 | 0.9730 | **0.6639** |
+| W/. Center  | 0.8599 | 0.9522 | 0.9727 | 0.6617     |
+| Weighted    | 0.8584 | 0.9504 | 0.9727 | 0.6607     |
 
-* SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
-    
-    [Checkpoint](https://drive.google.com/file/d/19q-RNjrT0SF0dZNVcsZZXFz9bgpcEAEr/view?usp=share_link)
+CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center
 
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP   |
-    |--------|--------|--------|-------|--------|
-    | Value  | 0.8581 | 0.9504 | 0.9679 | 0.6433 |
+| Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
+|--------|--------|--------|------|--------|
+| Value  | 0.8575 | 0.9489 | 0.9721 | 0.6546 |
 
-* SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(Important!)+TripletPenalty+Center-Continual
+SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP   | Size |
-    |--------|--------|--------|-------|--------|------|
-    | Value  | 0.8593 | 0.9501 | 0.9697 | 0.6493 | 44.246 MB|
+| Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
+|------------|----------------|--------|------|--------|
+| Value  | 0.8625 | 0.9519 | 0.9685 | 0.6522 |
 
-* SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(Important!)+TripletPenalty+Center
+SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; [Checkpoint](https://drive.google.com/file/d/19q-RNjrT0SF0dZNVcsZZXFz9bgpcEAEr/view?usp=share_link)
 
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
-    |--------|--------|--------|--------|--------|
-    | Value  | 0.8530 | 0.9483 | 0.9667 | 0.6409 |
-
-* SeRes18-IBN-BatchReNorm(Important!)-PolyLoss(Important; epsilon=1.0)+TripletPenalty+Center-Continual(thres=0.3)
-
-    [Checkpoint](https://drive.google.com/file/d/1jYa38ujTvOXhcjPUbkxY7lOe9SXsLrfh/view?usp=share_link)
-
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
-    |--------|--------|--------|------|--------|
-    | Value  | 0.8473 | 0.9445 | 0.9685 | 0.6401 |
-
-* SeRes18-IBN-BatchReNorm(Important!)-PolyLoss(Important; epsilon=1.0)+TripletPenalty+Center
-
-    [Checkpoint](https://drive.google.com/file/d/1CYStmtATe3YWch48lYbDvdDWfX_KKBe_/view?usp=share_link)
-
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
-    |--------|--------|--------|------|--------|
-    | Value  | 0.8438 | 0.9424 | 0.9685 | 0.6365 |
-
-* SeRes18-IBN-BatchReNorm(Important!)-PolyLoss(Important; epsilon=1.0)+SoftTriplet+Center (Pending Update)
-
-    [Checkpoint](https://drive.google.com/file/d/1hCY4y8Ro2Mee-ccSekq0wUs_bTBU8src/view?usp=share_link)
-
-    | Metric | Acc@1 | Acc@5 | Acc@10 | mAP |
-    |-------|-------|--------|-----|--------|
-    | Value  | -     | -     | -      | -   |
-
-* SERes18-IBN-BatchReNorm(Important!)-Softmax+TripletPenalty+Center (Pending Update)
-
-    | Metric | Acc@1 | Acc@5 | Acc@10 | mAP |
-    |-------|-------|--------|-----|--------|
-    | Value  | -     | -     | -      | -   |
-
-* SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(Important!)+SoftTriplet+Center
-
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP |
-    |--------|--------|--------|-----|--------|
-    | Value  | 0.8189 | 0.9317 | 0.9507 | 0.6002 |
-
-* SeRes18-IBN-BatchReNorm(Important!)-Softmax+SoftTriplet+Center-ContinualLearning
-    
-    [Checkpoint](https://drive.google.com/file/d/1R739WslU0FG-8to9e9xht50GCuDvJKMX/view?usp=share_link)
-    
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
-    |--------|--------|--------|------|--------|
-    | Value  | 0.8138 | 0.9311 | 0.9531 | 0.5924 |
-
-* SeRes18-IBN-BatchReNorm(Important!)-Softmax+SoftTriplet+Center
-
-    [Checkpoint](https://drive.google.com/file/d/1B6FUe9OQxT4ATxqNl1ZwT7ppL56e2klD/view?usp=share_link)
-
-    | Metric | Acc@1  | Acc@5  | Acc@10 | mAP  |
-    |--------|--------|--------|------|--------|
-    | Value  | 0.8058 | 0.9258 | 0.9528 | 0.5848 |
-
+| Metric | Acc@1  | Acc@5  | Acc@10 | mAP   |
+|--------|--------|--------|-------|--------|
+| Value  | 0.8581 | 0.9504 | 0.9679 | 0.6433 |
 
 
 **Tracking**
 
 [Need to be re-evaluated]
 
-The tracking quality is evaluated under regular metrics including MOTA, MOTP and IDSW. The evaluation can be deployed with a bash command. I set the maximum distance to 0.15 (cosine distance) and minimum confidence to 0.5. Also, I resized the bounding box to (128, 256). The evaluation results are shown below. Our proposal has better performance in MOTA, MOTP, MODA and IDF1 with 1% of absolute improvement! For specific meaning of tracking metrics, please refer to [this](https://link.springer.com/content/pdf/10.1007/s11263-020-01375-2.pdf) and [this](https://link.springer.com/content/pdf/10.1155/2008/246309.pdf).
+The tracking quality is evaluated under regular metrics including MOTA, MOTP and IDSW. HOTA will be applied soon.
+The evaluation can be deployed with a bash command. 
+I resized the bounding box to (128, 256), set the maximum distance to 0.15 (cosine distance) and minimum confidence to 0.5 for your information. 
+The evaluation results are shown below. 
+Our proposal has better performance in MOTA, MOTP, MODA and IDF1 with 1% of absolute improvement! 
+For specific meaning of tracking metrics, please refer to [this](https://link.springer.com/content/pdf/10.1007/s11263-020-01375-2.pdf) and [this](https://link.springer.com/content/pdf/10.1155/2008/246309.pdf).
 
 **Original Baseline (YoloV8m detector)**
 
