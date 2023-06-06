@@ -193,6 +193,19 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
     return embeddings_total, true_labels, true_cams
 
 
+def diminish_camera_bias(embeddings, cams, la=0.005):
+    num_cams = cams.max().int()
+    for i in range(num_cams+1):
+        cur_embeddings = embeddings[cams == i]
+        cam_bias = cur_embeddings.mean(dim=0)
+        embeddings[cams == i] -= cam_bias
+        tmp_eye = torch.eye(embeddings.shape[1])
+        P = torch.inverse(cur_embeddings.T.matmul(cur_embeddings) + cur_embeddings.shape[0] * la * tmp_eye)
+        embeddings[cams == i] = embeddings[cams == i].matmul(P.t())
+        embeddings[cams == i] = embeddings[cams == i]/torch.norm(embeddings[cams == i], p=2, dim=1).unsqueeze(1)
+    return embeddings
+
+
 def parser():
     args = argparse.ArgumentParser()
     args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
@@ -339,6 +352,7 @@ if __name__ == "__main__":
     gallery_embeddings2 = F.normalize(gallery_embeddings2, dim=1)
 
     gallery_embeddings = (gallery_embeddings1 + gallery_embeddings2) / 2.0
+    gallery_embeddings = diminish_camera_bias(gallery_embeddings, gallery_cams)
 
     market_query = MarketDataset(dataset.query, transform_test, False)
     dataloader1 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
@@ -356,6 +370,7 @@ if __name__ == "__main__":
     query_embeddings2 = F.normalize(query_embeddings2, dim=1)
 
     query_embeddings = (query_embeddings1 + query_embeddings2) / 2.0
+    query_embeddings = diminish_camera_bias(query_embeddings, query_cams)
 
     CMC = torch.IntTensor(gallery_embeddings.size(0)).zero_()
     ap = 0.0

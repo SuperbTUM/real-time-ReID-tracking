@@ -138,28 +138,30 @@ More can be found on [wiki](https://github.com/SuperbTUM/real-time-ReID-tracking
 
 Model Size Comparison
 
-| Model | Res18  | CARes18 | CARes18-IBrN | SERes18 |
-|--------|---------|--------|--------------|--------|
-| Size (MB) | 45.870 | 44.420  | 44.417       | 44.246 |
+| Model     | Res18  | CARes18 | CARes18-IBrN | SERes18 |
+|-----------|--------|---------|--------------|---------|
+| Size (MB) | 45.870 | 44.420  | 44.417       | 44.246  |
 
 Baseline: Res18(ImageNet1k-pretrained)-Softmax+SoftTriplet+Center
     
 | Metric | Acc@1  | Acc@5  | Acc@10 | mAP    | Size      |
-| ------ |--------|--------|--------|-----------|--------|
+|--------|--------|--------|--------|--------|-----------|
 | Value  | 0.7812 | 0.9112 | 0.9406 | 0.5609 | 45.870 MB |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=0.1)+TripletPenalty(W/. augment)+Center-Continual; 
 [Checkpoint](https://drive.google.com/file/d/1u9zdzY5Ui8npyibPSXh-VxyIHn7vN39S/view?usp=sharing)
 
-| Metric    | Acc@1  | Acc@5  | Acc@10 | mAP      |
-|--------|--------|--------|--------|----------|
-| Value  | `0.8747` | 0.9546 | 0.9733 | `0.6771` |
+| Metric           | Acc@1    | Acc@5  | Acc@10 | mAP      |
+|------------------|----------|--------|--------|----------|
+| Value            | 0.8747   | 0.9546 | 0.9733 | 0.6771   |
+| Strong Inference | `0.8869` | 0.9581 | 0.9762 | `0.6966` |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=0.1)+TripletPenalty(W/. augment)+Center
 
-| Metric    | Acc@1    | Acc@5  | Acc@10 | mAP      |
-|--------|----------|--------|--------|----------|
-| Value  | *0.8723* | 0.9522 | 0.9727 | *0.6712* |
+| Metric           | Acc@1    | Acc@5  | Acc@10 | mAP      |
+|------------------|----------|--------|--------|----------|
+| Value            | 0.8723   | 0.9522 | 0.9727 | 0.6712   |
+| Strong Inference | *0.8851* | 0.9558 | 0.9760 | *0.6931* |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
@@ -191,11 +193,11 @@ CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
 
 CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center-Continual
 
-| Metric      | Acc@1  | Acc@5  | Acc@10 | mAP        |
+| Metric      | Acc@1  | Acc@5  | Acc@10 | mAP    |
 |--------|--------|--------|------------|--------|
-| W/o. Center | 0.8587 | 0.9516 | 0.9730 | **0.6639** |
-| W/. Center  | 0.8599 | 0.9522 | 0.9727 | 0.6617     |
-| Weighted    | 0.8584 | 0.9504 | 0.9727 | 0.6607     |
+| W/o. Center | 0.8587 | 0.9516 | 0.9730 | 0.6639 |
+| W/. Center  | 0.8599 | 0.9522 | 0.9727 | 0.6617 |
+| Weighted    | 0.8584 | 0.9504 | 0.9727 | 0.6607 |
 
 CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center
 
