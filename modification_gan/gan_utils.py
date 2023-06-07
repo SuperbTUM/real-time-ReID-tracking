@@ -41,8 +41,8 @@ def construct_raw_dataset(query_images):
 class DataSet4GAN(Dataset):
     def __init__(self, raw_dataset, root, transform=None, group=-1):
         super(DataSet4GAN, self).__init__()
-        if group >= 0:
-            raw_dataset = filter(lambda x: x[-1] == group, raw_dataset)
+        if group > 0:
+            raw_dataset = list(filter(lambda x: x[-1] == group, raw_dataset))
         self.raw_dataset = raw_dataset
         self.root = root
         self.transform = transform

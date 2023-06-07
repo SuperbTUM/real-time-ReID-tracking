@@ -14,8 +14,8 @@ from tqdm import tqdm
 
 from gan_utils import *
 from kmeans_ import get_groups
-from .backbones.discrim import Discriminator
-from .backbones.vae_gan import VAE, Generator, weights_init
+from backbones.discrim import Discriminator
+from backbones.vae_gan import VAE, Generator, weights_init
 
 device = "cuda"
 
@@ -38,13 +38,13 @@ def load_model(nz,
     lr_schedulerD = torch.optim.lr_scheduler.StepLR(optimizerD, 1000, 0.75)
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD
 
+transform = transforms.Compose([
+    transforms.Resize((128, 64)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+])
 
 def load_dataset(raw_dataset, batch_size=32, group=-1):
-    transform = transforms.Compose([
-        transforms.Resize((128, 64)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-    ])
     reid_dataset = DataSet4GAN(raw_dataset, params.root, transform, group=group)
     data_loader = DataLoaderX(reid_dataset,
                               shuffle=True,

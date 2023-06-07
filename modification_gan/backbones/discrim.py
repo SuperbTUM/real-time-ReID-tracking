@@ -130,6 +130,7 @@ class Discriminator(nn.Module):
         self.self_attn = self_attn
 
     def forward(self, input):
+        assert input.size(2) == 128 and input.size(3) == 64
         bs = input.size(0)
         main = self.main(input)
         if self.VAE:
@@ -140,4 +141,7 @@ class Discriminator(nn.Module):
             return self.sigmoid(self.extension(main)), main1
         if self.Wassertein:
             return self.getDis(main)
-        return self.sigmoid(self.getDis(self.attn(main))) if self.self_attn else self.sigmoid(self.getDis(main))
+        if self.self_attn:
+            main = self.attn(main)
+        get_dis = self.getDis(main)
+        return self.sigmoid(get_dis)

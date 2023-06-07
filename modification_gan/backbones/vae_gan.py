@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from discrim import SelfAttention
+from .discrim import SelfAttention
 
 
 def weights_init(m):
@@ -118,7 +118,7 @@ class Generator(nn.Module):
                 nn.BatchNorm2d(ngf),
                 nn.ReLU(True),
                 SelfAttention(ngf) if self_attn else nn.Identity(),
-                nn.ConvTranspose2d(ngf, nc, (8, 4), 2, 1, bias=False),
+                nn.ConvTranspose2d(ngf, nc, (6, 4), (4, 2), 1, bias=False), # ?
                 nn.Tanh()
             )
         else:
@@ -142,9 +142,9 @@ class Generator(nn.Module):
                 nn.ReLU(True),
                 # state size. (ngf) x 32 x 32
                 SelfAttention(ngf) if self_attn else nn.Identity(),
-                nn.ConvTranspose2d(ngf, nc, (8, 4), 2, 1, bias=False),
+                nn.ConvTranspose2d(ngf, nc, (6, 4), (4, 2), 1, bias=False), # ?
                 nn.Tanh()
-                # state size. (nc) x 64 x 64
+                # state size. (nc) x 128 x 64
             )
 
     def forward(self, input):
