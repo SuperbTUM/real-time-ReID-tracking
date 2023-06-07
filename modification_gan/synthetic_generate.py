@@ -14,215 +14,20 @@ from tqdm import tqdm
 
 from gan_utils import *
 from kmeans_ import get_groups
+from .backbones.discrim import Discriminator
+from .backbones.vae_gan import VAE, Generator, weights_init
 
 device = "cuda"
 
-class EMA:
-    def __init__(self, model, decay):
-        self.model = model
-        self.decay = decay
-        self.shadow = {}
-        self.backup = {}
 
-    def register(self):
-        for name, param in self.model.named_parameters():
-            if param.requires_grad:
-                self.shadow[name] = param.data.clone()
-
-    def update(self):
-        for name, param in self.model.named_parameters():
-            if param.requires_grad:
-                assert name in self.shadow
-                new_average = (1.0 - self.decay) * param.data + self.decay * self.shadow[name]
-                self.shadow[name] = new_average.clone()
-
-    def apply_shadow(self):
-        for name, param in self.model.named_parameters():
-            if param.requires_grad:
-                assert name in self.shadow
-                self.backup[name] = param.data
-                param.data = self.shadow[name]
-
-    def restore(self):
-        for name, param in self.model.named_parameters():
-            if param.requires_grad:
-                assert name in self.backup
-                param.data = self.backup[name]
-        self.backup = {}
-
-
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-
-# try with VAE-GAN
-class VAE(nn.Module):
-    def __init__(self, device="cuda"):
-        super(VAE, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, 64, 5, stride=2, padding=2, bias=False),
-            nn.BatchNorm2d(64, momentum=0.9),
-            nn.ReLU(True),
-            nn.Conv2d(64, 128, 5, stride=2, padding=2, bias=False),
-            nn.BatchNorm2d(128, momentum=0.9),
-            nn.ReLU(True),
-            nn.Conv2d(128, 256, 5, stride=2, padding=2, bias=False),
-            nn.BatchNorm2d(256, momentum=0.9),
-            nn.LeakyReLU(0.2),
-            nn.Flatten(),
-            nn.Linear(256*16*8, 2048),
-            nn.BatchNorm1d(2048, momentum=0.9),
-            nn.ReLU(True)
-        )
-        self.fc_mean = nn.Linear(2048, 128)
-        self.fc_var = nn.Linear(2048, 128)
-
-        self.decoder = nn.Sequential(
-            nn.Linear(128, 16*8*256),
-            nn.BatchNorm1d(16*8*256, momentum=0.9),
-            nn.LeakyReLU(0.2),
-            nn.Unflatten(1, torch.Size([256, 16, 8])),
-            nn.ConvTranspose2d(256, 256, 6, stride=2, padding=2, bias=False),  # 5 or 6?
-            nn.BatchNorm2d(256, momentum=0.9),
-            nn.ConvTranspose2d(256, 128, 6, stride=2, padding=2, bias=False),
-            nn.BatchNorm2d(128, momentum=0.9),
-            nn.ConvTranspose2d(128, 32, 6, stride=2, padding=2, bias=False),
-            nn.BatchNorm2d(32, momentum=0.9),
-            nn.ConvTranspose2d(32, 3, 5, stride=1, padding=2),
-            nn.Tanh()
-        )
-        self.device = device
-
-    def forward(self, x):
-        bs = x.size()[0]
-        encoded = self.encoder(x)
-        mean = self.fc_mean(encoded)
-        var = self.fc_var(encoded)
-        epsilon = torch.randn(bs, 128).to(self.device)
-        z = mean + var * epsilon
-        x_tilda = self.decoder(z)
-        return mean, var, x_tilda
-
-
-class Generator(nn.Module):
-    def __init__(self, ngpu=1, nz=100, ngf=64, nc=3):
-        super(Generator, self).__init__()
-        self.ngpu = ngpu
-        self.main = nn.Sequential(
-            # input is Z, going into a convolution
-            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(ngf * 8),
-            nn.ReLU(True),
-            # state size. (ngf*8) x 4 x 4
-            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 4),
-            nn.ReLU(True),
-            # state size. (ngf*4) x 8 x 8
-            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 2),
-            nn.ReLU(True),
-            # state size. (ngf*2) x 16 x 16
-            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf),
-            nn.ReLU(True),
-            # state size. (ngf) x 32 x 32
-            nn.ConvTranspose2d(ngf, nc, (8, 4), 2, 1, bias=False),
-            nn.Tanh()
-            # state size. (nc) x 64 x 64
-        )
-
-    def forward(self, input):
-        return self.main(input)
-
-
-class Discriminator(nn.Module):
-    def __init__(self, ngpu=1, nc=3, ndf=64, VAE=False, Wassertein=False):
-        super(Discriminator, self).__init__()
-        self.ngpu = ngpu
-        if Wassertein:
-            self.main = nn.Sequential(
-                # input is (nc) x 128 x 64
-                nn.Conv2d(nc, ndf, 4, (4, 2), 1, bias=False),
-                nn.LeakyReLU(0.2, inplace=True),
-                # # state size. (ndf) x  x 32
-                # nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-                # nn.BatchNorm2d(ndf * 2),
-                # nn.LeakyReLU(0.2, inplace=True),
-                # # state size. (ndf*2) x 16 x 16
-                # nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-                # nn.BatchNorm2d(ndf * 4),
-                # nn.LeakyReLU(0.2, inplace=True),
-                # # state size. (ndf*4) x 8 x 8
-                # nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-                # nn.BatchNorm2d(ndf * 8),
-                # nn.LeakyReLU(0.2, inplace=True),
-                # state size. (ndf*8) x 4 x 4
-                # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-                nn.Conv2d(ndf, ndf * 2, 3, stride=1, padding=1),
-                nn.LeakyReLU(0.2, True),
-                nn.MaxPool2d((2, 2)),
-
-                nn.Conv2d(ndf * 2, ndf * 4, 3, stride=1, padding=1),
-                nn.LeakyReLU(0.2, True),
-                nn.MaxPool2d((2, 2)),
-
-                nn.Conv2d(ndf * 4, ndf * 8, 3, stride=1, padding=1),
-                nn.LeakyReLU(0.2, True),
-                nn.MaxPool2d((2, 2)),
-            )
-        else:
-            self.main = nn.Sequential(
-                # input is (nc) x 128 x 64
-                nn.Conv2d(nc, ndf, 4, (4, 2), 1, bias=False),
-                nn.LeakyReLU(0.2, inplace=True),
-                # state size. (ndf) x  x 32
-                nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ndf * 2),
-                nn.LeakyReLU(0.2, inplace=True),
-                # state size. (ndf*2) x 16 x 16
-                nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ndf * 4),
-                nn.LeakyReLU(0.2, inplace=True),
-                # state size. (ndf*4) x 8 x 8
-                nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ndf * 8),
-                nn.LeakyReLU(0.2, inplace=True),
-                # state size. (ndf*8) x 4 x 4
-                # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            )
-        self.extension = nn.Sequential(
-            nn.Linear(ndf*8*4*4, 512),
-            nn.BatchNorm1d(512, momentum=0.9),
-            nn.LeakyReLU(0.2, True),
-            nn.Linear(512, 1)
-        )
-        self.getDis = nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
-        self.sigmoid = nn.Sigmoid()
-        self.VAE = VAE
-        self.Wassertein = Wassertein
-
-    def forward(self, input):
-        bs = input.size(0)
-        main = self.main(input)
-        if self.VAE:
-            main = main.view(bs, -1)
-            main1 = main
-            if self.Wassertein:
-                return self.extension(main), main1
-            return self.sigmoid(self.extension(main)), main1
-        if self.Wassertein:
-            return self.getDis(main)
-        return self.sigmoid(self.getDis(main))
-
-
-def load_model(nz, device="cuda:0", lr=0.0002):
-    modelG = Generator(nz=nz).to(device)
+def load_model(nz,
+               device="cuda:0",
+               lr=0.0002,
+               spectral_norm=True,
+               self_attn=False):
+    modelG = Generator(nz=nz, spectral_norm=spectral_norm, self_attn=self_attn).to(device)
     modelG.apply(weights_init)
-    modelD = Discriminator().to(device)
+    modelD = Discriminator(spectral_norm=spectral_norm, self_attn=self_attn).to(device)
     modelD.apply(weights_init)
     # criterion = nn.BCEWithLogitsLoss()
     criterion = nn.BCELoss()
@@ -249,10 +54,13 @@ def load_dataset(raw_dataset, batch_size=32, group=-1):
     return data_loader
 
 
-def load_everything(nz=100, device="cuda:0", lr=1e-2):
+def load_everything(nz=100, device="cuda:0", lr=1e-2, spectral_norm=True, self_attn=False):
     print("-----------------------------Loading Generator and Discriminator-----------------------------------")
-    modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD = load_model(nz, device=device,
-                                                                                                 lr=lr)
+    modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD = load_model(nz,
+                                                                                                 device=device,
+                                                                                                 lr=lr,
+                                                                                                 spectral_norm=spectral_norm,
+                                                                                                 self_attn=self_attn)
     emaG = EMA(modelG, 0.999)
     emaG.register()
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD, emaG
@@ -368,12 +176,14 @@ def train_VAE_GAN(raw_dataset,
                   training=True,
                   Wassertein=False,
                   gp=False,
-                  threshold=0.05
+                  threshold=0.05,
+                  spectral_norm=True,
+                  self_attn=False
                     ):
     if not training:
         return checkpoint
-    gen = VAE().to(device)
-    discrim = Discriminator(VAE=True, Wassertein=Wassertein).to(device)
+    gen = VAE(spectral_norm=spectral_norm, self_attn=self_attn).to(device)
+    discrim = Discriminator(VAE=True, Wassertein=Wassertein, spectral_norm=spectral_norm, self_attn=self_attn).to(device)
     criterion = nn.BCELoss().to(device)
     optim_E = torch.optim.RMSprop(gen.encoder.parameters(), lr=lr, alpha=0.9, eps=1e-8, centered=False)
     optim_D = torch.optim.RMSprop(gen.decoder.parameters(), lr=lr, alpha=0.9, eps=1e-8, centered=False)
@@ -417,15 +227,21 @@ def train_VAE_GAN(raw_dataset,
     return gen.decoder
 
 
-def train(raw_dataset,
-          checkpoint=None,
-          epochs=10,
-          batch_size=64,
-          nz=100,
-          device="cuda:0",
-          lr=1e-3,
-          training=True):
-    netG, netD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD, emaG = load_everything(nz, device, lr)
+def train_gan(raw_dataset,
+              checkpoint=None,
+              epochs=10,
+              batch_size=64,
+              nz=100,
+              device="cuda:0",
+              lr=1e-3,
+              training=True,
+              spectral_norm=True,
+              self_attn=False):
+    netG, netD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD, emaG = load_everything(nz,
+                                                                                                        device,
+                                                                                                        lr,
+                                                                                                        spectral_norm,
+                                                                                                        self_attn)
     # Training Loop
     if not training:
         return netG, checkpoint
@@ -538,7 +354,7 @@ def plot_imglist(img_list):
 
 def generate(modelG_checkpoint, modelG, device="cuda:0"):
     # emaG.apply_shadow()
-    print("-----------------------------------Start Generating New Image-------------------------------------")
+    print("-----------------------------------Start Generating Images---------------------------------------------")
     width, height = 64, 128
     modelG.eval()
     if modelG_checkpoint and os.path.exists(modelG_checkpoint):
@@ -561,6 +377,7 @@ def generate(modelG_checkpoint, modelG, device="cuda:0"):
         generated_image = generated_image.cpu().detach().numpy().transpose(1, 2, 0)
         generated_image = Image.fromarray(generated_image, "RGB")
         generated_image.save("synthetic_images/synthetic_image{}.jpg".format(str(i).zfill(5)))
+    print("-----------------------------------Generating Images Completed-----------------------------------------")
 
 
 def parser():
@@ -574,6 +391,7 @@ def parser():
     args.add_argument("--gp", action="store_true")
     args.add_argument("--instances", default=1000, type=int)
     args.add_argument("--gamma", default=20, type=int)
+    args.add_argument("--self_attn", action="store_true")
     return args.parse_args()
 
 
@@ -592,8 +410,14 @@ if __name__ == "__main__":
         groups = get_groups(reid_dataset, params.k)
         raw_dataset = list(zip(*raw_dataset, groups))
     if params.vae:
-        netG = train_VAE_GAN(raw_dataset, epochs=params.epochs, batch_size=params.bs, gamma=params.gamma, Wassertein=params.Wassertein, gp=params.gp)
+        netG = train_VAE_GAN(raw_dataset,
+                             epochs=params.epochs,
+                             batch_size=params.bs,
+                             gamma=params.gamma,
+                             Wassertein=params.Wassertein,
+                             gp=params.gp,
+                             self_attn=params.self_attn)
     else:
-        netG, img_list = train(raw_dataset, epochs=params.epochs, batch_size=params.bs)
+        netG, img_list = train_gan(raw_dataset, epochs=params.epochs, batch_size=params.bs, self_attn=params.self_attn)
         plot_imglist(img_list)
     generate(None, netG)
