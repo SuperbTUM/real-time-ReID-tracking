@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
-from .SERes18_IBN import GeM, IBN, trunc_normal_
+from .SERes18_IBN import GeM, IBN, trunc_normal_, weights_init_classifier, weights_init_kaiming
 from .batchrenorm import BatchRenormalization2D
 from .attention_pooling import AttentionPooling
 
@@ -151,6 +151,7 @@ class CARes18_IBN(nn.Module):
 
         self.bnneck = nn.BatchNorm1d(512)
         self.bnneck.bias.requires_grad_(False)
+        self.bnneck.apply(weights_init_kaiming)
 
         self.classifier = nn.Sequential(
             nn.Linear(512, 256),
@@ -159,6 +160,7 @@ class CARes18_IBN(nn.Module):
             nn.Dropout(),
             nn.Linear(256, num_class),
         )
+        self.classifier.apply(weights_init_classifier)
         # self.needs_norm = needs_norm
         self.is_reid = is_reid
         self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))

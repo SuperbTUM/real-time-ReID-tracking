@@ -21,6 +21,14 @@ def weights_init_kaiming(m):
         torch.nn.init.constant_(m.bias.data, 0.0)
 
 
+def weights_init_classifier(m):
+    for submodule in m.modules():
+        classname = submodule.__class__.__name__
+        if classname.find('Linear') != -1:
+            nn.init.normal_(submodule.weight, std=0.001)
+            if submodule.bias is not None:
+                nn.init.constant_(submodule.bias, 0.0)
+
 # This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):
     def __init__(self, c_in, se_attn=False):
@@ -250,6 +258,7 @@ class SERse18_IBN(nn.Module):
 
         self.bnneck = nn.BatchNorm1d(512)
         self.bnneck.bias.requires_grad_(False)
+        self.bnneck.apply(weights_init_kaiming)
 
         self.classifier = nn.Sequential(
             nn.Linear(512, 256),
@@ -258,6 +267,7 @@ class SERse18_IBN(nn.Module):
             nn.Dropout(),
             nn.Linear(256, num_class),
         )
+        self.classifier.apply(weights_init_classifier)
         # self.needs_norm = needs_norm
         self.is_reid = is_reid
         self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))

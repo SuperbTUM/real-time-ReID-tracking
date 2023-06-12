@@ -10,7 +10,7 @@ from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
 from train_utils import *
 from dataset_market import Market1501
-from train_prepare import WarmupMultiStepLR, RandomIdentitySampler
+from train_prepare import WarmupMultiStepLR, RandomIdentitySampler, RandomErasing
 
 import argparse
 import onnxruntime
@@ -111,6 +111,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 30], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
+    optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(dataset, params.instance)
@@ -124,14 +125,15 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         accelerator = res_dict["accelerator"]
     loss_stats = []
     transforms_augment = nn.Sequential(transforms.RandomHorizontalFlip(p=1))
-    scripted_transforms_augment = torch.jit.script(transforms_augment)
+    scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label, cams = sample[:3]
-            images_flip = scripted_transforms_augment(images)
             optimizer.zero_grad()
+            optimizer_center.zero_grad()
             images = images.cuda(non_blocking=True)
+            images_flip = scripted_transforms_augment(images)
             label = Variable(label).cuda(non_blocking=True)
             # cams = cams.cuda(non_blocking=True)
             embeddings, outputs = model(images)#, cams)
@@ -145,6 +147,9 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             else:
                 loss.backward()
             optimizer.step()
+            for param in loss_func.center.parameters():
+                param.grad.data *= (1. / params.center_lamda)
+            optimizer_center.step()
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
         lr_scheduler.step()
@@ -172,6 +177,9 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
     loss_func1 = HybridLoss(num_classes, 2048, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     loss_func2 = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+    optimizer_center1 = torch.optim.SGD(loss_func1.center.parameters(), lr=0.5)
+    optimizer_center2 = torch.optim.SGD(loss_func1.center.parameters(), lr=0.5)
+
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
         model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
@@ -182,6 +190,8 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
         for sample in iterator:
             images, label = sample[:2]
             optimizer.zero_grad()
+            optimizer_center1.zero_grad()
+            optimizer_center2.zero_grad()
             images = images.cuda(non_blocking=True)
             label = Variable(label).cuda(non_blocking=True)
             global_branch, local_branch, feat = model(images)
@@ -195,6 +205,12 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
             else:
                 loss.backward()
             optimizer.step()
+            for param in loss_func1.center.parameters():
+                param.grad.data *= (1. / params.center_lamda)
+            optimizer_center1.step()
+            for param in loss_func2.center.parameters():
+                param.grad.data *= (1. / params.center_lamda)
+            optimizer_center2.step()
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
         lr_scheduler.step()
@@ -218,6 +234,7 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
     lr_scheduler = WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, feat_dim, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+    optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
         model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
@@ -227,6 +244,7 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
         iterator = tqdm(dataloader)
         for sample in iterator:
             optimizer.zero_grad()
+            optimizer_center.zero_grad()
             if len(sample) == 2:
                 images, label = sample
                 view_index = None
@@ -251,6 +269,9 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
             else:
                 loss.backward()
             optimizer.step()
+            for param in loss_func.center.parameters():
+                param.grad.data *= (1. / params.center_lamda)
+            optimizer_center.step()
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
         lr_scheduler.step()
@@ -440,8 +461,8 @@ if __name__ == "__main__":
             transforms.RandomCrop((256, 128)),
             LGT(),
             # transforms.ToTensor(),
-            transforms.RandomErasing(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            transforms.RandomErasing(),
         ])
         market_dataset = MarketDataset(dataset.train, transform_train)
         torch.cuda.empty_cache()
