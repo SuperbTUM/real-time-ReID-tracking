@@ -24,7 +24,7 @@ cudnn.benchmark = True
 # assert export_yolo()
 
 class MarketDataset(Dataset):
-    def __init__(self, images, transform=None, get_crop=True):
+    def __init__(self, images, transform=None, get_crop=False):
         self.images = images
         self.transform = transform
         self.images_pseudo = []
@@ -95,8 +95,8 @@ class MarketDataset(Dataset):
         detailed_info[1] = torch.tensor(detailed_info[1])
         for i in range(2, len(detailed_info)):
             detailed_info[i] = torch.tensor(detailed_info[i], dtype=torch.long)
-        # if self._continual:
-        #     return detailed_info + [0. if item < len(self.images) else 1.]
+        if self._continual:
+            return detailed_info + [0. if item < len(self.images) else 1.]
         return detailed_info
 
 
@@ -178,7 +178,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
     loss_func2 = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     optimizer_center1 = torch.optim.SGD(loss_func1.center.parameters(), lr=0.5)
-    optimizer_center2 = torch.optim.SGD(loss_func1.center.parameters(), lr=0.5)
+    optimizer_center2 = torch.optim.SGD(loss_func2.center.parameters(), lr=0.5)
 
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
@@ -379,7 +379,7 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
 def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    loss_func = TripletLoss(alpha=0.0)#WeightedRegularizedTriplet()
+    loss_func = TripletLoss(alpha=0.0, reduction="none")#WeightedRegularizedTriplet()
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer)
@@ -391,11 +391,12 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label = sample[:2]
+            sample_weights = sample[-1]
             optimizer.zero_grad()
             images = images.cuda(non_blocking=True)
             label = Variable(label).cuda(non_blocking=True)
             embeddings, _ = model(images)
-            loss = loss_func(embeddings, label)
+            loss = loss_func(embeddings, label, sample_weights)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:

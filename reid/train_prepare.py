@@ -39,7 +39,10 @@ class FocalLoss(nn.Module):
         pt = torch.exp(-ce_loss)
         # mean over the batch
         focal_loss = (1 - pt) ** self.gamma * ce_loss
-        poly_loss = focal_loss + self.epsilon * torch.pow(1-pt, self.gamma+1)
+        if self.alpha is not None:
+            poly_loss = focal_loss + self.epsilon * torch.pow(1-pt, self.gamma+1) * self.alpha[targets]
+        else:
+            poly_loss = focal_loss + self.epsilon * torch.pow(1-pt, self.gamma+1)
         return poly_loss.mean()
 
 
@@ -234,8 +237,9 @@ class TripletLoss(nn.Module):
         self.alpha = alpha
         self.smooth = smooth
         self.sigma = sigma
+        self.reduction = reduction
 
-    def forward(self, inputs, targets):
+    def forward(self, inputs, targets, weights=None):
         """
         Args:
             inputs (torch.Tensor): feature matrix with shape (batch_size, feat_dim).
@@ -267,7 +271,9 @@ class TripletLoss(nn.Module):
             loss = self.ranking_loss(torch.exp(dist_an / self.sigma), torch.exp(dist_ap / self.sigma), y)
         else:
             loss = self.ranking_loss(dist_an, dist_ap, y)
-        # loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
+        if self.reduction == "none":
+            loss = loss * F.softmax(weights)
+            loss = loss.mean()
         if self.smooth:
             loss = F.softplus(loss)
         else:
