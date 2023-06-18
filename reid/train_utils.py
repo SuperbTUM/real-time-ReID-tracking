@@ -152,8 +152,11 @@ def redetection(images, format="pil", base_conf=0.5):
 def recrop(images, format="pil", base_conf=0.5):
     foregrounds = batched_extraction(images, blured=True)[0]
     if format == "pil":
-        foregrounds = Image.fromarray(foregrounds)
-        return foregrounds
+        fs = []
+        for foreground in foregrounds:
+            foreground = Image.fromarray(foreground)
+            fs.append(foreground)
+        return fs
     return foregrounds
 
 
