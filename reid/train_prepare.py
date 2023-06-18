@@ -98,7 +98,7 @@ class CenterLoss(nn.Module):
         else:
             self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim))
 
-    def forward(self, x, labels):
+    def forward(self, x, labels, x_augment=None):
         """
         Args:
             x: feature matrix with shape (batch_size, feat_dim).
@@ -111,6 +111,11 @@ class CenterLoss(nn.Module):
                   torch.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes, batch_size).t()
         distmat.addmm_(1, -2, x, self.centers.t())
 
+        if x_augment is not None:
+            distmat_augment = torch.pow(x_augment, 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_classes) + \
+                    torch.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes, batch_size).t()
+            distmat_augment.addmm_(1, -2, x_augment, self.centers.t())
+
         classes = torch.arange(self.num_classes).long()
         if self.use_gpu: classes = classes.cuda()
         labels = labels.unsqueeze(1).expand(batch_size, self.num_classes)
@@ -118,7 +123,7 @@ class CenterLoss(nn.Module):
 
         dist = []
         for i in range(batch_size):
-            value = distmat[i][mask[i]]
+            value = distmat[i][mask[i]] if x_augment is None else (distmat[i][mask[i]]+distmat_augment[i][mask[i]]) / 2.
             value = value.clamp(min=1e-12, max=1e+12)  # for numerical stability
             dist.append(value)
         dist = torch.cat(dist)
@@ -459,7 +464,8 @@ class HybridLoss(nn.Module):
                  lamda=0.0005,
                  alpha=0.4,
                  triplet_smooth=False,
-                 class_stats=None):
+                 class_stats=None,
+                 circle_factor=0.):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
         if margin > 0.:
@@ -468,7 +474,9 @@ class HybridLoss(nn.Module):
         else:
             self.triplet = WeightedRegularizedTriplet()
         self.smooth = FocalLoss(smoothing, epsilon, class_stats)#LabelSmoothing(smoothing, epsilon)
+        self.circle = CircleLoss()
         self.lamda = lamda
+        self.circle_factor = circle_factor
 
     def forward(self, embeddings, outputs, targets, embeddings_augment=None):
         """
@@ -478,8 +486,9 @@ class HybridLoss(nn.Module):
         smooth_loss = self.smooth(outputs, targets)
         # triplet_loss = self.triplet(embeddings, targets)
         triplet_loss = self.triplet(embeddings, targets, embeddings_augment)
-        center_loss = self.center(embeddings, targets)
-        return smooth_loss + triplet_loss + self.lamda * center_loss
+        center_loss = self.center(embeddings, targets, embeddings_augment)
+        circle_loss = self.circle(F.normalize(embeddings, p=2, dim=1), targets)
+        return smooth_loss + triplet_loss + self.lamda * center_loss + self.circle_factor * circle_loss
 
 
 class RepreLoss(nn.Module):
@@ -494,7 +503,7 @@ class RepreLoss(nn.Module):
 
 
 class CircleLoss(nn.Module):
-    def __init__(self, m: float, gamma: float) -> None:
+    def __init__(self, m: float = 0.25, gamma: float = 64) -> None:
         super(CircleLoss, self).__init__()
         self.m = m
         self.gamma = gamma
@@ -527,7 +536,7 @@ class CircleLoss(nn.Module):
 
         loss = self.soft_plus(torch.logsumexp(logit_n, dim=0) + torch.logsumexp(logit_p, dim=0))
 
-        return loss
+        return loss / normed_feature.size(0)
 
 
 def to_onnx(model, input_dummy, input_names=["input"], output_names=["outputs"]):
@@ -669,8 +678,8 @@ class WarmupMultiStepLR(torch.optim.lr_scheduler._LRScheduler):
         optimizer,
         milestones,
         gamma=0.1,
-        warmup_factor=1.0 / 3,
-        warmup_iters=500,
+        warmup_factor=0.01,
+        warmup_iters=5,
         warmup_method="linear",
         last_epoch=-1,
     ):

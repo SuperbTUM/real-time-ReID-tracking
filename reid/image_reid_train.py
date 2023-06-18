@@ -44,7 +44,7 @@ class MarketDataset(Dataset):
                 end = min(i+64, len(pure_images))
                 for j in range(i, end):
                     local_batch.append(Image.open(pure_images[j]).convert("RGB"))
-                cropped_imgs = redetection(local_batch, "pil")
+                cropped_imgs = recrop(local_batch, "pil")
                 self.cropped.extend(cropped_imgs)
                 i = end
 
@@ -72,7 +72,7 @@ class MarketDataset(Dataset):
                 end = min(i + 64, len(pure_images))
                 for j in range(i, end):
                     local_batch.append(Image.open(pure_images[j]).convert("RGB"))
-                cropped_imgs = redetection(local_batch, "pil")
+                cropped_imgs = recrop(local_batch, "pil")
                 self.cropped_pseudo.extend(cropped_imgs)
                 i = end
 
@@ -109,7 +109,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 30], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
+    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[15, 30], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
@@ -216,7 +216,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
         lr_scheduler.step()
     model.eval()
     to_onnx(model.module,
-            torch.randn(1, 3, 256, 128, requires_grad=True, device="cuda"),
+            torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),
             output_names=["y1", "y2", "fea"])
     torch.save(model.state_dict(), "checkpoint/plr_osnet_checkpoint.pt")
     return model, loss_stats
@@ -277,8 +277,8 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
         lr_scheduler.step()
     model.eval()
     to_onnx(model.module,
-            (torch.randn(1, 3, 448, 224, requires_grad=True, device="cuda"),
-             torch.ones(1, dtype=torch.long)),
+            (torch.randn(2, 3, 448, 224, requires_grad=True, device="cuda"),
+             torch.ones(2, dtype=torch.long)),
             input_names=["input", "index"],
             output_names=["embeddings", "outputs"])
     torch.save(model.state_dict(), "checkpoint/vision_transformer_checkpoint.pt")
@@ -391,7 +391,7 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label = sample[:2]
-            sample_weights = sample[-1]
+            sample_weights = sample[-1].cuda(non_blocking=True)
             optimizer.zero_grad()
             images = images.cuda(non_blocking=True)
             label = Variable(label).cuda(non_blocking=True)

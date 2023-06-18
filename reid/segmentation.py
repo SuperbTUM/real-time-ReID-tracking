@@ -7,21 +7,25 @@ from PIL import Image
 from torchvision import transforms
 from torch.utils.data import Dataset
 
-# use deeplabv3_resnet50 instead of deeplabv3_resnet101 to reduce the model size
-model = torch.hub.load('pytorch/vision:v0.8.0', 'deeplabv3_resnet50', pretrained=True)
-model.eval()
-scriptedm = torch.jit.script(model)
+
+def get_segment_model():
+    # use deeplabv3_resnet50 instead of deeplabv3_resnet101 to reduce the model size
+    model = torch.hub.load('pytorch/vision:v0.8.0', 'deeplabv3_resnet50', pretrained=True)
+    model.eval()
+    scriptedm = torch.jit.script(model)
+    return scriptedm
 
 # There are two ways, one is to segment on blured image, one is on original image
-def inference(input_image, blured=False):
+def inference(scriptedm, input_image, blured=False):
     preprocess = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-    blur = transforms.GaussianBlur(7)
+    blur = nn.Sequential(transforms.GaussianBlur(7))
+    blurts = torch.jit.script(blur)
     input_tensor = preprocess(input_image)
     if blured:
-        input_tensor = blur(input_tensor)
+        input_tensor = blurts(input_tensor)
     input_batch = input_tensor.unsqueeze(0)
     with torch.no_grad():
         output = scriptedm(input_batch)['out'][0]  #(21, W, H), 21 means classes
@@ -33,9 +37,10 @@ def extract_foreground_background(output, input_image, blur_background=True):
     input_image = np.array(input_image)
     foreground = deepcopy(input_image)
     background = deepcopy(input_image)
-    blur = transforms.GaussianBlur(7)
+    blur = nn.Sequential(transforms.GaussianBlur(7))
+    blurts = torch.jit.script(blur)
     if blur_background:
-        background = blur(background)
+        background = blurts(background)
     for h in range(output.shape[0]):
         for w in range(output.shape[1]):
             if output[h, w] == 0:
@@ -46,10 +51,11 @@ def extract_foreground_background(output, input_image, blur_background=True):
 
 
 def batched_extraction(images_path, blured=False, blur_background=True):
+    scriptedm = get_segment_model()
     foreground, background = [], []
     for path in images_path:
         img = Image.open(path)
-        output = inference(img, blured)
+        output = inference(scriptedm, img, blured)
         f, b = extract_foreground_background(output, img, blur_background)
         foreground.append(f)
         background.append(b)

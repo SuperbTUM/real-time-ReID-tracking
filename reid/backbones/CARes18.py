@@ -122,18 +122,18 @@ class CARes18_IBN(nn.Module):
 
         self.basicBlock11 = CABasicBlock(model.layer1[0], 64, renorm, True, se_attn)
 
-        self.basicBlock12 = CABasicBlock(model.layer1[1], 64, renorm, False, se_attn)
+        self.basicBlock12 = CABasicBlock(model.layer1[1], 64, renorm, True, se_attn)
 
         self.basicBlock21 = CABasicBlock(model.layer2[0], 128, renorm, True, se_attn)
 
-        self.basicBlock22 = CABasicBlock(model.layer2[1], 128, renorm, False, se_attn)
+        self.basicBlock22 = CABasicBlock(model.layer2[1], 128, renorm, True, se_attn)
 
         self.basicBlock31 = CABasicBlock(model.layer3[0], 256, renorm, True, se_attn)
 
-        self.basicBlock32 = CABasicBlock(model.layer3[1], 256, renorm, False, se_attn)
+        self.basicBlock32 = CABasicBlock(model.layer3[1], 256, renorm, True, se_attn)
 
         # last stride = 1
-        self.basicBlock41 = CABasicBlock(model.layer4[0], 512, renorm, True, se_attn, True)
+        self.basicBlock41 = CABasicBlock(model.layer4[0], 512, renorm, False, se_attn, True)
 
         self.basicBlock42 = CABasicBlock(model.layer4[1], 512, renorm, False, se_attn)
 

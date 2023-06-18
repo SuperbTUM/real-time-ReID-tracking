@@ -7,6 +7,7 @@ import cv2
 import os
 import matplotlib.pyplot as plt
 import onnxruntime
+from segmentation import batched_extraction
 
 from accelerate import Accelerator
 from ultralytics import YOLO
@@ -146,6 +147,14 @@ def redetection(images, format="pil", base_conf=0.5):
                 raise NotImplementedError
         images_cropped.append(image)
     return images_cropped
+
+
+def recrop(images, format="pil", base_conf=0.5):
+    foregrounds = batched_extraction(images, blured=True)[0]
+    if format == "pil":
+        foregrounds = Image.fromarray(foregrounds)
+        return foregrounds
+    return foregrounds
 
 
 def check_parameters(model):

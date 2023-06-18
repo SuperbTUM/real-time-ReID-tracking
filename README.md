@@ -154,14 +154,14 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=1.0)+TripletPenalty(W/. augme
 | Metric           | Acc@1  | Acc@5  | Acc@10 | mAP    |
 |------------------|--------|--------|--------|--------|
 | Value            | -      | -      | -      | -      |
-| Strong Inference | `0.8978` | 0.9626 | 0.9748 | `0.7214` |
+| Strong Inference | `0.9056` | 0.9685 | 0.9819 | `0.7365` |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=1.0)+TripletPenalty(W/. augment)+Center
 
 | Metric           | Acc@1  | Acc@5  | Acc@10 | mAP    |
 |------------------|--------|--------|--------|--------|
 | Value            | -      | -      | -      | -      |
-| Strong Inference | 0.8967 | 0.9623 | 0.9754 | 0.7209 |
+| Strong Inference | 0.9055 | 0.9673 | 0.9816 | 0.7345 |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
@@ -173,7 +173,7 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)
 
 | Metric   | Acc@1  | Acc@5  | Acc@10 | mAP    |
 |----------|--------|--------|--------|--------|
-| Value    | 0.8925 | 0.9602 | 0.9757 | 0.7115 |
+| Value    | 0.9002 | 0.9626 | 0.9762 | 0.7311 |
 
 CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
