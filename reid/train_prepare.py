@@ -16,6 +16,7 @@ from PIL import Image
 from bisect import bisect_right
 from typing import Tuple
 from collections import defaultdict
+import cv2
 
 cudnn.deterministic = True
 cudnn.benchmark = True
@@ -40,9 +41,9 @@ class FocalLoss(nn.Module):
         # mean over the batch
         focal_loss = (1 - pt) ** self.gamma * ce_loss
         if self.alpha is not None:
-            poly_loss = focal_loss + self.epsilon * torch.pow(1-pt, self.gamma+1) * self.alpha[targets]
+            poly_loss = focal_loss + self.epsilon * torch.pow(1 - pt, self.gamma + 1) * self.alpha[targets]
         else:
-            poly_loss = focal_loss + self.epsilon * torch.pow(1-pt, self.gamma+1)
+            poly_loss = focal_loss + self.epsilon * torch.pow(1 - pt, self.gamma + 1)
         return poly_loss.mean()
 
 
@@ -113,7 +114,8 @@ class CenterLoss(nn.Module):
 
         if x_augment is not None:
             distmat_augment = torch.pow(x_augment, 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_classes) + \
-                    torch.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes, batch_size).t()
+                              torch.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes,
+                                                                                         batch_size).t()
             distmat_augment.addmm_(1, -2, x_augment, self.centers.t())
 
         classes = torch.arange(self.num_classes).long()
@@ -123,7 +125,8 @@ class CenterLoss(nn.Module):
 
         dist = []
         for i in range(batch_size):
-            value = distmat[i][mask[i]] if x_augment is None else (distmat[i][mask[i]]+distmat_augment[i][mask[i]]) / 2.
+            value = distmat[i][mask[i]] if x_augment is None else (distmat[i][mask[i]] + distmat_augment[i][
+                mask[i]]) / 2.
             value = value.clamp(min=1e-12, max=1e+12)  # for numerical stability
             dist.append(value)
         dist = torch.cat(dist)
@@ -191,7 +194,7 @@ def cosine_dist(x, y):
     bs1, bs2 = x.shape[0], y.shape[0]
     frac_up = torch.matmul(x, y.transpose(0, 1))
     frac_down = (torch.sqrt(torch.sum(torch.pow(x, 2), 1))).view(bs1, 1).repeat(1, bs2) * \
-            (torch.sqrt(torch.sum(torch.pow(y, 2), 1))).view(1, bs2).repeat(bs1, 1)
+                (torch.sqrt(torch.sum(torch.pow(y, 2), 1))).view(1, bs2).repeat(bs1, 1)
     cosine = frac_up / frac_down
     return (1 - cosine) / 2
 
@@ -210,8 +213,8 @@ class TripletLossPenalty(nn.Module):
         :param y:
         :return:
         """
-        penalized_margin = (1-self.beta)*self.margin / (1+self.beta)
-        loss = torch.maximum(torch.zeros_like(y), -y * ((1-self.beta)*x1 - (1+self.beta)*x2) + penalized_margin)
+        penalized_margin = (1 - self.beta) * self.margin / (1 + self.beta)
+        loss = torch.maximum(torch.zeros_like(y), -y * ((1 - self.beta) * x1 - (1 + self.beta) * x2) + penalized_margin)
         if self.reduction == "mean":
             return loss.mean()
         elif self.reduction == "sum":
@@ -473,7 +476,7 @@ class HybridLoss(nn.Module):
             self.triplet = TripletBeta(margin, alpha, triplet_smooth)
         else:
             self.triplet = WeightedRegularizedTriplet()
-        self.smooth = FocalLoss(smoothing, epsilon, class_stats)#LabelSmoothing(smoothing, epsilon)
+        self.smooth = FocalLoss(smoothing, epsilon, class_stats)  # LabelSmoothing(smoothing, epsilon)
         self.circle = CircleLoss()
         self.lamda = lamda
         self.circle_factor = circle_factor
@@ -539,6 +542,79 @@ class CircleLoss(nn.Module):
         return loss / normed_feature.size(0)
 
 
+def normalize_rank(x, axis=-1):
+    """Normalizing to unit length along the specified dimension.
+    Args:
+      x: pytorch Variable
+    Returns:
+      x: pytorch Variable, same shape as input
+    """
+    x = 1. * x / (torch.norm(x, 2, axis, keepdim=True).expand_as(x) + 1e-12)
+    return x
+
+
+def rank_loss(dist_mat, labels, margin, alpha, tval, dist_mat_augment):
+    """
+    Args:
+      dist_mat: pytorch Variable, pair wise distance between samples, shape [N, N]
+      labels: pytorch LongTensor, with shape [N]
+
+    """
+    assert len(dist_mat.size()) == 2
+    assert dist_mat.size(0) == dist_mat.size(1)
+    N = dist_mat.size(0)
+
+    total_loss = 0.0
+    for ind in range(N):
+        is_pos = labels.eq(labels[ind])
+        # is_pos[ind] = 0
+        is_neg = labels.ne(labels[ind])
+
+        dist_ap = dist_mat[ind][is_pos]
+        cnt = 0
+        for i in range(is_pos.size(0)):
+            if is_pos[i].item():
+                if dist_ap[cnt] < 1e-6:
+                    dist_ap[cnt] = dist_mat_augment[ind][i]
+                cnt += 1
+        dist_an = torch.maximum(dist_mat[ind][is_neg], dist_mat_augment[ind][is_neg])
+
+        ap_is_pos = torch.clamp(torch.add(dist_ap, margin - alpha), min=0.0)
+        ap_pos_num = ap_is_pos.size(0) + 1e-5
+        ap_pos_val_sum = torch.sum(ap_is_pos)
+        loss_ap = torch.div(ap_pos_val_sum, float(ap_pos_num))
+
+        an_is_pos = torch.lt(dist_an, alpha)
+        an_less_alpha = dist_an[an_is_pos]
+        an_weight = torch.exp(tval * (-1 * an_less_alpha + alpha))
+        an_weight_sum = torch.sum(an_weight) + 1e-5
+        an_dist_lm = alpha - an_less_alpha
+        an_ln_sum = torch.sum(torch.mul(an_dist_lm, an_weight))
+        loss_an = torch.div(an_ln_sum, an_weight_sum)
+
+        total_loss = total_loss + loss_ap + loss_an
+    total_loss = total_loss * 1.0 / N
+    return total_loss
+
+
+class RankedLoss(object):
+    "Ranked_List_Loss_for_Deep_Metric_Learning_CVPR_2019_paper"
+
+    def __init__(self, margin=1.3, alpha=2.0, tval=1.0):
+        self.margin = margin
+        self.alpha = alpha
+        self.tval = tval
+
+    def __call__(self, global_feat, labels, normalize_feature=True, feat_augment=None):
+        if normalize_feature:
+            global_feat = normalize_rank(global_feat, axis=-1)
+        dist_mat = euclidean_dist(global_feat, global_feat)
+        dist_mat_augment = euclidean_dist(global_feat, feat_augment)
+        total_loss = rank_loss(dist_mat, labels, self.margin, self.alpha, self.tval, dist_mat_augment)
+
+        return total_loss
+
+
 def to_onnx(model, input_dummy, input_names=["input"], output_names=["outputs"]):
     import os
     if not os.path.exists("checkpoint"):
@@ -591,7 +667,7 @@ class LGT(object):
         """
         if isinstance(img, torch.Tensor):
             img = transforms.ToPILImage()(img)
-        new = img.convert("L")   # Convert from here to the corresponding grayscale image
+        new = img.convert("L")  # Convert from here to the corresponding grayscale image
         np_img = np.array(new, dtype=np.uint8)
         img_gray = np.dstack([np_img, np_img, np_img])
 
@@ -619,6 +695,55 @@ class LGT(object):
 
                 return transforms.ToTensor()(img)
 
+        return transforms.ToTensor()(img)
+
+
+def toSketch(img):  # Convert visible  image to sketch image
+    img_np = np.asarray(img)
+    img_inv = 255 - img_np
+    img_blur = cv2.GaussianBlur(img_inv, ksize=(27, 27), sigmaX=0, sigmaY=0)
+    img_blend = cv2.divide(img_np, 255 - img_blur, scale=256)
+    img_blend = Image.fromarray(img_blend)
+    return img_blend
+
+
+"""
+Randomly select several channels of visible image (R, G, B), gray image (gray), and sketch image (sketch) 
+to fuse them into a new 3-channel image.
+"""
+
+
+def random_choose(r, g, b, gray_or_sketch):
+    p = [r, g, b, gray_or_sketch, gray_or_sketch]
+    idx = [0, 1, 2, 3, 4]
+    random.shuffle(idx)
+    return Image.merge('RGB', [p[idx[0]], p[idx[1]], p[idx[2]]])
+
+
+# 10(%Grayscale) 5%(Grayscale-RGB) 5%(Sketch-RGB)
+class Fuse_RGB_Gray_Sketch(object):
+    def __init__(self, G=0.1, G_rgb=0.05, S_rgb=0.05):
+        self.G = G
+        self.G_rgb = G_rgb
+        self.S_rgb = S_rgb
+
+    def __call__(self, img):
+        if isinstance(img, torch.Tensor):
+            img = transforms.ToPILImage()(img)
+        r, g, b = img.split()
+        gray = img.convert('L')  # convert visible  image to grayscale images
+        p = random.random()
+        if p < self.G:  # just Grayscale
+            img = Image.merge('RGB', [gray, gray, gray])
+
+        elif p < self.G + self.G_rgb:  # fuse Grayscale-RGB
+            img2 = random_choose(r, g, b, gray)
+            img = img2
+
+        elif p < self.G + self.G_rgb + self.S_rgb:  # fuse Sketch-RGB
+            sketch = toSketch(gray)
+            img3 = random_choose(r, g, b, sketch)
+            img = img3
         return transforms.ToTensor()(img)
 
 
@@ -662,9 +787,9 @@ class RandomIdentitySampler(torch.utils.data.sampler.Sampler):
             if not select_indexes:
                 continue
             if len(select_indexes) >= self.num_instances:
-                ind_indexes = np.random.choice(select_indexes, size=self.num_instances-1, replace=False)
+                ind_indexes = np.random.choice(select_indexes, size=self.num_instances - 1, replace=False)
             else:
-                ind_indexes = np.random.choice(select_indexes, size=self.num_instances-1, replace=True)
+                ind_indexes = np.random.choice(select_indexes, size=self.num_instances - 1, replace=True)
 
             for kk in ind_indexes:
                 ret.append(index[kk])
@@ -674,14 +799,14 @@ class RandomIdentitySampler(torch.utils.data.sampler.Sampler):
 
 class WarmupMultiStepLR(torch.optim.lr_scheduler._LRScheduler):
     def __init__(
-        self,
-        optimizer,
-        milestones,
-        gamma=0.1,
-        warmup_factor=0.01,
-        warmup_iters=5,
-        warmup_method="linear",
-        last_epoch=-1,
+            self,
+            optimizer,
+            milestones,
+            gamma=0.1,
+            warmup_factor=0.01,
+            warmup_iters=10,
+            warmup_method="linear",
+            last_epoch=-1,
     ):
         if not list(milestones) == sorted(milestones):
             raise ValueError(

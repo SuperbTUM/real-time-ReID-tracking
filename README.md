@@ -107,7 +107,7 @@ But still, we include a model zoo, with CNN-based re-id models, and vision trans
 We train the model on both image-based dataset and video-based dataset(w/. ground truth), and the scripts can be access under the same folder.
 
 ```python
-python reid/image_reid_train.py --backbone seres18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005
+python reid/image_reid_train.py --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005
 ```
 
 ```python
@@ -154,7 +154,7 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=1.0)+TripletPenalty(W/. augme
 | Metric           | Acc@1  | Acc@5  | Acc@10 | mAP    |
 |------------------|--------|--------|--------|--------|
 | Value            | -      | -      | -      | -      |
-| Strong Inference | `0.9056` | 0.9685 | 0.9819 | `0.7365` |
+| Strong Inference | 0.9056 | 0.9685 | 0.9819 | 0.7365 |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=1.0)+TripletPenalty(W/. augment)+Center
 
@@ -171,9 +171,9 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
 
-| Metric   | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|----------|--------|--------|--------|--------|
-| Value    | 0.9002 | 0.9626 | 0.9762 | 0.7311 |
+| Metric   | Acc@1  | Acc@5 | Acc@10 | mAP    |
+|----------|--------|-------|--------|--------|
+| Value    | `0.9086` | 0.9679 | 0.9804 | `0.7409` |
 
 CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 

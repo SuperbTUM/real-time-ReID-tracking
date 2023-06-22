@@ -105,7 +105,7 @@ class CARes18_IBN(nn.Module):
                  resnet18_pretrained="IMAGENET1K_V1",
                  num_class=751,
                  num_cams=6,
-                 needs_norm=True,
+                 needs_norm=False,
                  pooling="gem",
                  renorm=False,
                  se_attn=False,
@@ -158,10 +158,10 @@ class CARes18_IBN(nn.Module):
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(256, num_class),
+            nn.Linear(256, num_class, bias=False),
         )
         self.classifier.apply(weights_init_classifier)
-        # self.needs_norm = needs_norm
+        self.needs_norm = needs_norm
         self.is_reid = is_reid
         self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
         self.cam_factor = 1.5
@@ -188,9 +188,10 @@ class CARes18_IBN(nn.Module):
             trunc_normal_(feature, std=0.02)
         if self.is_reid:
             return feature
-        x = self.bnneck(feature)
-        x = self.classifier(x)
-
+        x_norm = self.bnneck(feature)
+        x = self.classifier(x_norm)
+        if self.needs_norm:
+            return x_norm, x
         return feature, x
 
 

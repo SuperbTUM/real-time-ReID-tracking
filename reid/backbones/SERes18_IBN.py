@@ -86,8 +86,8 @@ class IBN(nn.Module):
         self.ratio = ratio
         self.half = int(self.in_channels * ratio)
         self.IN = nn.InstanceNorm2d(self.half, affine=True)
-        self.BN = nn.BatchNorm2d(self.in_channels - self.half)
-        # self.BN = BatchRenormalization2D(self.in_channels - self.half) # experimental
+        # self.BN = nn.BatchNorm2d(self.in_channels - self.half)
+        self.BN = BatchRenormalization2D(self.in_channels - self.half) # experimental
 
     def forward(self, x):
         split = torch.split(x, self.half, 1)
@@ -265,7 +265,7 @@ class SERse18_IBN(nn.Module):
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(256, num_class),
+            nn.Linear(256, num_class, bias=False),
         )
         self.classifier.apply(weights_init_classifier)
         # self.needs_norm = needs_norm
