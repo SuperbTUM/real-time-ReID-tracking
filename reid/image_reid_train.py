@@ -396,6 +396,8 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
         model, dataloader, optimizer = res_dict["accelerated"]
         accelerator = res_dict["accelerator"]
     loss_stats = []
+    transforms_augment = nn.Sequential(transforms.RandomHorizontalFlip(p=1))
+    scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
     # Additionally train 10 epochs
     for epoch in range(10):
         iterator = tqdm(dataloader)
@@ -404,9 +406,11 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
             sample_weights = sample[-1].cuda(non_blocking=True)
             optimizer.zero_grad()
             images = images.cuda(non_blocking=True)
+            images_augment = scripted_transforms_augment(images)
             label = Variable(label).cuda(non_blocking=True)
             embeddings, _ = model(images)
-            loss = loss_func(embeddings, label, sample_weights / batch_size)
+            embeddings_augment, _ = model(images_augment)
+            loss = loss_func(embeddings, label, embeddings_augment, sample_weights / batch_size)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:

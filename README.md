@@ -53,7 +53,7 @@ A major reference is [this](https://developer.nvidia.com/blog/accelerating-infer
 You are suggested to install other dependencies with
 
 ```bash
-pip install -r requirements.txt
+pip --disable-pip-version-check install -r requirements.txt
 ```
 
 Optionally, using `faiss` is highly recommended.
@@ -82,7 +82,9 @@ Person gallery: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eE
 
 You can try to generate synthetic images with GAN. 
 That means you need additional training on the GAN. 
-We have a few selections: DC-GAN, VAE-GAN and VAE-WGANGP. We don't have diffusion model at this moment.
+We have a few pending selections: DC-GAN, VAE-GAN and VAE-WGANGP. 
+There are some references([ref1](https://arxiv.org/abs/1805.08318), [ref2](https://arxiv.org/abs/1802.05957)) for robust training.
+Unfortunately we don't have diffusion model at this moment.
 Explicitly, to train DC-GAN, please refer to the instructions on [this](https://github.com/qiaoguan/Person-reid-GAN-pytorch/tree/master/DCGAN-tensorflow). 
 Please pay attention that this is an out-of-fashion repo w/. certain file missing. 
 You can also refer to the `ipynb` file in [modification_gan](https://github.com/SuperbTUM/real-time-ReID-tracking/tree/main/modification_gan) folder. 
@@ -98,7 +100,7 @@ python modification_gan/synthetic_generate.py --vae --Wassertein --gp
 **ReID training**
 
 Although some checkpoints are available, you are still advised to train your Re-ID model with Market1501.
-Due to privacy issue, some datasets are no longer open to the public and not acceptable to the academy as well.
+Due to privacy issue, some datasets such as DukeMTMC are no longer open to the public and not acceptable to the academy as well.
 In the [reid](https://github.com/SuperbTUM/real-time-ReID-tracking/tree/main/reid) folder, you can see how we build the model as well train the model. 
 There are a few versions of models.
 
@@ -106,8 +108,19 @@ The main focus of the project is to construct a lite backbone for mobile develop
 But still, we include a model zoo, with CNN-based re-id models, and vision transformer based models, where you can access all of them in the [backbones](https://github.com/SuperbTUM/real-time-person-ReID-tracking/tree/main/reid/backbones) folder.
 We train the model on both image-based dataset and video-based dataset(w/. ground truth), and the scripts can be access under the same folder.
 
+For non-continual image training
 ```python
-python reid/image_reid_train.py --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005
+python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005
+```
+
+For continual image training
+```python
+python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005 --continual
+```
+
+For image testing
+```python
+python reid/image_reid_inference.py --backbone cares18 --bs 1 --ckpt checkpoint/reid_model.onnx
 ```
 
 ```python
@@ -120,13 +133,20 @@ If you want to train the Re-ID model with video dataset, please refer to the [vi
 **Tracking evaluation**
 
 For the final evaluation, please refer to [this Wiki](https://github.com/mikel-brostrom/yolo_tracking/wiki/MOT-16-evaluation) for details. 
-We also have our script file for tracking (May not reliable as running in Colab).
+We also have our script file for tracking.
 
 
 
 ## Tracking Speed
 
-The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. The inference speed is 15 ~ 20 ms per frame [need to be re-assessed and OSNet 1.0 is heavy!!! ~100ms per frame] depending on the sparsity of pedestrians with 640 * 640 resolution with Tesla P100. It may be slower if bounding box is resized to (128, 256). The modified extractor is based on Dense skip connection in ResNet-18 with Squeeze and Excitation Network, only a minor increase on the number of learnable parameters. The tracking speed is 17 ms per frame under the same testing environment. The speed is acquired with `time` package after the synchronization of CUDA.
+[The following conclusion is outdated]
+
+The baseline extractor in DeepSort-YoloV5 implementation is pure ResNet-18. 
+The inference speed is 15 ~ 20 ms per frame [need to be re-assessed and OSNet 1.0 is heavy!!! ~100ms per frame] depending on the sparsity of pedestrians with 640 * 640 resolution with Tesla P100. 
+It may be slower if bounding box is resized to (128, 256). 
+The modified extractor is based on Dense skip connection in ResNet-18 with Squeeze and Excitation Network, only a minor increase on the number of learnable parameters. 
+The tracking speed is 17 ms per frame under the same testing environment. 
+The speed is acquired with `time` package after the synchronization of CUDA.
 
 
 
@@ -212,7 +232,8 @@ SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augm
 |--------|--------|--------|--------|--------|
 | Value  | 0.8625 | 0.9519 | 0.9685 | 0.6522 |
 
-SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; [Checkpoint](https://drive.google.com/file/d/19q-RNjrT0SF0dZNVcsZZXFz9bgpcEAEr/view?usp=share_link)
+SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
+[Checkpoint](https://drive.google.com/file/d/19q-RNjrT0SF0dZNVcsZZXFz9bgpcEAEr/view?usp=share_link)
 
 | Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
 |--------|--------|--------|--------|--------|
