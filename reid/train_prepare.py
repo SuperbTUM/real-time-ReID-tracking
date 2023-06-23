@@ -99,7 +99,7 @@ class CenterLoss(nn.Module):
         else:
             self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim))
 
-    def forward(self, x, labels, x_augment=None):
+    def forward(self, x, labels, x_augment=None, weights=None):
         """
         Args:
             x: feature matrix with shape (batch_size, feat_dim).
@@ -124,13 +124,20 @@ class CenterLoss(nn.Module):
         mask = labels.eq(classes.expand(batch_size, self.num_classes))
 
         dist = []
+        indices = torch.zeros_like(labels)
         for i in range(batch_size):
             value = distmat[i][mask[i]] if x_augment is None else (distmat[i][mask[i]] + distmat_augment[i][
                 mask[i]]) / 2.
             value = value.clamp(min=1e-12, max=1e+12)  # for numerical stability
+            if value.detach().cpu().numpy():
+                indices[i] = 1
             dist.append(value)
         dist = torch.cat(dist)
-        loss = dist.mean()
+        if weights is not None:
+            dist = dist * weights[indices == 1]
+            loss = dist.sum()
+        else:
+            loss = dist.mean()
         return loss
 
 
@@ -280,8 +287,8 @@ class TripletLoss(nn.Module):
         else:
             loss = self.ranking_loss(dist_an, dist_ap, y)
         if self.reduction == "none":
-            loss = loss * F.softmax(weights)
-            loss = loss.mean()
+            loss = loss * weights
+            loss = loss.sum()
         if self.smooth:
             loss = F.softplus(loss)
         else:
@@ -495,14 +502,14 @@ class HybridLoss(nn.Module):
 
 
 class RepreLoss(nn.Module):
-    def __init__(self, lamda, margin=0.3, feat_dim=512):
+    def __init__(self, lamda=0.0005, margin=0.3, feat_dim=512):
         super(RepreLoss, self).__init__()
-        self.triplet = TripletLoss(margin, alpha=0.0)
+        self.triplet = TripletLoss(margin, alpha=0.0, reduction="none")
         self.center = CenterLoss(feat_dim=feat_dim)
         self.lamda = lamda
 
-    def forward(self, embeddings, targets):
-        return self.triplet(embeddings, targets) + self.lamda * self.center(embeddings, targets)
+    def forward(self, embeddings, targets, weights):
+        return self.triplet(embeddings, targets, weights) + self.lamda * self.center(embeddings, targets, weights=weights)
 
 
 class CircleLoss(nn.Module):

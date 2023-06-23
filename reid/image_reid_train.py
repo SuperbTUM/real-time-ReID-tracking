@@ -96,7 +96,7 @@ class MarketDataset(Dataset):
         for i in range(2, len(detailed_info)):
             detailed_info[i] = torch.tensor(detailed_info[i], dtype=torch.long)
         if self._continual:
-            return detailed_info + [0. if item < len(self.images) else 1.]
+            return detailed_info + [1. if item < len(self.images) else 2.]
         return detailed_info
 
 
@@ -379,16 +379,18 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
 
 def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
     model.train()
+    model.needs_norm = False
     optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
     loss_func = TripletLoss(alpha=0.0, reduction="none")#WeightedRegularizedTriplet()
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         res_dict = accelerate_train(model, dataloader, optimizer)
         model, dataloader, optimizer = res_dict["accelerated"]
         accelerator = res_dict["accelerator"]
     loss_stats = []
-    # Additionally train 5 epochs
-    for epoch in range(5):
+    # Additionally train 10 epochs
+    for epoch in range(10):
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label = sample[:2]
@@ -397,7 +399,7 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
             images = images.cuda(non_blocking=True)
             label = Variable(label).cuda(non_blocking=True)
             embeddings, _ = model(images)
-            loss = loss_func(embeddings, label, sample_weights)
+            loss = loss_func(embeddings, label, sample_weights / batch_size)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:
@@ -407,6 +409,8 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
             optimizer.step()
             description = "epoch: {}, Triplet loss: {:.4f}".format(epoch, loss)
             iterator.set_description(description)
+        scheduler.step()
+    # model.needs_norm = True
     model.eval()
     try:
         to_onnx(model.module,
