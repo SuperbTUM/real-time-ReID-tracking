@@ -16,7 +16,7 @@ import argparse
 import onnxruntime
 from scipy.special import softmax
 import madgrad
-
+from sklearn.cluster import DBSCAN
 
 cudnn.deterministic = True
 cudnn.benchmark = True
@@ -96,7 +96,7 @@ class MarketDataset(Dataset):
         for i in range(2, len(detailed_info)):
             detailed_info[i] = torch.tensor(detailed_info[i], dtype=torch.long)
         if self._continual:
-            return detailed_info + [1. if item < len(self.images) else 2.]
+            return detailed_info + [0. if item < len(self.images) else 1.] # tricky
         return detailed_info
 
 
@@ -155,6 +155,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         lr_scheduler.step()
     model.needs_norm = True
     model.eval()
+    loss_func.center.save()
     try:
         to_onnx(model.module,
                 torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"), # bs=2, experimental
@@ -216,6 +217,8 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
             iterator.set_description(description)
         lr_scheduler.step()
     model.eval()
+    loss_func1.center.save()
+    loss_func2.center.save()
     to_onnx(model.module,
             torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),
             output_names=["y1", "y2", "fea"])
@@ -277,6 +280,7 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
             iterator.set_description(description)
         lr_scheduler.step()
     model.eval()
+    loss_func.center.save()
     to_onnx(model.module,
             (torch.randn(2, 3, 448, 224, requires_grad=True, device="cuda"),
              torch.ones(2, dtype=torch.long)),
@@ -307,17 +311,20 @@ def representation_only(model):
     model.module.basicBlock12.requires_grad_ = False
     model.module.basicBlock21.requires_grad_ = False
     model.module.basicBlock22.requires_grad_ = False
-    model.module.basicBlock31.requires_grad_ = False
-    model.module.basicBlock32.requires_grad_ = False
+    #model.module.basicBlock31.requires_grad_ = False
+    #model.module.basicBlock32.requires_grad_ = False
 
     model.module.classifier.requires_grad_ = False
     model.module.bnneck.requires_grad_ = False
     return model
 
 
-def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, use_side=False) -> list:
+def inference(model, dataset_test, all_cam=6, use_onnx=False, use_side=False) -> list:
     model.eval()
-    labels = []
+    pseudo_data = []
+    embeddings = []
+    cams = []
+    seqs = []
     if not use_onnx:
         dataloader = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True)
         with torch.no_grad():
@@ -332,20 +339,12 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
                     img, _, cam, seq = sample
                 img = img.cuda(non_blocking=True)
                 if use_side:
-                    _, preds = model(img, cam + all_cam * seq)
+                    embedding, _ = model(img, cam + all_cam * seq)
                 else:
-                    _, preds = model(img)
-                preds = preds.softmax(dim=-1)
-                conf, candidates = preds.max(dim=-1)  # (bs, )
-                candidates = candidates.cpu().numpy()
-                cam = cam.cpu().numpy()
-                seq = seq.cpu().numpy()
-                for i, c in enumerate(conf):
-                    if c > conf_thres:
-                        labels.append((dataset.gallery[i+iteration*params.bs][0],
-                                       candidates[i]+dataset.num_train_pids,
-                                       cam[i].item(),
-                                       seq[i].item()))
+                    embedding, _ = model(img)
+                embeddings.append(embedding)
+                cams.append(cam)
+                seqs.append(seq)
     else:
         # experiment
         dataloader = DataLoaderX(dataset_test, batch_size=2, shuffle=False, num_workers=4, pin_memory=True, drop_last=True)
@@ -363,25 +362,33 @@ def inference(model, dataset_test, all_cam=6, conf_thres=0.7, use_onnx=False, us
                               "index": to_numpy(cam + all_cam * seq)}
             else:
                 ort_inputs = {'input': to_numpy(img)}
-            preds = ort_session.run(["embeddings", "outputs"], ort_inputs)[1]
-            preds = softmax(preds, axis=-1)
-            conf = preds.max(axis=-1)
-            candidates = preds.argmax(axis=-1)
-            for i, c in enumerate(conf):
-                if c > conf_thres:
-                    labels.append((dataset.gallery[i+iteration][0],
-                                   candidates[i]+dataset.num_train_pids,
-                                   cam[i].item(),
-                                   seq[i].item()))
-    print("Inference completed! {} more pseudo-labels obtained!".format(len(labels)))
-    return labels
+            embedding = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
+            embeddings.append(torch.from_numpy(embedding))
+            cams.append(cam)
+            seqs.append(seq)
+    embeddings = F.normalize(torch.cat(embeddings, dim=0), dim=1, p=2)
+    dists = euclidean_dist(embeddings, embeddings)
+    cluster_method = DBSCAN(eps=0.2, min_samples=6, metric="precomputed")
+    labels = cluster_method.fit_predict(dists)
+    cams = torch.cat(cams, dim=0)
+    seqs = torch.cat(seqs, dim=0)
+    for i, label in enumerate(labels):
+        if label != -1:
+            pseudo_data.append((
+                dataset.gallery[i][0],
+                label + dataset.num_train_pids,
+                cams[i].item(),
+                seqs[i].item()
+            ))
+    print("Inference completed! {} more pseudo-labels obtained!".format(len(pseudo_data)))
+    return pseudo_data
 
 
 def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
     model.train()
     model.needs_norm = False
     optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    loss_func = TripletLoss(alpha=0.0, reduction="none")#WeightedRegularizedTriplet()
+    loss_func = TripletBeta(reduction="none")#WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
@@ -448,7 +455,6 @@ def parser():
     args.add_argument("--continual", action="store_true")
     args.add_argument("--accelerate", action="store_true")
     args.add_argument("--renorm", action="store_true")
-    args.add_argument("--conf_thres", type=float, default=0.5)
     args.add_argument("--instance", type=int, default=0)
     return args.parse_args()
 
@@ -498,7 +504,7 @@ if __name__ == "__main__":
                 dataset_test = MarketDataset(dataset.gallery, transform_test)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, params.conf_thres, use_onnx=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, use_onnx=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
@@ -544,7 +550,7 @@ if __name__ == "__main__":
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
 
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, params.conf_thres, use_onnx=True, use_side=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
@@ -574,7 +580,7 @@ if __name__ == "__main__":
                 #                               pin_memory=True)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, params.conf_thres, use_onnx=True, use_side=True)
+                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()

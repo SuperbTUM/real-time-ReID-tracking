@@ -88,16 +88,29 @@ class CenterLoss(nn.Module):
         feat_dim (int): feature dimension.
     """
 
-    def __init__(self, num_classes=751, feat_dim=2048, use_gpu=True):
+    def __init__(self, num_classes=751, feat_dim=2048, use_gpu=True, ckpt=None):
         super(CenterLoss, self).__init__()
         self.num_classes = num_classes
         self.feat_dim = feat_dim
         self.use_gpu = use_gpu
+        self.ckpt = ckpt
 
         if self.use_gpu:
             self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim, device="cuda"))
         else:
             self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim))
+        if ckpt:
+            self.load()
+
+    def load(self):
+        ckpt_centers = torch.load(self.ckpt)
+        ckpt_classes = ckpt_centers.size(0)
+        self.centers = nn.Parameter(torch.cat((ckpt_centers,
+                                               torch.randn(self.num_classes - ckpt_classes, self.feat_dim, device="cuda")),
+                                              dim=0))
+
+    def save(self):
+        torch.save(self.centers, "center_ckpt.pt")
 
     def forward(self, x, labels, x_augment=None, weights=None):
         """
@@ -168,10 +181,10 @@ def softmax_weights(dist, mask):
 
 class WeightedRegularizedTriplet(object):
 
-    def __init__(self):
-        self.ranking_loss = nn.SoftMarginLoss()
+    def __init__(self, reduction="mean"):
+        self.ranking_loss = nn.SoftMarginLoss(reduction=reduction)
 
-    def __call__(self, global_feat, labels, normalize_feature=False):
+    def __call__(self, global_feat, labels, normalize_feature=False, weights=None):
         if normalize_feature:
             global_feat = F.normalize(global_feat, dim=-1)
         dist_mat = euclidean_dist(global_feat, global_feat)
@@ -193,7 +206,9 @@ class WeightedRegularizedTriplet(object):
 
         y = furthest_positive.new().resize_as_(furthest_positive).fill_(1)
         loss = self.ranking_loss(closest_negative - furthest_positive, y)
-
+        if weights is not None:
+            loss *= weights
+            return loss.sum()
         return loss
 
 
@@ -300,7 +315,7 @@ class TripletBeta(TripletLoss):
     def __init__(self, margin=0.3, alpha=0.4, smooth=False, sigma=1.0, reduction="mean"):
         super(TripletBeta, self).__init__(margin, alpha, smooth, sigma, reduction)
 
-    def forward(self, inputs, targets, inputs_augment):
+    def forward(self, inputs, targets, inputs_augment, weights=None):
         """
         Args:
             inputs (torch.Tensor): feature matrix with shape (batch_size, feat_dim).
@@ -341,7 +356,9 @@ class TripletBeta(TripletLoss):
             loss = self.ranking_loss(torch.exp(dist_an / self.sigma), torch.exp(dist_ap / self.sigma), y)
         else:
             loss = self.ranking_loss(dist_an, dist_ap, y)
-        # loss += self.alpha * torch.mean(dist_an + dist_ap) / 2
+        if weights is not None:
+            loss *= weights
+            loss = loss.sum()
         if self.smooth:
             loss = F.softplus(loss)
         else:
@@ -502,10 +519,10 @@ class HybridLoss(nn.Module):
 
 
 class RepreLoss(nn.Module):
-    def __init__(self, lamda=0.0005, margin=0.3, feat_dim=512):
+    def __init__(self, num_classes, lamda=0.0005, margin=0.3, feat_dim=512, ckpt=None):
         super(RepreLoss, self).__init__()
-        self.triplet = TripletLoss(margin, alpha=0.0, reduction="none")
-        self.center = CenterLoss(feat_dim=feat_dim)
+        self.triplet = TripletLoss(margin, 0.0, reduction="none")
+        self.center = CenterLoss(num_classes, feat_dim, ckpt=ckpt)
         self.lamda = lamda
 
     def forward(self, embeddings, targets, weights):

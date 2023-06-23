@@ -7,3 +7,4 @@ onnxruntime-gpu
 ultralytics
 prefetch_generator
 gdown
+scikit-learn
