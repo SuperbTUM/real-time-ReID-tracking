@@ -114,12 +114,12 @@ class SEBasicBlock(nn.Module):
             block.bn1 = IBN(dim)
         # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
-            self.block_pre = nn.Sequential(OrderedDict((block.named_children())[:-1]))
+            self.block_pre = nn.Sequential(OrderedDict(list(block.named_children())[:-1]))
             downsample_layer = list(block.downsample.children())
-            self.block_post = nn.ModuleDict({
-                "conv": downsample_layer[0],
-                "bn": downsample_layer[1]
-            })
+            self.block_post = nn.Sequential(OrderedDict(
+                [("conv", downsample_layer[0]),
+                 ("bn", downsample_layer[1])]
+            ))
         else:
             self.block_pre = block
             self.block_post = None
