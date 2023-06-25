@@ -3,6 +3,7 @@ import torch.nn as nn
 from torchvision import models
 from torch.nn import functional as F
 import math
+from collections import OrderedDict
 
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization1D
 from .attention_pooling import AttentionPooling
@@ -113,8 +114,12 @@ class SEBasicBlock(nn.Module):
             block.bn1 = IBN(dim)
         # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
-            self.block_pre = nn.Sequential(*list(block.children())[:-1])
-            self.block_post = block.downsample
+            self.block_pre = nn.Sequential(OrderedDict((block.named_children())[:-1]))
+            downsample_layer = list(block.downsample.children())
+            self.block_post = nn.ModuleDict({
+                "conv": downsample_layer[0],
+                "bn": downsample_layer[1]
+            })
         else:
             self.block_pre = block
             self.block_post = None
@@ -127,6 +132,23 @@ class SEBasicBlock(nn.Module):
         x = scale * x
         if self.block_post:
             branch = self.block_post(branch)
+        x += branch
+        return F.relu(x)
+
+
+class SEPreActBasicBlock(SEBasicBlock):
+    def __init__(self, block, dim, renorm, ibn, se_attn, restride=False):
+        super(SEPreActBasicBlock, self).__init__(block, dim, renorm, ibn, se_attn, restride)
+
+    def forward(self, x):
+        branch = x
+        x = self.block_pre.relu(self.block_pre.bn1(x))
+        if self.block_post:
+            branch = self.block_post.conv(x)
+        x = self.block_pre.conv1(x)
+        x = self.block_pre.conv2(self.block_pre.relu(self.block_pre.bn2(x)))
+        scale = self.seblock(x)
+        x = scale * x
         x += branch
         return F.relu(x)
 

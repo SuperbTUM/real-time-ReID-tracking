@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
+from collections import OrderedDict
 from .SERes18_IBN import GeM, IBN, trunc_normal_, weights_init_classifier, weights_init_kaiming
 from .batchrenorm import BatchRenormalization2D
 from .attention_pooling import AttentionPooling
@@ -78,8 +79,12 @@ class CABasicBlock(nn.Module):
             block.bn1 = IBN(dim)
         # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
-            self.block_pre = nn.Sequential(*list(block.children())[:-1])
-            self.block_post = block.downsample
+            self.block_pre = nn.Sequential(OrderedDict((block.named_children())[:-1]))
+            downsample_layer = list(block.downsample.children())
+            self.block_post = nn.ModuleDict({
+                "conv": downsample_layer[0],
+                "bn": downsample_layer[1]
+            })
         else:
             self.block_pre = block
             self.block_post = None
