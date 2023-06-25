@@ -14,9 +14,9 @@ from train_prepare import WarmupMultiStepLR, RandomIdentitySampler, RandomErasin
 
 import argparse
 import onnxruntime
-from scipy.special import softmax
 import madgrad
 from sklearn.cluster import DBSCAN
+from accelerate import Accelerator
 
 cudnn.deterministic = True
 cudnn.benchmark = True
@@ -120,9 +120,9 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
                              pin_memory=True, sampler=custom_sampler)
     if accelerate:
-        res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
-        model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
-        accelerator = res_dict["accelerator"]
+        accelerator = Accelerator()
+        model = model.to(accelerator.device)
+        model, dataloader, optimizer, lr_scheduler, optimizer_center = accelerator.prepare(model, dataloader, optimizer, lr_scheduler, optimizer_center)
     loss_stats = []
     transforms_augment = nn.Sequential(transforms.RandomHorizontalFlip(p=1))
     scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
@@ -183,9 +183,13 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
     optimizer_center2 = torch.optim.SGD(loss_func2.center.parameters(), lr=0.5)
 
     if accelerate:
-        res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
-        model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
-        accelerator = res_dict["accelerator"]
+        accelerator = Accelerator()
+        model = model.to(accelerator.device)
+        model, dataloader, optimizer, lr_scheduler, optimizer_center1, optimizer_center2 = accelerator.prepare(
+            model, dataloader, optimizer,
+            lr_scheduler,
+            optimizer_center1,
+            optimizer_center2)
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
@@ -240,9 +244,11 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     if accelerate:
-        res_dict = accelerate_train(model, dataloader, optimizer, lr_scheduler)
-        model, dataloader, optimizer, lr_scheduler = res_dict["accelerated"]
-        accelerator = res_dict["accelerator"]
+        accelerator = Accelerator()
+        model = model.to(accelerator.device)
+        model, dataloader, optimizer, lr_scheduler, optimizer_center = accelerator.prepare(model, dataloader, optimizer,
+                                                                                           lr_scheduler,
+                                                                                           optimizer_center)
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
@@ -319,14 +325,14 @@ def representation_only(model):
     return model
 
 
-def inference(model, dataset_test, all_cam=6, use_onnx=False, use_side=False) -> list:
+def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side=False) -> list:
     model.eval()
     pseudo_data = []
     embeddings = []
     cams = []
     seqs = []
     if not use_onnx:
-        dataloader = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True)
+        dataloader = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True, drop_last=True)
         with torch.no_grad():
             for iteration, sample in enumerate(dataloader, 0):
                 if len(sample) == 2:
@@ -392,9 +398,10 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
-        res_dict = accelerate_train(model, dataloader, optimizer)
-        model, dataloader, optimizer = res_dict["accelerated"]
-        accelerator = res_dict["accelerator"]
+        accelerator = Accelerator()
+        model = model.to(accelerator.device)
+        model, dataloader, optimizer, scheduler = accelerator.prepare(model, dataloader, optimizer,
+                                                                      scheduler)
     loss_stats = []
     transforms_augment = nn.Sequential(transforms.RandomHorizontalFlip(p=1))
     scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
@@ -508,7 +515,7 @@ if __name__ == "__main__":
                 dataset_test = MarketDataset(dataset.gallery, transform_test)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, use_onnx=True)
+                pseudo_labeled_data = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
@@ -554,7 +561,7 @@ if __name__ == "__main__":
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
 
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
+                pseudo_labeled_data = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()
@@ -584,7 +591,7 @@ if __name__ == "__main__":
                 #                               pin_memory=True)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = inference(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
+                pseudo_labeled_data = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data)
                 market_dataset.set_cross_domain()

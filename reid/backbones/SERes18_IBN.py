@@ -37,9 +37,9 @@ class SEBlock(nn.Module):
             self.globalavgpooling = GeM()
         else:
             self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
-        self.fc1 = nn.Linear(c_in, max(1, c_in // 16))
+        self.fc1 = nn.Linear(c_in, max(1, c_in // 16))  # bias=False
         self.relu = nn.ReLU(inplace=True)
-        self.fc2 = nn.Linear(max(1, c_in // 16), c_in)
+        self.fc2 = nn.Linear(max(1, c_in // 16), c_in)  # bias=False
         self.sigmoid = nn.Sigmoid()
         self.c_in = c_in
 

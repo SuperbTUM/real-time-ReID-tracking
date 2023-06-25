@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import onnxruntime
 from segmentation import batched_extraction
 
-from accelerate import Accelerator
 from ultralytics import YOLO
 
 
@@ -64,11 +63,6 @@ def postprocess_ddp(ddp_model, rank):
         torch.save(ddp_model.state_dict(), "checkpoint.pt")
     dist.barrier()
     cleanup()
-
-
-def accelerate_train(*args):
-    accelerator = Accelerator()
-    return {"accelerated": accelerator.prepare(*args), "accelerator":  accelerator}
 
 
 def plot_loss(loss_stats):

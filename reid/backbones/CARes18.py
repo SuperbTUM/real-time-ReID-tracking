@@ -13,15 +13,15 @@ class CABlock(nn.Module):
         super(CABlock, self).__init__()
 
         # self.conv_1x1 = nn.Conv2d(in_channels=channel, out_channels=channel//reduction, kernel_size=1, stride=1, bias=False)
-        self.conv_1x1 = nn.Linear(channel, channel//reduction)
+        self.conv_1x1 = nn.Linear(channel, channel//reduction)  # bias=False
 
         self.relu = nn.ReLU(inplace=True)
         self.bn = BatchRenormalization2D(channel//reduction)#nn.BatchNorm2d(channel//reduction)
 
         # self.F_h = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
         # self.F_w = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
-        self.F_h = nn.Linear(channel//reduction, channel)
-        self.F_w = nn.Linear(channel//reduction, channel)
+        self.F_h = nn.Linear(channel//reduction, channel)  # bias=False
+        self.F_w = nn.Linear(channel//reduction, channel)  # bias=False
 
         self.sigmoid_h = nn.Sigmoid()
         self.sigmoid_w = nn.Sigmoid()

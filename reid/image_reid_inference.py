@@ -18,6 +18,7 @@ from backbones.resnet50 import ft_net
 
 from train_utils import to_numpy, DataLoaderX
 from image_reid_train import MarketDataset
+from inference_utils import diminish_camera_bias
 
 # @credit to Zhedong
 #######################################################################
@@ -191,19 +192,6 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
     true_labels = torch.stack(true_labels).flatten()
     true_cams = torch.stack(true_cams).flatten()
     return embeddings_total, true_labels, true_cams
-
-
-def diminish_camera_bias(embeddings, cams, la=0.005):
-    num_cams = cams.max().int()
-    for i in range(num_cams+1):
-        cur_embeddings = embeddings[cams == i]
-        cam_bias = cur_embeddings.mean(dim=0)
-        embeddings[cams == i] -= cam_bias
-        tmp_eye = torch.eye(embeddings.shape[1])
-        P = torch.inverse(cur_embeddings.T.matmul(cur_embeddings) + cur_embeddings.shape[0] * la * tmp_eye)
-        embeddings[cams == i] = embeddings[cams == i].matmul(P.t())
-        embeddings[cams == i] = embeddings[cams == i]/torch.norm(embeddings[cams == i], p=2, dim=1).unsqueeze(1)
-    return embeddings
 
 
 def parser():

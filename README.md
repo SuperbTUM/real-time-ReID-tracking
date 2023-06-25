@@ -123,8 +123,15 @@ For image testing
 python reid/image_reid_inference.py --backbone cares18 --bs 1 --ckpt checkpoint/reid_model.onnx
 ```
 
+For video training
 ```python
 python reid/video_reid_train.py --crop_factor 1.0
+```
+
+Training with `accelerate`
+```python
+accelerate config
+CUDA_VISIBLE_DEVICES="0" accelerate launch xxx.py --args
 ```
 
 To fit with `yolov8_tracking`, please copy your model and checkpoints to `trackers/strongsort/models` and `trackers/strongsort/checkpoint`, and modify `reid_model_factory.py` accordingly.
@@ -192,9 +199,10 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
 [Checkpoint](https://drive.google.com/file/d/1jT02nnDXbTmhx62-bW2CTCVbomcfwDpb/view?usp=sharing)
 
-| Metric   | Acc@1  | Acc@5 | Acc@10 | mAP    |
-|----------|--------|-------|--------|--------|
-| Value    | `0.9086` | 0.9679 | 0.9804 | 0.7409 |
+| Metric   | Acc@1    | Acc@5  | Acc@10 | mAP    | Size(MB) |
+|----------|----------|--------|--------|--------|----------|
+| Version1 | `0.9086` | 0.9679 | 0.9804 | 0.7409 | 44.417   |
+| Version2 | 0.9014   | 0.9670 | 0.9801 | 0.7415 | 44.402   |
 
 CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
