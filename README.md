@@ -110,12 +110,12 @@ We train the model on both image-based dataset and video-based dataset(w/. groun
 
 For non-continual image training
 ```python
-python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005
+python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005
 ```
 
 For continual image training
 ```python
-python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005 --continual
+python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --continual
 ```
 
 For image testing
@@ -175,20 +175,20 @@ Baseline: Res18(ImageNet1k-pretrained)-Softmax+SoftTriplet
 |--------|--------|--------|--------|--------|-----------|
 | Value  | 0.7812 | 0.9112 | 0.9406 | 0.5609 | 45.870 MB |
 
-CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=1.0)+TripletPenalty(W/. augment)+Center-Continual
+CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augment)+Center-Continual
 
 | Metric           | Acc@1 | Acc@5 | Acc@10 | mAP |
 |------------------|-------|-------|--------|-----|
 | Value            | -     | -     | -      | -   |
 | Strong Inference | -     | -     | -      | -   |
 
-CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=1.0)+TripletPenalty(W/. augment)+Center;
+CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augment)+Center;
 [Checkpoint](https://drive.google.com/file/d/1osOKwuygDGbqZzNBnqzcMsdTbz5JyCmc/view?usp=sharing)
 
-| Metric           | Acc@1  | Acc@5  | Acc@10 | mAP     |
-|------------------|--------|--------|--------|---------|
-| Value            | -      | -      | -      | -       |
-| Strong Inference | 0.9056 | 0.9656 | 0.9798 | `0.7508` |
+| Metric           | Acc@1  | Acc@5  | Acc@10 | mAP      |
+|------------------|--------|--------|--------|----------|
+| Value            | -      | -      | -      | -        |
+| Strong Inference | `0.9106` | 0.9694 | 0.9822 | `0.7534` |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
@@ -199,10 +199,10 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
 [Checkpoint](https://drive.google.com/file/d/1jT02nnDXbTmhx62-bW2CTCVbomcfwDpb/view?usp=sharing)
 
-| Metric   | Acc@1    | Acc@5  | Acc@10 | mAP    | Size(MB) |
-|----------|----------|--------|--------|--------|----------|
-| Version1 | `0.9086` | 0.9679 | 0.9804 | 0.7409 | 44.417   |
-| Version2 | 0.9074   | 0.9700 | 0.9819 | 0.7506 | `44.399` |
+| Metric   | Acc@1  | Acc@5  | Acc@10 | mAP    | Size(MB) |
+|----------|--------|--------|--------|--------|----------|
+| Version1 | 0.9086 | 0.9679 | 0.9804 | 0.7409 | 44.417   |
+| Version2 | 0.9074 | 0.9700 | 0.9819 | 0.7506 | `44.399` |
 
 CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
