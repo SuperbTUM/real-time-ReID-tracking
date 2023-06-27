@@ -109,7 +109,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[20, 40], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
+    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[25, 50], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
@@ -374,7 +374,7 @@ def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side
             seqs.append(seq)
     embeddings = F.normalize(torch.cat(embeddings, dim=0), dim=1, p=2)
     dists = euclidean_dist(embeddings, embeddings)
-    cluster_method = DBSCAN(eps=0.2, min_samples=6, metric="precomputed")
+    cluster_method = DBSCAN(eps=0.2, min_samples=6, metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
     cams = torch.cat(cams, dim=0)
     seqs = torch.cat(seqs, dim=0)
@@ -459,7 +459,7 @@ def parser():
                                                                             "swin_v1",
                                                                             "swin_v2",
                                                                             "baseline"])
-    args.add_argument("--epochs", type=int, default=60)
+    args.add_argument("--epochs", type=int, default=70)
     args.add_argument("--epsilon", help="for polyloss, 0 by default", type=range_type, default=0.0, metavar="[-1, 1]")
     args.add_argument("--margin", help="for triplet loss", default=0.0, type=float)
     args.add_argument("--center_lamda", help="for center loss", default=0.0, type=float)
