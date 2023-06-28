@@ -109,7 +109,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[30, 55], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
+    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[40, 70], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
@@ -483,6 +483,7 @@ if __name__ == "__main__":
             transforms.Pad(10),
             transforms.RandomCrop((256, 128)),
             LGT(),
+            transforms.RandomGrayscale(0.05),
             # transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             transforms.RandomErasing(),
