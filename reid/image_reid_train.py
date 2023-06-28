@@ -109,7 +109,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[25, 50], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
+    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[30, 55], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
@@ -175,7 +175,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     optimizer = madgrad.MADGRAD(model.parameters(), lr=0.001, weight_decay=5e-4)
-    lr_scheduler = WarmupMultiStepLR(optimizer, [10, 30])
+    lr_scheduler = WarmupMultiStepLR(optimizer, [30, 55])
     loss_func1 = HybridLoss(num_classes, 2048, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     loss_func2 = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
@@ -239,7 +239,7 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
 
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
-    lr_scheduler = WarmupMultiStepLR(optimizer, [10, 30])
+    lr_scheduler = WarmupMultiStepLR(optimizer, [30, 55])
     loss_func = HybridLoss(num_classes, feat_dim, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
