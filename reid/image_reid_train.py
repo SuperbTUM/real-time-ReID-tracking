@@ -96,7 +96,7 @@ class MarketDataset(Dataset):
         for i in range(2, len(detailed_info)):
             detailed_info[i] = torch.tensor(detailed_info[i], dtype=torch.long)
         if self._continual:
-            return detailed_info + [0. if item < len(self.images) else 1.] # tricky
+            return detailed_info + [1. if item < len(self.images) else 2.] # tricky
         return detailed_info
 
 
@@ -317,8 +317,8 @@ def representation_only(model):
     model.module.basicBlock12.requires_grad_ = False
     model.module.basicBlock21.requires_grad_ = False
     model.module.basicBlock22.requires_grad_ = False
-    #model.module.basicBlock31.requires_grad_ = False
-    #model.module.basicBlock32.requires_grad_ = False
+    model.module.basicBlock31.requires_grad_ = False
+    model.module.basicBlock32.requires_grad_ = False
 
     model.module.classifier.requires_grad_ = False
     model.module.bnneck.requires_grad_ = False
@@ -374,7 +374,7 @@ def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side
             seqs.append(seq)
     embeddings = F.normalize(torch.cat(embeddings, dim=0), dim=1, p=2)
     dists = euclidean_dist(embeddings, embeddings)
-    cluster_method = DBSCAN(eps=0.2, min_samples=6, metric="precomputed", n_jobs=-1)
+    cluster_method = DBSCAN(eps=0.25, min_samples=6, metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
     cams = torch.cat(cams, dim=0)
     seqs = torch.cat(seqs, dim=0)
@@ -393,8 +393,8 @@ def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side
 def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
     model.train()
     model.needs_norm = False
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    loss_func = TripletBeta(reduction="none")#WeightedRegularizedTriplet("none")
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0005, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    loss_func = TripletBeta(alpha=0.0, reduction="none")#WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
@@ -403,7 +403,10 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
         model, dataloader, optimizer, scheduler = accelerator.prepare(model, dataloader, optimizer,
                                                                       scheduler)
     loss_stats = []
-    transforms_augment = nn.Sequential(transforms.RandomHorizontalFlip(p=1))
+    transforms_augment = nn.Sequential(
+        transforms.Pad([10, 10]),
+        transforms.RandomCrop((256, 128)),
+        transforms.RandomHorizontalFlip(p=1.))
     scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
     # Additionally train 10 epochs
     for epoch in range(10):
@@ -513,7 +516,8 @@ if __name__ == "__main__":
                                                      transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                                                      ]
                                                     )
-                dataset_test = MarketDataset(dataset.gallery, transform_test)
+                merged_datasets = dataset.gallery + dataset.query
+                dataset_test = MarketDataset(merged_datasets, transform_test)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
                 pseudo_labeled_data = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True)
