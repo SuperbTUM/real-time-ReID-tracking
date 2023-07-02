@@ -37,9 +37,10 @@ class FocalLoss(nn.Module):
 
     def forward(self, outputs, targets):
         ce_loss = F.cross_entropy(outputs, targets, self.alpha, reduction='none', label_smoothing=self.smoothing)
+        # ce_loss = F.cross_entropy(outputs, targets, reduction='none', label_smoothing=self.smoothing)
         pt = torch.exp(-ce_loss)
         # mean over the batch
-        focal_loss = (1 - pt) ** self.gamma * ce_loss
+        focal_loss = (1 - pt) ** self.gamma * ce_loss # * self.alpha[targets]
         if self.alpha is not None and self.epsilon != 0.:
             poly_loss = focal_loss + (self.epsilon * torch.pow(1 - pt, self.gamma + 1) + 0.2 * torch.pow(1 - pt, self.gamma + 2)) * self.alpha[targets]
         elif self.epsilon != 0.:

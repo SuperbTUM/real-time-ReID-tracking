@@ -459,7 +459,7 @@ def parser():
                                                                             "swin_v1",
                                                                             "swin_v2",
                                                                             "baseline"])
-    args.add_argument("--epochs", type=int, default=70)
+    args.add_argument("--epochs", type=int, default=100)
     args.add_argument("--epsilon", help="for polyloss, 0 by default", type=range_type, default=0.0, metavar="[-1, 1]")
     args.add_argument("--margin", help="for triplet loss", default=0.0, type=float)
     args.add_argument("--center_lamda", help="for center loss", default=0.0, type=float)
