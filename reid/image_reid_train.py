@@ -485,7 +485,7 @@ if __name__ == "__main__":
             transforms.RandomHorizontalFlip(),
             transforms.Pad(10),
             transforms.RandomCrop((256, 128)),
-            LGT(),
+            LGT(0.4),
             transforms.RandomGrayscale(0.05),
             # transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),

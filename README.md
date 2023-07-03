@@ -192,16 +192,16 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augm
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
-| Metric | Acc@1 | Acc@5 | Acc@10 | mAP |
-|--------|-------|-------|--------|-----|
-| Value  | -     | -     | -      | -   |
+| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
+|--------|--------|--------|--------|--------|
+| Value  | 0.9207 | 0.9709 | 0.9804 | 0.7774 |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
 [Checkpoint](https://drive.google.com/file/d/1eyK1wFZullwdXDZkJ8fgpnOV4AiqDtfu/view?usp=drive_link)
 
 | Metric | Acc@1  | Acc@5  | Acc@10 | mAP    | Size(MB) |
 |--------|--------|--------|--------|--------|----------|
-| Value  | 0.9183 | 0.9679 | 0.9795 | 0.7675 | `44.399` |
+| Value  | 0.9201 | 0.9712 | 0.9813 | 0.7759 | `44.399` |
 
 CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
