@@ -317,8 +317,8 @@ def representation_only(model):
     model.module.basicBlock12.requires_grad_ = False
     model.module.basicBlock21.requires_grad_ = False
     model.module.basicBlock22.requires_grad_ = False
-    model.module.basicBlock31.requires_grad_ = False
-    model.module.basicBlock32.requires_grad_ = False
+    model.module.basicBlock31.requires_grad_ = False # tricky
+    model.module.basicBlock32.requires_grad_ = False # tricky
 
     model.module.classifier.requires_grad_ = False
     model.module.bnneck.requires_grad_ = False
@@ -444,7 +444,7 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
 
 
 def parser():
-    def range_type(astr, min=-1., max=1.):
+    def range_type(astr, min=-1., max=6.):
         value = float(astr)
         if min <= value <= max:
             return value

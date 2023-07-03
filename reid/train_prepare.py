@@ -42,6 +42,7 @@ class FocalLoss(nn.Module):
         # mean over the batch
         focal_loss = (1 - pt) ** self.gamma * ce_loss * self.alpha[targets]
         if self.alpha is not None and self.epsilon != 0.:
+            # epsilon2 = 0.2 in polyloss is still tricky
             poly_loss = focal_loss + (self.epsilon * torch.pow(1 - pt, self.gamma + 1) + 0.2 * torch.pow(1 - pt, self.gamma + 2)) * self.alpha[targets]
         elif self.epsilon != 0.:
             poly_loss = focal_loss + self.epsilon * torch.pow(1 - pt, self.gamma + 1) + 0.2 * torch.pow(1 - pt, self.gamma + 2)
