@@ -317,8 +317,8 @@ def representation_only(model):
     model.module.basicBlock12.requires_grad_ = False
     model.module.basicBlock21.requires_grad_ = False
     model.module.basicBlock22.requires_grad_ = False
-    model.module.basicBlock31.requires_grad_ = False # tricky
-    model.module.basicBlock32.requires_grad_ = False # tricky
+    # model.module.basicBlock31.requires_grad_ = False # tricky
+    # model.module.basicBlock32.requires_grad_ = False # tricky
 
     model.module.classifier.requires_grad_ = False
     model.module.bnneck.requires_grad_ = False
@@ -404,8 +404,8 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
                                                                       scheduler)
     loss_stats = []
     transforms_augment = nn.Sequential(
-        transforms.Pad([10, 10]),
-        transforms.RandomCrop((256, 128)),
+        # transforms.Pad([10, 10]),
+        # transforms.RandomCrop((256, 128)),
         transforms.RandomHorizontalFlip(p=1.))
     scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
     # Additionally train 10 epochs
@@ -463,7 +463,7 @@ def parser():
                                                                             "swin_v2",
                                                                             "baseline"])
     args.add_argument("--epochs", type=int, default=100)
-    args.add_argument("--epsilon", help="for polyloss, 0 by default", type=range_type, default=0.0, metavar="[-1, 1]")
+    args.add_argument("--epsilon", help="for polyloss, 0 by default", type=range_type, default=0.0, metavar="[-1, 6]")
     args.add_argument("--margin", help="for triplet loss", default=0.0, type=float)
     args.add_argument("--center_lamda", help="for center loss", default=0.0, type=float)
     args.add_argument("--continual", action="store_true")
