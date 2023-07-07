@@ -161,6 +161,7 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
     embeddings_total = []
     true_labels = []
     true_cams = []
+    true_seqs = []
     for sample1, sample2 in tqdm(zip(dataloader1, dataloader2), total=len(dataloader1)):
         assert len(sample1) == len(sample2)
         if len(sample1) == 2:
@@ -187,11 +188,13 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
         embeddings_total.append(embeddings)
         true_labels.append(true_label)
         true_cams.append(cam)
+        true_seqs.append(seq)
 
     embeddings_total = torch.stack(embeddings_total)
     true_labels = torch.stack(true_labels).flatten()
     true_cams = torch.stack(true_cams).flatten()
-    return embeddings_total, true_labels, true_cams
+    true_seqs = torch.stack(true_seqs).flatten()
+    return embeddings_total, true_labels, true_cams, true_seqs
 
 
 def parser():
@@ -333,14 +336,25 @@ if __name__ == "__main__":
     # market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip, False)
     market_gallery.transform = transform_test_flip
     dataloader2 = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    gallery_embeddings, gallery_labels, gallery_cams = inference_efficient(model, dataloader1, dataloader2, dataset.num_gallery_cams, params.use_side)
+    gallery_embeddings, gallery_labels, gallery_cams, gallery_seqs = inference_efficient(model, dataloader1, dataloader2, dataset.num_gallery_cams, params.use_side)
     gallery_embeddings1 = torch.stack([i[0].squeeze() for i in gallery_embeddings])
     gallery_embeddings2 = torch.stack([i[1].squeeze() for i in gallery_embeddings])
     gallery_embeddings1 = F.normalize(gallery_embeddings1, dim=1)
     gallery_embeddings2 = F.normalize(gallery_embeddings2, dim=1)
 
     gallery_embeddings = (gallery_embeddings1 + gallery_embeddings2) / 2.0
+    # from train_prepare import euclidean_dist
+    # from sklearn.cluster import DBSCAN
+    # dists = euclidean_dist(gallery_embeddings, gallery_embeddings)
+    # cluster_method = DBSCAN(eps=0.25, min_samples=6, metric="precomputed", n_jobs=-1)
+    # pseudo_labels = cluster_method.fit_predict(dists)
+    # indices_pseudo = (pseudo_labels != -1)
+    # num_labels = max(pseudo_labels) + 1
+    # gallery_seqs = gallery_seqs * dataset.num_gallery_cams * num_labels + gallery_cams * num_labels + pseudo_labels
+
     gallery_embeddings = diminish_camera_bias(gallery_embeddings, gallery_cams)
+    # from inference_utils import smooth_tracklets
+    # gallery_embeddings = smooth_tracklets(gallery_embeddings, gallery_seqs, indices_pseudo)
 
     market_query = MarketDataset(dataset.query, transform_test, False)
     dataloader1 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
@@ -351,7 +365,7 @@ if __name__ == "__main__":
     market_query.transform = transform_test_flip
     dataloader2 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False,
                               pin_memory=True)
-    query_embeddings, query_labels, query_cams = inference_efficient(model, dataloader1, dataloader2, dataset.num_query_cams, params.use_side)
+    query_embeddings, query_labels, query_cams, query_seqs = inference_efficient(model, dataloader1, dataloader2, dataset.num_query_cams, params.use_side)
     query_embeddings1 = torch.stack([i[0].squeeze() for i in query_embeddings])
     query_embeddings2 = torch.stack([i[1].squeeze() for i in query_embeddings])
     query_embeddings1 = F.normalize(query_embeddings1, dim=1)

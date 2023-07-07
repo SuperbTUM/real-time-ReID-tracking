@@ -180,71 +180,28 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augm
 | Metric           | Acc@1 | Acc@5 | Acc@10 | mAP |
 |------------------|-------|-------|--------|-----|
 | Value            | -     | -     | -      | -   |
-| Strong Inference | -     | -     | -      | -   |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augment)+Center;
 [Checkpoint](https://drive.google.com/file/d/1osOKwuygDGbqZzNBnqzcMsdTbz5JyCmc/view?usp=sharing)
 
-| Metric           | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|------------------|--------|--------|--------|--------|
-| Value            | -      | -      | -      | -      |
-| Strong Inference | 0.9181 | 0.9712 | 0.9813 | 0.7719 |
+| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
+|--------|--------|--------|--------|--------|
+| Value  | 0.9181 | 0.9712 | 0.9813 | 0.7719 |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
-| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|--------|--------|--------|--------|--------|
-| Value  | 0.9201 | 0.9721 | 0.9807 | 0.7911 |
+| Metric           | Acc@1    | Acc@5    | Acc@10   | mAP      |
+|------------------|----------|----------|----------|----------|
+| Value            | `0.9276` | `0.9733` | `0.9816` | 0.7917   |
+| Strong Inference | 0.9276   | 0.9730   | 0.9813   | `0.7953` |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
 [Checkpoint](https://drive.google.com/file/d/1eyK1wFZullwdXDZkJ8fgpnOV4AiqDtfu/view?usp=drive_link)
 
-| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    | Size(MB) |
-|--------|--------|--------|--------|--------|----------|
-| Value  | 0.9201 | 0.9712 | 0.9813 | 0.7759 | `44.399` |
-
-CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
-
-| Metric    | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|-----------|--------|--------|--------|--------|
-| Regular   | 0.8631 | 0.9516 | 0.9700 | 0.6625 |
-| Efficient | 0.8667 | 0.9513 | 0.9664 | 0.6650 |
-| IBrN      | 0.8622 | 0.9477 | 0.9694 | 0.6662 |
-
-CARes18-IBN-BatchReNorm-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center
-
-| Metric    | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|-----------|--------|--------|--------|--------|
-| Regular   | 0.8593 | 0.9507 | 0.9664 | 0.6545 |
-| Efficient | 0.8614 | 0.9507 | 0.9664 | 0.6603 |
-| IBrN      | 0.8602 | 0.9474 | 0.9685 | 0.6618 |
-
-CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center-Continual
-
-| Metric      | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|-------------|--------|--------|--------|--------|
-| W/o. Center | 0.8587 | 0.9516 | 0.9730 | 0.6639 |
-| W/. Center  | 0.8599 | 0.9522 | 0.9727 | 0.6617 |
-| Weighted    | 0.8584 | 0.9504 | 0.9727 | 0.6607 |
-
-CARes18-IBN-BatchReNorm-FocalLoss+TripletPenalty+Center
-
-| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|--------|--------|--------|--------|--------|
-| Value  | 0.8575 | 0.9489 | 0.9721 | 0.6546 |
-
-SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
-
-| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|--------|--------|--------|--------|--------|
-| Value  | 0.8625 | 0.9519 | 0.9685 | 0.6522 |
-
-SeRes18-IBN-BatchReNorm(Important!)-FocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
-[Checkpoint](https://drive.google.com/file/d/19q-RNjrT0SF0dZNVcsZZXFz9bgpcEAEr/view?usp=share_link)
-
-| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|--------|--------|--------|--------|--------|
-| Value  | 0.8581 | 0.9504 | 0.9679 | 0.6433 |
+| Metric           | Acc@1  | Acc@5  | Acc@10 | mAP    | Size(MB) |
+|------------------|--------|--------|--------|--------|----------|
+| Value            | 0.9270 | 0.9742 | 0.9828 | 0.7786 | `44.399` |
+| Strong Inference | 0.9233 | 0.9742 | 0.9825 | 0.7871 | `44.399` |
 
 
 **Tracking**
@@ -326,4 +283,6 @@ IDF1: **59.31**
 
 ## Thoughts After the Milestone
 
-Simple DCGAN may bring easy samples to make the network more likely to overfit. We may pre-cluster (K-Means++) datasets and conduct synthetic image generation on each cluster with stronger GAN network (VAE-GAN). We can even make the network partial-aware with separate attention on foreground and background.
+Simple DCGAN may bring easy samples to make the network more likely to be overfit. SPGAN may be more recommended.
+We may pre-cluster (K-Means++) datasets and conduct synthetic image generation on each cluster with stronger GAN network (VAE-GAN). 
+We can even make the network partial-aware with separate attention on foreground and background.
