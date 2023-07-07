@@ -62,8 +62,12 @@ class MarketDataset(Dataset):
             return len(self.images_pseudo) + len(self.images)
         return len(self.images)
 
-    def add_pseudo(self, pseudo_labeled_data):
+    def add_pseudo(self, pseudo_labeled_data, num_class_new):
         self.images_pseudo.extend(pseudo_labeled_data)
+        self.class_stats = self.class_stats + [0 for _ in range(num_class_new - 751)]
+        for image in self.images_pseudo:
+            if image[1] >= 751:
+                self.class_stats[image[1]] += 1
         if self.get_crop:
             pure_images = list(map(lambda x: x[0], self.images_pseudo))
             i = 0
@@ -307,7 +311,7 @@ def side_info_only(model):
 
 
 def representation_only(model):
-    # for seres18
+    # for seres18/cares18
     model.train()
     model.module.conv0.requires_grad_ = False
     model.module.bn0.requires_grad_ = False
@@ -320,12 +324,12 @@ def representation_only(model):
     # model.module.basicBlock31.requires_grad_ = False # tricky
     # model.module.basicBlock32.requires_grad_ = False # tricky
 
-    model.module.classifier.requires_grad_ = False
-    model.module.bnneck.requires_grad_ = False
+    # model.module.classifier.requires_grad_ = False
+    # model.module.bnneck.requires_grad_ = False
     return model
 
 
-def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side=False) -> list:
+def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side=False) -> tuple:
     model.eval()
     pseudo_data = []
     embeddings = []
@@ -387,15 +391,20 @@ def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side
                 seqs[i].item()
             ))
     print("Inference completed! {} more pseudo-labels obtained!".format(len(pseudo_data)))
-    return pseudo_data
+    return pseudo_data, max(labels) + 1 + dataset.num_train_pids
 
 
-def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
+def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=False, tmp_feat_dim=256):
     model.train()
     model.needs_norm = False
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.0005, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    loss_func = TripletBeta(alpha=0.0, reduction="none")#WeightedRegularizedTriplet("none")
+    model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False)
+    nn.init.normal_(model.module.classifier[-1], std=0.001)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    class_stats = dataset.get_class_stats()
+    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
+    loss_func = HybridLoss(num_class_new, 512, params.margin, lamda=params.center_lamda, class_stats=class_stats)#WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5)
+    optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
     if accelerate:
         accelerator = Accelerator()
@@ -413,14 +422,15 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label = sample[:2]
-            sample_weights = sample[-1].cuda(non_blocking=True)
+            # sample_weights = sample[-1].cuda(non_blocking=True)
             optimizer.zero_grad()
+            optimizer_center.zero_grad()
             images = images.cuda(non_blocking=True)
             images_augment = scripted_transforms_augment(images)
             label = Variable(label).cuda(non_blocking=True)
-            embeddings, _ = model(images)
+            embeddings, outputs = model(images)
             embeddings_augment, _ = model(images_augment)
-            loss = loss_func(embeddings, label, embeddings_augment, sample_weights / batch_size)
+            loss = loss_func(embeddings, outputs, label, embeddings_augment)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:
@@ -428,6 +438,9 @@ def train_cnn_continual(model, dataset, batch_size=8, accelerate=False):
             else:
                 loss.backward()
             optimizer.step()
+            for param in loss_func.center.parameters():
+                param.grad.data *= (1. / params.center_lamda)
+            optimizer_center.step()
             description = "epoch: {}, Triplet loss: {:.4f}".format(epoch, loss)
             iterator.set_description(description)
         scheduler.step()
@@ -520,13 +533,13 @@ if __name__ == "__main__":
                 dataset_test = MarketDataset(merged_datasets, transform_test)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True)
                 del dataset_test
-                market_dataset.add_pseudo(pseudo_labeled_data)
+                market_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 market_dataset.set_cross_domain()
                 model = representation_only(model)
                 torch.cuda.empty_cache()
-                model, loss_stats = train_cnn_continual(model, market_dataset, params.bs, params.accelerate)
+                model, loss_stats = train_cnn_continual(model, market_dataset, num_class_new, params.bs, params.accelerate)
                 market_dataset.reset_cross_domain()
 
     else:
@@ -560,15 +573,16 @@ if __name__ == "__main__":
                                                          dataset.num_train_seqs,
                                                          params.accelerate)
             if params.continual:
-                dataset_test = MarketDataset(dataset.gallery, transform_test)
+                merged_datasets = dataset.gallery + dataset.query
+                dataset_test = MarketDataset(merged_datasets, transform_test)
                 # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
                 #                               pin_memory=True)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
 
-                pseudo_labeled_data = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
-                market_dataset.add_pseudo(pseudo_labeled_data)
+                market_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 market_dataset.set_cross_domain()
                 model = side_info_only(model)
                 model, loss_stats = train_vision_transformer(model, market_dataset, 384,
@@ -591,14 +605,15 @@ if __name__ == "__main__":
                                                          params.accelerate)
 
             if params.continual:
-                dataset_test = MarketDataset(dataset.gallery, transform_test)
+                merged_datasets = dataset.gallery + dataset.query
+                dataset_test = MarketDataset(merged_datasets, transform_test)
                 # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
                 #                               pin_memory=True)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
-                market_dataset.add_pseudo(pseudo_labeled_data)
+                market_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 market_dataset.set_cross_domain()
                 model = side_info_only(model)
                 model, loss_stats = train_vision_transformer(model, market_dataset, 96,

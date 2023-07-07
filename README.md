@@ -177,10 +177,10 @@ Baseline: Res18(ImageNet1k-pretrained)-Softmax+SoftTriplet
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augment)+Center-Continual
 
-| Metric           | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|------------------|--------|--------|--------|--------|
-| Value            | -      | -      | -      | -      |
-| Strong Inference | 0.9181 | 0.9685 | 0.9831 | 0.7728 |
+| Metric           | Acc@1 | Acc@5 | Acc@10 | mAP |
+|------------------|-------|-------|--------|-----|
+| Value            | -     | -     | -      | -   |
+| Strong Inference | -     | -     | -      | -   |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augment)+Center;
 [Checkpoint](https://drive.google.com/file/d/1osOKwuygDGbqZzNBnqzcMsdTbz5JyCmc/view?usp=sharing)
@@ -194,7 +194,7 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)
 
 | Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
 |--------|--------|--------|--------|--------|
-| Value  | 0.9207 | 0.9721 | 0.9816 | 0.7783 |
+| Value  | 0.9201 | 0.9721 | 0.9807 | 0.7911 |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
 [Checkpoint](https://drive.google.com/file/d/1eyK1wFZullwdXDZkJ8fgpnOV4AiqDtfu/view?usp=drive_link)
