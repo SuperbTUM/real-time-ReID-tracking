@@ -402,7 +402,7 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
     optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
-    loss_func = HybridLoss(num_class_new, 512, params.margin, lamda=params.center_lamda, class_stats=class_stats)#WeightedRegularizedTriplet("none")
+    loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda, class_stats=class_stats)#WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
@@ -422,7 +422,7 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label = sample[:2]
-            # sample_weights = sample[-1].cuda(non_blocking=True)
+            sample_weights = sample[-1].cuda(non_blocking=True)
             optimizer.zero_grad()
             optimizer_center.zero_grad()
             images = images.cuda(non_blocking=True)
@@ -430,7 +430,7 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
             label = Variable(label).cuda(non_blocking=True)
             embeddings, outputs = model(images)
             embeddings_augment, _ = model(images_augment)
-            loss = loss_func(embeddings, outputs, label, embeddings_augment)
+            loss = loss_func(embeddings, outputs, label, embeddings_augment, sample_weights / batch_size)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:

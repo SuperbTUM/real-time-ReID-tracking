@@ -190,10 +190,10 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augm
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
 
-| Metric           | Acc@1    | Acc@5    | Acc@10   | mAP      |
-|------------------|----------|----------|----------|----------|
-| Value            | `0.9276` | `0.9733` | `0.9816` | 0.7917   |
-| Strong Inference | 0.9276   | 0.9730   | 0.9813   | `0.7953` |
+| Metric           | Acc@1    | Acc@5  | Acc@10 | mAP      |
+|------------------|----------|--------|--------|----------|
+| Value            | `0.9290` | 0.9718 | 0.9816 | 0.7919   |
+| Strong Inference | 0.9290   | 0.9709 | 0.9813 | `0.7966` |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
 [Checkpoint](https://drive.google.com/file/d/1eyK1wFZullwdXDZkJ8fgpnOV4AiqDtfu/view?usp=drive_link)
