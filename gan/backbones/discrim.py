@@ -1,5 +1,28 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import math
+
+
+class BasicBlock(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(BasicBlock, self).__init__()
+        self.conv1 = nn.utils.spectral_norm(nn.Conv2d(in_channel, out_channel, 3, 1, 0))
+        self.conv2 = nn.utils.spectral_norm(nn.Conv2d(out_channel, out_channel, 3, 1, 0))
+        self.downsample_layer = nn.utils.spectral_norm(nn.Conv2d(in_channel, out_channel, 1, 1, 0))
+
+        nn.init.xavier_uniform_(self.conv1.weight.data, math.sqrt(2))
+        nn.init.xavier_uniform_(self.conv2.weight.data, math.sqrt(2))
+        nn.init.xavier_uniform_(self.downsample_layer.weight.data)
+
+    def forward(self, x):
+        branch = x
+        x = F.relu(self.conv1(x))
+        x = F.avg_pool2d(self.conv2(x), 2)
+        branch = F.avg_pool2d(branch, 2)
+        branch = self.downsample_layer(branch)
+        x += branch
+        return x
 
 
 class SelfAttention(nn.Module):
@@ -82,18 +105,11 @@ class Discriminator(nn.Module):
         else:
             if spectral_norm:
                 self.main = nn.Sequential(
-                    nn.Conv2d(nc, ndf, 4, (4, 2), 1, bias=False),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.utils.spectral_norm(nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False)),
-                    nn.BatchNorm2d(ndf * 2),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.utils.spectral_norm(nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False)),
-                    nn.BatchNorm2d(ndf * 4),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    SelfAttention(ndf * 4) if self_attn else nn.Identity(),
-                    nn.utils.spectral_norm(nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False)),
-                    nn.BatchNorm2d(ndf * 8),
-                    nn.LeakyReLU(0.2, inplace=True),
+                    BasicBlock(nc, ndf),
+                    BasicBlock(ndf, ndf * 2),
+                    BasicBlock(ndf * 2, ndf * 4),
+                    BasicBlock(ndf * 4, ndf * 8),
+                    nn.ReLU(True),
                 )
             else:
                 self.main = nn.Sequential(
