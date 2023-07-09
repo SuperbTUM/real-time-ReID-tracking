@@ -1,9 +1,6 @@
 [submodule "yolov8_tracking"]
 	path = yolov8_tracking
 	url = https://github.com/mikel-brostrom/yolov8_tracking.git
-[submodule "Person_reid_GAN_pytorch"]
-	path = Person-reid-GAN-pytorch
-	url = https://github.com/qiaoguan/Person-reid-GAN-pytorch.git
 [submodule "yolov5"]
 	path = yolov5
 	url = https://github.com/ultralytics/yolov5.git

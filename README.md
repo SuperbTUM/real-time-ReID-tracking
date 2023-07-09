@@ -1,8 +1,11 @@
+# Real-time ReID Tracking w/. Strong Feature Extractor & GAN
+
+
 ## TODOs
 
 - [x] To work with latest YoloV8-DeepOCSort implementation towards a new benchmark(important!) and apply necessary changes on current repository.
 
-- [ ] To debug and tune a VAE-(W)GAN model for Market1501.
+- [ ] To debug and tune a SPGAN model for synthetic image generation based on Market1501.
 
 - [x] To check if triplet loss w/. penalty is helpful in object re-identification/image retrieval/person search.
 
@@ -10,27 +13,13 @@
 
 - [x] To check whether background information is helpful with a hyperparameter to zoom, inspired by an ECCV18' paper.
 
-  
-
-## Update
-
-- Mar. 15, 2023, Add Swin-Transformer & ViT w/. Side Information and multi-scale features
-- Jan. 24, 2023, Add VAE-GAN/WGAN to support generating better synthetic images
-- Sep. 24, Support distributed training w/. PyTorch
-- Feb. 27, Consider class-imbalanced problem and build balanced dataset for Market-1501 training set
-- Feb. 22, Add Video-based training code and switch IoU to DIoU
-- Feb. 11, Add IBN and modified MIN_CONF to 0.5
-- Feb. 8, 2022 Reformat files
-- Feb. 4, 2022  Add some thoughts 
-- Jan. 3, 2022  Add more details
-- Dec. 20, 2021  First submit
-
 
 
 ## Introduction
 
-From Sort to OCSort, we become aware that deep feature extractor is crucial in both re-identification and multiple object tracking.
-The project combines Yolo detection, deep feature extractor for re-identification and MOT. The baseline is a Yolov5(now is YoloV8!) based DeepSort(now is DeepOCSort & StrongSort) algorithm.
+From Sort to OCSort, we are becoming aware that deep feature extractor is crucial in both re-identification and multiple object tracking.
+The project integrates Yolo detection, GAN, deep feature extractor for re-identification and MOT. 
+The baseline is a Yolov5(now is YoloV8!) based DeepSort(now is DeepOCSort & StrongSort) algorithm.
 Everything can be found [here](https://github.com/mikel-brostrom/yolo_tracking). 
 The author has updated the repository with import of fast-reid package.  
 The baseline backbone for re-identification is simply ResNet-18.
@@ -85,11 +74,6 @@ That means you need additional training on the GAN.
 We have a few pending selections: DC-GAN, VAE-GAN and VAE-WGANGP. 
 There are some references([ref1](https://arxiv.org/abs/1805.08318), [ref2](https://arxiv.org/abs/1802.05957)) for robust training.
 Unfortunately we don't have diffusion model at this moment.
-Explicitly, to train DC-GAN, please refer to the instructions on [this](https://github.com/qiaoguan/Person-reid-GAN-pytorch/tree/master/DCGAN-tensorflow). 
-Please pay attention that this is an out-of-fashion repo w/. certain file missing. 
-You can also refer to the `ipynb` file in [modification_gan](https://github.com/SuperbTUM/real-time-ReID-tracking/tree/main/modification_gan) folder. 
-Before that, make sure you properly execute `prepare.py`, `changeIndex.py` as well as the customized `re_index.py` before conducting training. 
-We trained the backbone with `Market-1501/bounding_box_train` plus generated images. You can refer to the script files in our repo. 
 
 In a general scenario, you can simply execute the training script:
 
@@ -281,8 +265,21 @@ IDF1: **59.31**
 
 
 
-## Thoughts After the Milestone
+## License
 
-Simple DCGAN may bring easy samples to make the network more likely to be overfit. SPGAN may be more recommended.
-We may pre-cluster (K-Means++) datasets and conduct synthetic image generation on each cluster with stronger GAN network (VAE-GAN). 
-We can even make the network partial-aware with separate attention on foreground and background.
+[MIT License](./LICENSE)
+
+
+## Citation
+
+If you find my work useful in your research, please consider citing:
+```
+@misc{SuperbTUM,
+  author = {Mingzhe Hu},
+  title = {real-time ReID Tracking},
+  year = {2023},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/SuperbTUM/real-time-ReID-tracking}},
+}
+```

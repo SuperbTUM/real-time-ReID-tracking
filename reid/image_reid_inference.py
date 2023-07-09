@@ -343,18 +343,18 @@ if __name__ == "__main__":
     gallery_embeddings2 = F.normalize(gallery_embeddings2, dim=1)
 
     gallery_embeddings = (gallery_embeddings1 + gallery_embeddings2) / 2.0
-    # from train_prepare import euclidean_dist
-    # from sklearn.cluster import DBSCAN
-    # dists = euclidean_dist(gallery_embeddings, gallery_embeddings)
-    # cluster_method = DBSCAN(eps=0.25, min_samples=6, metric="precomputed", n_jobs=-1)
-    # pseudo_labels = cluster_method.fit_predict(dists)
-    # indices_pseudo = (pseudo_labels != -1)
-    # num_labels = max(pseudo_labels) + 1
-    # gallery_seqs = gallery_seqs * dataset.num_gallery_cams * num_labels + gallery_cams * num_labels + pseudo_labels
+    from train_prepare import euclidean_dist
+    from sklearn.cluster import DBSCAN
+    dists = euclidean_dist(gallery_embeddings, gallery_embeddings)
+    cluster_method = DBSCAN(eps=0.25, min_samples=6, metric="precomputed", n_jobs=-1)
+    pseudo_labels = cluster_method.fit_predict(dists)
+    indices_pseudo = (pseudo_labels != -1)
+    num_labels = max(pseudo_labels) + 1
+    gallery_seqs = gallery_seqs * dataset.num_gallery_cams * num_labels + gallery_cams * num_labels + pseudo_labels
 
     gallery_embeddings = diminish_camera_bias(gallery_embeddings, gallery_cams)
-    # from inference_utils import smooth_tracklets
-    # gallery_embeddings = smooth_tracklets(gallery_embeddings, gallery_seqs, indices_pseudo)
+    from inference_utils import smooth_tracklets
+    gallery_embeddings = smooth_tracklets(gallery_embeddings, gallery_seqs, indices_pseudo)
 
     market_query = MarketDataset(dataset.query, transform_test, False)
     dataloader1 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
