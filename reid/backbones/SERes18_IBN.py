@@ -89,6 +89,9 @@ class IBN(nn.Module):
         self.IN = nn.InstanceNorm2d(self.half, affine=True)
         # self.BN = nn.BatchNorm2d(self.in_channels - self.half)
         self.BN = BatchRenormalization2D(self.in_channels - self.half) # experimental
+        # experimental
+        # self.IN.weight.data.fill_(1.)
+        # self.IN.bias.data.zero_()
 
     def forward(self, x):
         split = torch.split(x, self.half, 1)
@@ -137,13 +140,22 @@ class SEBasicBlock(nn.Module):
 
 
 class SEPreActBasicBlock(SEBasicBlock):
+    """I did not think of a proper pretrained weight to load
+    """
     def __init__(self, block, dim, renorm, ibn, se_attn, restride=False):
         super(SEPreActBasicBlock, self).__init__(block, dim, renorm, ibn, se_attn, restride)
+        in_planes = block.conv1.in_channels
+        if renorm:
+            block.bn1 = BatchRenormalization2D(in_planes)
+        if ibn:
+            block.bn1 = IBN(in_planes)
+        self.block_pre = block
 
     def forward(self, x):
         branch = x
         x = self.block_pre.relu(self.block_pre.bn1(x))
         if self.block_post:
+            # This is tricky in onnx inference as you need to disable conv fusion
             branch = self.block_post.conv(x)
         x = self.block_pre.conv1(x)
         x = self.block_pre.conv2(self.block_pre.relu(self.block_pre.bn2(x)))
