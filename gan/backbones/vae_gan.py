@@ -157,6 +157,7 @@ class Generator(nn.Module):
                 SelfAttention(ngf * 2) if self_attn else nn.Identity(),
                 BasicBlock(ngf * 2, ngf, num_class=num_class),
                 SelfAttention(ngf) if self_attn else nn.Identity(),
+                BasicBlock(ngf, ngf, num_class=num_class),
                 nn.ConvTranspose2d(ngf, nc, (6, 4), (4, 2), 1, bias=False), # ?
                 nn.Tanh()
             )
