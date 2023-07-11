@@ -9,8 +9,8 @@ from .categorical_conditional_bn import CategoricalConditionalBatchNorm2d
 class BasicBlock(nn.Module):
     def __init__(self, in_channel, out_channel, num_class=0, upsample=True):
         super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_channel, out_channel, 3, 1, 0)
-        self.conv2 = nn.Conv2d(out_channel, out_channel, 3, 1, 0)
+        self.conv1 = nn.Conv2d(in_channel, out_channel, 3, 1, 1)
+        self.conv2 = nn.Conv2d(out_channel, out_channel, 3, 1, 1)
         if num_class:
             self.bn1 = CategoricalConditionalBatchNorm2d(num_class, in_channel)
             self.bn2 = CategoricalConditionalBatchNorm2d(num_class, out_channel)

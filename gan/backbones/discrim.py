@@ -7,8 +7,8 @@ import math
 class BasicBlock(nn.Module):
     def __init__(self, in_channel, out_channel):
         super(BasicBlock, self).__init__()
-        self.conv1 = nn.utils.spectral_norm(nn.Conv2d(in_channel, out_channel, 3, 1, 0))
-        self.conv2 = nn.utils.spectral_norm(nn.Conv2d(out_channel, out_channel, 3, 1, 0))
+        self.conv1 = nn.utils.spectral_norm(nn.Conv2d(in_channel, out_channel, 3, 1, 1))
+        self.conv2 = nn.utils.spectral_norm(nn.Conv2d(out_channel, out_channel, 3, 1, 1))
         self.downsample_layer = nn.utils.spectral_norm(nn.Conv2d(in_channel, out_channel, 1, 1, 0))
 
         nn.init.xavier_uniform_(self.conv1.weight.data, math.sqrt(2))
@@ -133,31 +133,31 @@ class Discriminator(nn.Module):
                     # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
                 )
         self.extension = nn.Sequential(
-            nn.Linear(ndf*8*4*4, 512),
+            nn.Linear(ndf*8, 512),
             nn.BatchNorm1d(512, momentum=0.9),
             nn.LeakyReLU(0.2, True),
             nn.Linear(512, 1)
         )
         self.attn = SelfAttention(ndf * 8)
-        self.getDis = nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
+        self.getDis = nn.Linear(ndf * 8, 1, bias=False)#nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
         self.sigmoid = nn.Sigmoid()
         self.VAE = VAE
         self.Wassertein = Wassertein
         self.self_attn = self_attn
 
     def forward(self, input):
-        assert input.size(2) == 128 and input.size(3) == 64
         bs = input.size(0)
         main = self.main(input)
+        if self.self_attn:
+            main = self.attn(main)
+        main = F.adaptive_avg_pool2d(main, 1)
+        main = main.view(bs, -1)
         if self.VAE:
-            main = main.view(bs, -1)
             main1 = main
             if self.Wassertein:
                 return self.extension(main), main1
             return self.sigmoid(self.extension(main)), main1
         if self.Wassertein:
             return self.getDis(main)
-        if self.self_attn:
-            main = self.attn(main)
         get_dis = self.getDis(main)
         return self.sigmoid(get_dis)
