@@ -7,8 +7,8 @@ import math
 class BasicBlock(nn.Module):
     def __init__(self, in_channel, out_channel):
         super(BasicBlock, self).__init__()
-        self.conv1 = nn.utils.spectral_norm(nn.Conv2d(in_channel, out_channel, 3, 1, 1))
-        self.conv2 = nn.utils.spectral_norm(nn.Conv2d(out_channel, out_channel, 3, 1, 1))
+        self.conv1 = nn.utils.spectral_norm(nn.Conv2d(in_channel, in_channel, 3, 1, 1))
+        self.conv2 = nn.utils.spectral_norm(nn.Conv2d(in_channel, out_channel, 3, 1, 1))
         self.downsample_layer = nn.utils.spectral_norm(nn.Conv2d(in_channel, out_channel, 1, 1, 0))
 
         nn.init.xavier_uniform_(self.conv1.weight.data, math.sqrt(2))

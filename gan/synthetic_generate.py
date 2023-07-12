@@ -32,8 +32,8 @@ def load_model(nz,
     # criterion = nn.BCEWithLogitsLoss()
     criterion = nn.BCELoss()
     # criterion = LabelSmoothing()
-    optimizerG = torch.optim.Adam(modelG.parameters(), lr=lr, betas=(0.5, 0.999))
-    optimizerD = torch.optim.Adam(modelD.parameters(), lr=lr, betas=(0.5, 0.999))
+    optimizerG = torch.optim.Adam(modelG.parameters(), lr=lr, betas=(0., 0.999))
+    optimizerD = torch.optim.Adam(modelD.parameters(), lr=lr, betas=(0., 0.999))
     lr_schedulerG = torch.optim.lr_scheduler.StepLR(optimizerG, 1000, 0.5)
     lr_schedulerD = torch.optim.lr_scheduler.StepLR(optimizerD, 1000, 0.75)
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD
@@ -265,7 +265,7 @@ def train_gan(raw_dataset,
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
                 # Train with all-real batch
-                netD.zero_grad()
+                optimizerD.zero_grad()
                 # Format batch
                 real_cpu = data[0].to(device)
                 b_size = real_cpu.size(0)
@@ -282,9 +282,9 @@ def train_gan(raw_dataset,
                 # Generate batch of latent vectors
                 noise = torch.randn(b_size, nz, 1, 1, device=device)
                 # Generate fake image batch with G
-                fake = netG(noise)
+                fake = netG(noise).detach()
                 # Classify all fake batch with D
-                output = netD(fake.detach()).view(-1)
+                output = netD(fake).view(-1)
                 # Calculate D's loss on the all-fake batch
                 errD_fake = criterion(output, Fake_label)
                 # Calculate the gradients for this batch, accumulated (summed) with previous gradients
@@ -298,9 +298,11 @@ def train_gan(raw_dataset,
                 ############################
                 # (2) Update G network: maximize log(D(G(z)))
                 ###########################
-                netG.zero_grad()
+                optimizerG.zero_grad()
+                gen_z = torch.randn(b_size, nz, 1, 1, device=device)
+                gen_imgs = netG(gen_z)
                 # Since we just updated D, perform another forward pass of all-fake batch through D
-                output = netD(fake).view(-1)
+                output = netD(gen_imgs).view(-1)
                 # Calculate G's loss based on this output
                 errG = criterion(output, Valid_label)
                 # Calculate gradients for G

@@ -7,7 +7,7 @@ from .categorical_conditional_bn import CategoricalConditionalBatchNorm2d
 
 
 class BasicBlock(nn.Module):
-    def __init__(self, in_channel, out_channel, num_class=0, upsample=True):
+    def __init__(self, in_channel, out_channel, num_class=0, upsample=True, ratio=(2, 2)):
         super(BasicBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channel, out_channel, 3, 1, 1)
         self.conv2 = nn.Conv2d(out_channel, out_channel, 3, 1, 1)
@@ -23,11 +23,11 @@ class BasicBlock(nn.Module):
         nn.init.xavier_uniform_(self.conv2.weight.data, gain=math.sqrt(2))
         nn.init.xavier_uniform_(self.downsample_layer.weight.data)
         self.upsample = upsample
+        self.ratio = ratio
 
-    @staticmethod
-    def _upsample(x):
+    def _upsample(self, x):
         h, w = x.size()[2:]
-        return F.interpolate(x, size=(h*2, w*2), mode="bilinear")
+        return F.interpolate(x, size=(h*self.ratio[0], w*self.ratio[1]), mode="bilinear")
 
     def forward(self, x, y=None, **kwargs):
         branch = x
@@ -146,19 +146,24 @@ class VAE(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, ngpu=1, nz=100, ngf=64, nc=3, spectral_norm=False, self_attn=False, num_class=0):
+    def __init__(self, ngpu=1, nz=100, ngf=64, nc=3, spectral_norm=False, self_attn=False, num_class=0, bottom_width=4):
         super(Generator, self).__init__()
         self.ngpu = ngpu
         if spectral_norm:
             self.main = nn.Sequential(
-                BasicBlock(nz, ngf * 8, num_class=num_class),
-                BasicBlock(ngf * 8, ngf * 4, num_class=num_class),
-                BasicBlock(ngf * 4, ngf * 2, num_class=num_class),
-                SelfAttention(ngf * 2) if self_attn else nn.Identity(),
-                BasicBlock(ngf * 2, ngf, num_class=num_class),
+                nn.Flatten(),
+                nn.Linear(nz, (bottom_width ** 2) * ngf),
+                nn.Unflatten(1, (ngf, bottom_width, bottom_width)),
+                BasicBlock(ngf, ngf, num_class=num_class),
+                BasicBlock(ngf, ngf, num_class=num_class),
+                BasicBlock(ngf, ngf, num_class=num_class),
                 SelfAttention(ngf) if self_attn else nn.Identity(),
                 BasicBlock(ngf, ngf, num_class=num_class),
-                nn.ConvTranspose2d(ngf, nc, (6, 4), (4, 2), 1, bias=False), # ?
+                SelfAttention(ngf) if self_attn else nn.Identity(),
+                BasicBlock(ngf, ngf, num_class=num_class, ratio=(2, 1)),
+                nn.BatchNorm2d(ngf),
+                nn.ReLU(True),
+                nn.Conv2d(ngf, nc, 3, 1, 1),
                 nn.Tanh()
             )
         else:
