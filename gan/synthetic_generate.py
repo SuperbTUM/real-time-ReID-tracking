@@ -29,23 +29,35 @@ def load_model(nz,
                self_attn=False):
     modelG = Generator(nz=nz, ngf=ngf, spectral_norm=spectral_norm, self_attn=self_attn).to(device)
     modelD = Discriminator(ndf=ndf, spectral_norm=spectral_norm, self_attn=self_attn).to(device)
-    if not spectral_norm:
-        modelG.apply(weights_init)
-        modelD.apply(weights_init)
+    modelG.apply(weights_init)
+    modelD.apply(weights_init)
     # criterion = nn.BCEWithLogitsLoss()
     criterion = nn.BCELoss()
     # criterion = LabelSmoothing()
     optimizerG = torch.optim.Adam(modelG.parameters(), lr=lr, betas=(0., 0.9))
     optimizerD = torch.optim.Adam(modelD.parameters(), lr=lr, betas=(0., 0.9))
-    lr_schedulerG = torch.optim.lr_scheduler.StepLR(optimizerG, 1000, 0.5)
-    lr_schedulerD = torch.optim.lr_scheduler.StepLR(optimizerD, 1000, 0.75)
+    lr_schedulerG = torch.optim.lr_scheduler.StepLR(optimizerG, 5, 0.5)
+    lr_schedulerD = torch.optim.lr_scheduler.StepLR(optimizerD, 5, 0.75)
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD
+
+
+class AddGaussianNoise(object):
+    def __init__(self, mean=0., std=1.):
+        self.std = std
+        self.mean = mean
+
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
 
 
 transform = transforms.Compose([
     transforms.Resize((128, 64)),
     transforms.ToTensor(),
     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+    AddGaussianNoise(std=0.1),
 ])
 
 
@@ -297,6 +309,8 @@ def train_gan(raw_dataset,
         emaG = EMA(netG, 0.999)
         emaG.register()
         dataloader = load_dataset(raw_dataset, batch_size, g)
+        netG.train()
+        netD.train()
         print("Starting Training Loop for group{}...".format(g))
         # For each epoch
         for epoch in range(epochs):
@@ -361,6 +375,8 @@ def train_gan(raw_dataset,
                 D_losses.append(errD.item())
 
                 iters += 1
+            lr_schedulerG.step()
+            lr_schedulerD.step()
         if not os.path.exists("checkpoint"):
             os.mkdir("checkpoint")
         netG.eval()
