@@ -139,7 +139,10 @@ class Discriminator(nn.Module):
             nn.Linear(512, 1)
         )
         self.attn = SelfAttention(ndf * 8)
-        self.getDis = nn.Linear(ndf * 8, 1, bias=False)#nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
+        if spectral_norm:
+            self.getDis = nn.utils.spectral_norm(nn.Linear(ndf * 8, 1, bias=False))#nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
+        else:
+            self.getDis = nn.Linear(ndf * 8, 1, bias=False)
         self.sigmoid = nn.Sigmoid()
         self.VAE = VAE
         self.Wassertein = Wassertein

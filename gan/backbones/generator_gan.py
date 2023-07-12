@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .discrim import SelfAttention
+from .discriminator_gan import SelfAttention
 from .categorical_conditional_bn import CategoricalConditionalBatchNorm2d
 
 
@@ -50,15 +50,6 @@ class BasicBlock(nn.Module):
         return x
 
 
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-
-
 # try with VAE-GAN
 class VAE(nn.Module):
     def __init__(self, spectral_norm=False, self_attn=False, device="cuda"):
@@ -66,13 +57,10 @@ class VAE(nn.Module):
         if spectral_norm:
             self.encoder = nn.Sequential(
                 nn.utils.spectral_norm(nn.Conv2d(3, 64, 5, stride=2, padding=2, bias=False)),
-                # nn.BatchNorm2d(64, momentum=0.9),
                 nn.ReLU(True),
                 nn.utils.spectral_norm(nn.Conv2d(64, 128, 5, stride=2, padding=2, bias=False)),
-                # nn.BatchNorm2d(128, momentum=0.9),
                 nn.ReLU(True),
                 nn.utils.spectral_norm(nn.Conv2d(128, 256, 5, stride=2, padding=2, bias=False)),
-                # nn.BatchNorm2d(256, momentum=0.9),
                 nn.LeakyReLU(0.2),
                 nn.Flatten(),
                 nn.Linear(256*16*8, 2048), # Is it necessary?
@@ -105,12 +93,9 @@ class VAE(nn.Module):
                 nn.LeakyReLU(0.2),
                 nn.Unflatten(1, torch.Size([256, 16, 8])),
                 nn.utils.spectral_norm(nn.ConvTranspose2d(256, 256, 6, stride=2, padding=2, bias=False), dim=1),
-                # nn.BatchNorm2d(256, momentum=0.9),
                 nn.utils.spectral_norm(nn.ConvTranspose2d(256, 128, 6, stride=2, padding=2, bias=False), dim=1),
-                # nn.BatchNorm2d(128, momentum=0.9),
                 SelfAttention(128) if self_attn else nn.Identity(),
                 nn.utils.spectral_norm(nn.ConvTranspose2d(128, 32, 6, stride=2, padding=2, bias=False), dim=1),
-                # nn.BatchNorm2d(32, momentum=0.9),
                 SelfAttention(32) if self_attn else nn.Identity(),
                 nn.utils.spectral_norm(nn.ConvTranspose2d(32, 3, 5, stride=1, padding=2), dim=1),
                 nn.Tanh()
@@ -146,21 +131,20 @@ class VAE(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, ngpu=1, nz=100, ngf=64, nc=3, spectral_norm=False, self_attn=False, num_class=0, bottom_width=4):
+    def __init__(self, nz=100, ngf=64, nc=3, spectral_norm=False, self_attn=False, num_class=0, bottom_width=4):
         super(Generator, self).__init__()
-        self.ngpu = ngpu
         if spectral_norm:
             self.main = nn.Sequential(
                 nn.Flatten(),
-                nn.Linear(nz, (bottom_width ** 2) * ngf),
-                nn.Unflatten(1, (ngf, bottom_width, bottom_width)),
+                nn.Linear(nz, (bottom_width ** 2 >> 1) * ngf),
+                nn.Unflatten(1, (ngf, bottom_width, bottom_width >> 1)),
                 BasicBlock(ngf, ngf, num_class=num_class),
                 BasicBlock(ngf, ngf, num_class=num_class),
                 BasicBlock(ngf, ngf, num_class=num_class),
                 SelfAttention(ngf) if self_attn else nn.Identity(),
                 BasicBlock(ngf, ngf, num_class=num_class),
                 SelfAttention(ngf) if self_attn else nn.Identity(),
-                BasicBlock(ngf, ngf, num_class=num_class, ratio=(2, 1)),
+                BasicBlock(ngf, ngf, num_class=num_class),
                 nn.BatchNorm2d(ngf),
                 nn.ReLU(True),
                 nn.Conv2d(ngf, nc, 3, 1, 1),
