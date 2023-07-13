@@ -297,7 +297,7 @@ def train_gan(raw_dataset,
     if checkpoint:
         netG.load_state_dict(torch.load(checkpoint))
     # Lists to keep track of progress
-    real_label = 1.
+    real_label = 0.9
     fake_label = 0.
     Valid_label = torch.full((batch_size,), real_label, dtype=torch.float, device=device)
     Fake_label = torch.full((batch_size,), fake_label, dtype=torch.float, device=device)
@@ -326,7 +326,7 @@ def train_gan(raw_dataset,
                 # Forward pass real batch through D
                 output = netD(real_images).view(-1)
                 # Calculate loss on all-real batch
-                if iters % 3 == 2:
+                if iters % 5 == 2:
                     errD_real = criterion(output, Fake_label)
                 else:
                     errD_real = criterion(output, Valid_label)
@@ -342,7 +342,7 @@ def train_gan(raw_dataset,
                 # Classify all fake batch with D
                 output = netD(fake).view(-1)
                 # Calculate D's loss on the all-fake batch
-                if iters % 3 == 2:
+                if iters % 5 == 2:
                     errD_fake = criterion(output, Fake_label)
                 else:
                     errD_fake = criterion(output, Valid_label)
