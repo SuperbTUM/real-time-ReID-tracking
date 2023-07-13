@@ -3,7 +3,7 @@ __author__ = "Mingzhe Hu"
 import torch
 
 torch.autograd.set_detect_anomaly(True)
-import torchvision.utils as vutils
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from torchvision import transforms
 import os
@@ -326,7 +326,11 @@ def train_gan(raw_dataset,
                 # Forward pass real batch through D
                 output = netD(real_images).view(-1)
                 # Calculate loss on all-real batch
-                errD_real = criterion(output, Valid_label)
+                if iters % 3 == 2:
+                    errD_real = criterion(output, Fake_label)
+                else:
+                    errD_real = criterion(output, Valid_label)
+                # errD_real = torch.mean(F.relu(1 - output))
                 # Calculate gradients for D in backward pass
                 D_x = output.mean().item()
 
@@ -338,7 +342,11 @@ def train_gan(raw_dataset,
                 # Classify all fake batch with D
                 output = netD(fake).view(-1)
                 # Calculate D's loss on the all-fake batch
-                errD_fake = criterion(output, Fake_label)
+                if iters % 3 == 2:
+                    errD_fake = criterion(output, Fake_label)
+                else:
+                    errD_fake = criterion(output, Valid_label)
+                # errD_fake = torch.mean(F.relu(1. + output))
                 # Calculate the gradients for this batch, accumulated (summed) with previous gradients
                 D_G_z1 = output.mean().item()
                 # Compute error of D as sum over the fake and the real batches
@@ -347,32 +355,32 @@ def train_gan(raw_dataset,
                 # Update D
                 optimizerD.step()
 
-                ############################
-                # (2) Update G network: maximize log(D(G(z)))
-                ###########################
-                optimizerG.zero_grad()
-                gen_z = torch.randn(batch_size, nz, 1, 1, device=device)
-                gen_imgs = netG(gen_z)
-                # Since we just updated D, perform another forward pass of all-fake batch through D
-                output = netD(gen_imgs).view(-1)
-                # Calculate G's loss based on this output
-                errG = criterion(output, Valid_label)
-                # Calculate gradients for G
-                errG.backward()
-                D_G_z2 = output.mean().item()
-                # Update G
-                optimizerG.step()
-                emaG.update()
+                if iters % 3 == 2:
+                    ############################
+                    # (2) Update G network: maximize log(D(G(z)))
+                    ###########################
+                    optimizerG.zero_grad()
+                    gen_z = torch.randn(batch_size, nz, 1, 1, device=device)
+                    gen_imgs = netG(gen_z)
+                    # Since we just updated D, perform another forward pass of all-fake batch through D
+                    output = netD(gen_imgs).view(-1)
+                    # Calculate G's loss based on this output
+                    errG = criterion(output, Valid_label)
+                    # Calculate gradients for G
+                    errG.backward()
+                    D_G_z2 = output.mean().item()
+                    # Update G
+                    optimizerG.step()
+                    emaG.update()
 
-                # Output training stats
-                if i % 50 == 0:
-                    print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
-                          % (epoch, epochs, i, len(dataloader),
-                             errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
-
-                # Save Losses for plotting later
-                G_losses.append(errG.item())
-                D_losses.append(errD.item())
+                    # Save Losses for plotting later
+                    G_losses.append(errG.item())
+                    D_losses.append(errD.item())
+                    # Output training stats
+                    if i % 50 <= 1:
+                        print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
+                              % (epoch, epochs, i, len(dataloader),
+                                 errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
 
                 iters += 1
             lr_schedulerG.step()
