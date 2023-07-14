@@ -106,9 +106,9 @@ class Discriminator(nn.Module):
             if spectral_norm:
                 self.main = nn.Sequential(
                     BasicBlock(nc, ndf),
-                    BasicBlock(ndf, ndf),
-                    BasicBlock(ndf, ndf),
-                    BasicBlock(ndf, ndf),
+                    BasicBlock(ndf, ndf * 2),
+                    BasicBlock(ndf * 2, ndf * 4),
+                    BasicBlock(ndf * 4, ndf * 8),
                     nn.ReLU(True),
                 )
             else:
@@ -140,9 +140,9 @@ class Discriminator(nn.Module):
         )
         self.attn = SelfAttention(ndf * 8)
         if spectral_norm:
-            self.getDis = nn.utils.spectral_norm(nn.Linear(ndf, 1, bias=False))#nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
+            self.getDis = nn.utils.spectral_norm(nn.Linear(ndf * 8, 1, bias=False))#nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
         else:
-            self.getDis = nn.Linear(ndf, 1, bias=False)
+            self.getDis = nn.Linear(ndf * 8, 1, bias=False)
         self.sigmoid = nn.Sigmoid()
         self.VAE = VAE
         self.Wassertein = Wassertein
