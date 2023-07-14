@@ -26,8 +26,10 @@ class BasicBlock(nn.Module):
         self.ratio = ratio
 
     def _upsample(self, x):
+        # c = x.size()[1]
+        # nn.ConvTranspose2d(c, c, 4, 2, 1, bias=False)
         h, w = x.size()[2:]
-        return F.interpolate(x, size=(h*self.ratio[0], w*self.ratio[1]), mode="bilinear")
+        return F.interpolate(x, size=(h*self.ratio[0], w*self.ratio[1]), mode="bicubic")
 
     def forward(self, x, y=None, **kwargs):
         branch = x
@@ -35,7 +37,7 @@ class BasicBlock(nn.Module):
             x = self.bn1(x, y, **kwargs)
         else:
             x = self.bn1(x)
-        x = F.relu(x)
+        x = F.leaky_relu(x, 0.2)
         if self.upsample:
             x = self._upsample(x)
             branch = self._upsample(branch)
@@ -44,7 +46,7 @@ class BasicBlock(nn.Module):
             x = self.bn2(x, y, **kwargs)
         else:
             x = self.bn2(x)
-        x = self.conv2(F.relu(x))
+        x = self.conv2(F.leaky_relu(x, 0.2))
         branch = self.downsample_layer(branch)
         x += branch
         return x

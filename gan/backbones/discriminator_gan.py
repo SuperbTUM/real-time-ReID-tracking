@@ -17,7 +17,7 @@ class BasicBlock(nn.Module):
 
     def forward(self, x):
         branch = x
-        x = F.relu(self.conv1(x))
+        x = F.leaky_relu(self.conv1(x), 0.2)
         x = F.avg_pool2d(self.conv2(x), 2)
         branch = F.avg_pool2d(branch, 2)
         branch = self.downsample_layer(branch)

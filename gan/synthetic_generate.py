@@ -298,7 +298,7 @@ def train_gan(raw_dataset,
         netG.load_state_dict(torch.load(checkpoint))
     # Lists to keep track of progress
     real_label = 0.9
-    fake_label = 0.
+    fake_label = (1 - real_label)
     Valid_label = torch.full((batch_size,), real_label, dtype=torch.float, device=device)
     Fake_label = torch.full((batch_size,), fake_label, dtype=torch.float, device=device)
 
@@ -311,18 +311,21 @@ def train_gan(raw_dataset,
         dataloader = load_dataset(raw_dataset, batch_size, g)
         netG.train()
         netD.train()
+        errG = torch.tensor(1.)
         print("Starting Training Loop for group{}...".format(g))
         # For each epoch
         for epoch in range(epochs):
             # For each batch in the dataloader
-            for i, data in enumerate(dataloader, 0):
+            iterator = tqdm(dataloader)
+            i = 0
+            for img, label in iterator:
                 ############################
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
                 # Train with all-real batch
                 optimizerD.zero_grad()
                 # Format batch
-                real_images = data[0].to(device)
+                real_images = img.to(device)
                 # Forward pass real batch through D
                 output = netD(real_images).view(-1)
                 # Calculate loss on all-real batch
@@ -377,11 +380,10 @@ def train_gan(raw_dataset,
                     G_losses.append(errG.item())
                     D_losses.append(errD.item())
                     # Output training stats
-                    if i % 50 <= 1:
-                        print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
-                              % (epoch, epochs, i, len(dataloader),
-                                 errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
-
+                iterator.set_description('[%d/%d][%d/%d], Loss_D: %.4f, Loss_G: %.4f'
+                                         % (epoch, epochs, i, len(dataloader),
+                                            errD.item(), errG.item()))
+                i += 1
                 iters += 1
             lr_schedulerG.step()
             lr_schedulerD.step()
@@ -427,7 +429,7 @@ def generate(modelG_checkpoint,
     if modelG_checkpoint and os.path.exists(modelG_checkpoint):
         modelG.load_state_dict(torch.load(modelG_checkpoint), strict=False)
     # experimental
-    modelG = torch.jit.script(modelG)
+    # modelG = torch.jit.script(modelG)
     if not os.path.exists("synthetic_images/"):
         os.mkdir("synthetic_images/")
     for i in range(params.instances):
@@ -500,4 +502,4 @@ if __name__ == "__main__":
                                 self_attn=params.self_attn)
 
         emaG = emaGs[0]
-    generate(None, netG, params.nz, emaG=emaG)
+    generate("checkpoint/Generate_model_trained_group0.pt", netG, params.nz, emaG=emaG)
