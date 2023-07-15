@@ -43,9 +43,12 @@ class FocalLoss(nn.Module):
         focal_loss = (1 - pt) ** self.gamma * ce_loss * self.alpha[targets]
         if self.alpha is not None and self.epsilon != 0.:
             # epsilon2 = 0.2 in polyloss is still tricky
-            poly_loss = focal_loss + (self.epsilon * torch.pow(1 - pt, self.gamma + 1) + 0.2 * torch.pow(1 - pt, self.gamma + 2)) * self.alpha[targets]
+            poly_loss = focal_loss + (
+                        self.epsilon * torch.pow(1 - pt, self.gamma + 1) + 0.2 * torch.pow(1 - pt, self.gamma + 2)) * \
+                        self.alpha[targets]
         elif self.epsilon != 0.:
-            poly_loss = focal_loss + self.epsilon * torch.pow(1 - pt, self.gamma + 1) + 0.2 * torch.pow(1 - pt, self.gamma + 2)
+            poly_loss = focal_loss + self.epsilon * torch.pow(1 - pt, self.gamma + 1) + 0.2 * torch.pow(1 - pt,
+                                                                                                        self.gamma + 2)
         else:
             poly_loss = focal_loss
         return poly_loss.mean()
@@ -110,7 +113,8 @@ class CenterLoss(nn.Module):
         ckpt_centers = torch.load(self.ckpt)
         ckpt_classes = ckpt_centers.size(0)
         self.centers = nn.Parameter(torch.cat((ckpt_centers,
-                                               torch.randn(self.num_classes - ckpt_classes, self.feat_dim, device="cuda")),
+                                               torch.randn(self.num_classes - ckpt_classes, self.feat_dim,
+                                                           device="cuda")),
                                               dim=0))
 
     def save(self):
@@ -515,11 +519,14 @@ class HybridLoss(nn.Module):
         targets: ground truth labels
         """
         smooth_loss = self.smooth(outputs, targets)
+        circle_loss = self.circle(F.normalize(outputs, p=2, dim=1), targets)
         # triplet_loss = self.triplet(embeddings, targets)
         triplet_loss = self.triplet(embeddings, targets, embeddings_augment)
         center_loss = self.center(embeddings, targets, embeddings_augment)
-        circle_loss = self.circle(F.normalize(embeddings, p=2, dim=1), targets)
-        return smooth_loss + triplet_loss + self.lamda * center_loss + self.circle_factor * circle_loss
+        return (1. - self.circle_factor) * smooth_loss + \
+               triplet_loss + \
+               self.lamda * center_loss + \
+               self.circle_factor * circle_loss
 
 
 class HybridLossWeighted(nn.Module):
@@ -551,11 +558,14 @@ class HybridLossWeighted(nn.Module):
         targets: ground truth labels
         """
         smooth_loss = self.smooth(outputs, targets)
+        circle_loss = self.circle(F.normalize(outputs, p=2, dim=1), targets)
         # triplet_loss = self.triplet(embeddings, targets)
         triplet_loss = self.triplet(embeddings, targets, embeddings_augment, weights)
         center_loss = self.center(embeddings, targets, embeddings_augment, weights)
-        circle_loss = self.circle(F.normalize(embeddings, p=2, dim=1), targets)
-        return smooth_loss + triplet_loss + self.lamda * center_loss + self.circle_factor * circle_loss
+        return (1. - self.circle_factor) * smooth_loss + \
+               triplet_loss + \
+               self.lamda * center_loss + \
+               self.circle_factor * circle_loss
 
 
 class RepreLoss(nn.Module):
@@ -566,7 +576,8 @@ class RepreLoss(nn.Module):
         self.lamda = lamda
 
     def forward(self, embeddings, targets, weights):
-        return self.triplet(embeddings, targets, weights) + self.lamda * self.center(embeddings, targets, weights=weights)
+        return self.triplet(embeddings, targets, weights) + self.lamda * self.center(embeddings, targets,
+                                                                                     weights=weights)
 
 
 class CircleLoss(nn.Module):
@@ -589,8 +600,30 @@ class CircleLoss(nn.Module):
         negative_matrix = negative_matrix.view(-1)
         return similarity_matrix[positive_matrix], similarity_matrix[negative_matrix]
 
-    def forward(self, normed_feature: Tensor, label: Tensor) -> Tensor:
+    def get_logits(self, normed_feature, label):
+        sp, sn = self.convert_label_to_similarity(normed_feature, label)
+        ap = torch.clamp_min(- sp.detach() + 1 + self.m, min=0.)
+        an = torch.clamp_min(sn.detach() + self.m, min=0.)
 
+        delta_p = 1 - self.m
+        delta_n = self.m
+
+        logit_p = - ap * (sp - delta_p) * self.gamma
+        logit_n = an * (sn - delta_n) * self.gamma
+
+        label = F.one_hot(label, num_classes=normed_feature.size(1))
+        pred_class_logits = label * logit_p + (1.0 - label) * logit_n
+        return pred_class_logits
+
+    def forward_focalize(self, normed_feature, label):
+        class_logits = self.get_logits(normed_feature, label)
+        ce_loss = F.cross_entropy(class_logits, label, reduction="none", label_smoothing=0.1)
+        pt = torch.exp(-ce_loss)
+        # mean over the batch
+        focal_loss = (1 - pt) ** self.gamma * ce_loss
+        return focal_loss
+
+    def forward(self, normed_feature: Tensor, label: Tensor) -> Tensor:
         sp, sn = self.convert_label_to_similarity(normed_feature, label)
         ap = torch.clamp_min(- sp.detach() + 1 + self.m, min=0.)
         an = torch.clamp_min(sn.detach() + self.m, min=0.)
