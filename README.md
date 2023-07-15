@@ -177,7 +177,8 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)
 | Metric           | Acc@1    | Acc@5  | Acc@10 | mAP      |
 |------------------|----------|--------|--------|----------|
 | Value            | `0.9290` | 0.9718 | 0.9816 | 0.7919   |
-| Strong Inference | 0.9290   | 0.9709 | 0.9813 | `0.7966` |
+| Strong Inference | `0.9290` | 0.9709 | 0.9813 | 0.7966   |
+| Jaccard Distance | 0.9157   | 0.9694 | 0.9798 | `0.8184` |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
 [Checkpoint](https://drive.google.com/file/d/1eyK1wFZullwdXDZkJ8fgpnOV4AiqDtfu/view?usp=drive_link)
