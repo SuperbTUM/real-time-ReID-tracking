@@ -235,7 +235,7 @@ if __name__ == "__main__":
         ])
         model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
     elif params.backbone in ("seres18", "cares18"):
-        transform_test = transforms.Compose([transforms.Resize((256, 128)),
+        transform_test = transforms.Compose([transforms.Resize((256, 128)), # interpolation=3
                                              transforms.ToTensor(),
                                              transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                                                   std=(0.229, 0.224, 0.225)),

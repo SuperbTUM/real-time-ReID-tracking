@@ -385,7 +385,7 @@ def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side
     for i, label in enumerate(labels):
         if label != -1:
             pseudo_data.append((
-                dataset.gallery[i][0],
+                dataset_test[i][0],
                 label + dataset.num_train_pids,
                 cams[i].item(),
                 seqs[i].item()
@@ -398,7 +398,7 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
     model.train()
     model.needs_norm = False
     model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False)
-    nn.init.normal_(model.module.classifier[-1], std=0.001)
+    nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
@@ -494,7 +494,7 @@ if __name__ == "__main__":
     if params.backbone in ("plr_osnet", "seres18", "baseline", "cares18"):
         # No need for cross-domain retrain
         transform_train = transforms.Compose([
-            transforms.Resize((256, 128)),
+            transforms.Resize((256, 128)), # interpolation=3
             transforms.RandomHorizontalFlip(),
             transforms.Pad(10),
             transforms.RandomCrop((256, 128)),
