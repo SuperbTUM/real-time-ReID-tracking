@@ -1,5 +1,5 @@
 # Real-time ReID Tracking w/. Strong Feature Extractor & GAN
-
+[Slides](https://docs.google.com/presentation/d/1cs5wEIcJWV5H6F5xnWDV0ikYf-uWuFvZj3byTBs4sMQ/edit#slide=id.p), Manuscript(Coming Soon...)
 
 ## TODOs
 
@@ -54,12 +54,12 @@ conda install -c pytorch faiss-cpu
 
 ## Datasets
 
-The current datasets are a bit outdated. You are advised to use MOT16, MOT20 instead.
-Now we primarily use MOT16 evaluation as benchmark and Market1501 to pre-train our re-id network.
+The current datasets are a bit outdated. You are advised to use MOT17, MOT20 instead.
+Now we primarily use MOT16 evaluation as benchmark and Market1501/DukeMTMC to pre-train our re-id network.
 
-Videos: [MOT16](https://motchallenge.net/data/MOT16/) => This dataset could be evaluated with completed bash scripts.
+Videos: [MOT16](https://motchallenge.net/data/MOT16/)
 
-Person gallery: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eEozWG9COHM/view?resourcekey=0-8nyl7K9_x37HlQm34MmrYQ) => We use the training set for training.
+Person gallery: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eEozWG9COHM/view?resourcekey=0-8nyl7K9_x37HlQm34MmrYQ), [DukeMTMC-reID](https://drive.google.com/file/d/1jjE85dRCMOgRtvJ5RQV9-Afs-2_5dY3O/view)
 
 
 
@@ -145,7 +145,7 @@ The speed is acquired with `time` package after the synchronization of CUDA.
 
 **Re-identification**
 
-More can be found on [wiki](https://github.com/SuperbTUM/real-time-ReID-tracking/wiki).
+Dataset: Market1501. More can be found on [wiki](https://github.com/SuperbTUM/real-time-ReID-tracking/wiki).
 
 Model Size Comparison
 

@@ -112,15 +112,17 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[40, 70], gamma=0.1)# WarmupMultiStepLR(optimizer, [10, 30])
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        optimizer = torch.optim.Adam(model.parameters(), lr=3.5e-4, weight_decay=5e-4)
     else:
         custom_sampler = None
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[40, 70],
+                                     gamma=0.1)  # WarmupMultiStepLR(optimizer, [10, 30])
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
                              pin_memory=True, sampler=custom_sampler)
     if accelerate:

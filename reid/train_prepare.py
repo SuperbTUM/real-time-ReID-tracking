@@ -326,12 +326,13 @@ class TripletBeta(TripletLoss):
     def __init__(self, margin=0.3, alpha=0.4, smooth=False, sigma=1.0, reduction="mean"):
         super(TripletBeta, self).__init__(margin, alpha, smooth, sigma, reduction)
 
-    def forward(self, inputs, targets, inputs_augment, weights=None):
+    def forward(self, inputs, targets, inputs_augment=None, weights=None):
         """
         Args:
             inputs (torch.Tensor): feature matrix with shape (batch_size, feat_dim).
             targets (torch.LongTensor): ground truth labels with shape (num_classes).
-            inputs_augment:
+            inputs_augment: Optional
+            weights: Optional
         """
         n = inputs.size(0)
         # Compute pairwise distance, replace by the official when merged
@@ -341,10 +342,13 @@ class TripletBeta(TripletLoss):
         dist.addmm_(inputs, inputs.t(), beta=1, alpha=-2)
         dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
 
-        dist_augment = (inputs * inputs_augment).sum(dim=1, keepdim=True).expand(n, n)
-        dist_augment = dist_augment + dist_augment.t()
-        dist_augment.addmm_(inputs, inputs_augment.t(), beta=1, alpha=-2)
-        dist_augment = dist_augment.clamp(min=1e-12).sqrt()
+        if inputs_augment is not None:
+            dist_augment = (inputs * inputs_augment).sum(dim=1, keepdim=True).expand(n, n)
+            dist_augment = dist_augment + dist_augment.t()
+            dist_augment.addmm_(inputs, inputs_augment.t(), beta=1, alpha=-2)
+            dist_augment = dist_augment.clamp(min=1e-12).sqrt()
+        else:
+            dist_augment = None
 
         # dist = 0.9 * dist + 0.1 * cosine_dist(inputs, inputs)
         # For each anchor, find the hardest positive and negative
@@ -352,10 +356,13 @@ class TripletBeta(TripletLoss):
         dist_ap, dist_an = [], []
         for i in range(n):
             positive = dist[i][mask[i]].max()
-            if positive < 1e-6:
+            if positive < 1e-6 and dist_augment is not None:
                 positive = dist_augment[i][mask[i]].max()
             dist_ap.append(positive)
-            dist_an.append(max(dist[i][mask[i] == 0].min(), dist_augment[i][mask[i] == 0].min()))
+            if dist_augment is not None:
+                dist_an.append(max(dist[i][mask[i] == 0].min(), dist_augment[i][mask[i] == 0].min()))
+            else:
+                dist_an.append(dist[i][mask[i] == 0].min())
         dist_ap = torch.stack(dist_ap)
         dist_an = torch.stack(dist_an)
         # Compute ranking hinge loss
@@ -522,7 +529,10 @@ class HybridLoss(nn.Module):
         targets: ground truth labels
         """
         smooth_loss = self.smooth(outputs, targets)
-        circle_loss = self.circle(normalize_rank(outputs, 1), targets, normalize_rank(outputs_augment, 1))
+        if outputs_augment is not None:
+            circle_loss = self.circle(normalize_rank(outputs, 1), targets, normalize_rank(outputs_augment, 1))
+        else:
+            circle_loss = self.circle(normalize_rank(outputs, 1), targets)
         # triplet_loss = self.triplet(embeddings, targets)
         triplet_loss = self.triplet(embeddings, targets, embeddings_augment)
         center_loss = self.center(embeddings, targets, embeddings_augment)
@@ -561,7 +571,10 @@ class HybridLossWeighted(nn.Module):
         targets: ground truth labels
         """
         smooth_loss = self.smooth(outputs, targets)
-        circle_loss = self.circle(normalize_rank(outputs, 1), targets, normalize_rank(outputs_augment, 1))
+        if outputs_augment is not None:
+            circle_loss = self.circle(normalize_rank(outputs, 1), targets, normalize_rank(outputs_augment, 1))
+        else:
+            circle_loss = self.circle(normalize_rank(outputs, 1), targets)
         # triplet_loss = self.triplet(embeddings, targets)
         triplet_loss = self.triplet(embeddings, targets, embeddings_augment, weights)
         center_loss = self.center(embeddings, targets, embeddings_augment, weights)
