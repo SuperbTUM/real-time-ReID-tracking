@@ -57,7 +57,7 @@ class FocalLoss(nn.Module):
 class LabelSmoothing(nn.Module):
     """ NLL loss with label smoothing. """
 
-    def __init__(self, smoothing=0.1, epsilon=0., k_sparse=-1):
+    def __init__(self, smoothing=0.1, epsilon=0., k_sparse=-1, class_weights=None):
         """ Constructor for the LabelSmoothing module.
         :param smoothing: label smoothing factor """
         super(LabelSmoothing, self).__init__()
@@ -65,6 +65,7 @@ class LabelSmoothing(nn.Module):
         self.smoothing = smoothing
         self.epsilon = epsilon
         self.k_sparse = k_sparse
+        self.class_weights = class_weights
 
     def forward(self, x, target):
         logprobs = F.log_softmax(x, dim=-1)
@@ -82,6 +83,8 @@ class LabelSmoothing(nn.Module):
         one_minus_pt = torch.sum(smoothed_labels * (1 - logprobs), dim=-1)
         loss = self.confidence * nll_loss + self.smoothing * smooth_loss
         poly_loss = loss + one_minus_pt * self.epsilon
+        if self.class_weights is not None:
+            poly_loss *= self.class_weights[target]
         # return loss.mean()
         return poly_loss.mean()
 
@@ -513,13 +516,13 @@ class HybridLoss(nn.Module):
         self.lamda = lamda
         self.circle_factor = circle_factor
 
-    def forward(self, embeddings, outputs, targets, embeddings_augment=None):
+    def forward(self, embeddings, outputs, targets, embeddings_augment=None, outputs_augment=None):
         """
         features: feature vectors
         targets: ground truth labels
         """
         smooth_loss = self.smooth(outputs, targets)
-        circle_loss = self.circle(F.normalize(outputs, p=2, dim=1), targets)
+        circle_loss = self.circle(normalize_rank(outputs, 1), targets, normalize_rank(outputs_augment, 1))
         # triplet_loss = self.triplet(embeddings, targets)
         triplet_loss = self.triplet(embeddings, targets, embeddings_augment)
         center_loss = self.center(embeddings, targets, embeddings_augment)
@@ -552,13 +555,13 @@ class HybridLossWeighted(nn.Module):
         self.lamda = lamda
         self.circle_factor = circle_factor
 
-    def forward(self, embeddings, outputs, targets, embeddings_augment=None, weights=None):
+    def forward(self, embeddings, outputs, targets, embeddings_augment=None, weights=None, outputs_augment=None):
         """
         features: feature vectors
         targets: ground truth labels
         """
         smooth_loss = self.smooth(outputs, targets)
-        circle_loss = self.circle(F.normalize(outputs, p=2, dim=1), targets)
+        circle_loss = self.circle(normalize_rank(outputs, 1), targets, normalize_rank(outputs_augment, 1))
         # triplet_loss = self.triplet(embeddings, targets)
         triplet_loss = self.triplet(embeddings, targets, embeddings_augment, weights)
         center_loss = self.center(embeddings, targets, embeddings_augment, weights)
@@ -588,20 +591,29 @@ class CircleLoss(nn.Module):
         self.soft_plus = nn.Softplus()
 
     @staticmethod
-    def convert_label_to_similarity(normed_feature: Tensor, label: Tensor) -> Tuple[Tensor, Tensor]:
-        similarity_matrix = normed_feature @ normed_feature.transpose(1, 0)
+    def convert_label_to_similarity(normed_feature: Tensor, label: Tensor, normed_feature_augment: Tensor = None) -> Tuple[Tensor, Tensor]:
+        similarity_matrix = normed_feature @ normed_feature.T
+        if normed_feature_augment is not None:
+            similarity_matrix_augmented = normed_feature @ normed_feature_augment.T
+        else:
+            similarity_matrix_augmented = None
         label_matrix = label.unsqueeze(1) == label.unsqueeze(0)
 
-        positive_matrix = label_matrix.triu(diagonal=1)
+        positive_matrix = label_matrix.triu(diagonal=0)
         negative_matrix = label_matrix.logical_not().triu(diagonal=1)
 
         similarity_matrix = similarity_matrix.view(-1)
+        if similarity_matrix_augmented is not None:
+            similarity_matrix_augmented = similarity_matrix_augmented.view(-1)
         positive_matrix = positive_matrix.view(-1)
         negative_matrix = negative_matrix.view(-1)
-        return similarity_matrix[positive_matrix], similarity_matrix[negative_matrix]
+        if similarity_matrix_augmented is not None:
+            return torch.maximum(similarity_matrix[positive_matrix], similarity_matrix_augmented[positive_matrix]), similarity_matrix[negative_matrix]
+        else:
+            return similarity_matrix[positive_matrix], similarity_matrix[negative_matrix]
 
-    def get_logits(self, normed_feature, label):
-        sp, sn = self.convert_label_to_similarity(normed_feature, label)
+    def get_logits(self, normed_feature, label, normed_feature_augment=None):
+        sp, sn = self.convert_label_to_similarity(normed_feature, label, normed_feature_augment)
         ap = torch.clamp_min(- sp.detach() + 1 + self.m, min=0.)
         an = torch.clamp_min(sn.detach() + self.m, min=0.)
 
@@ -612,19 +624,19 @@ class CircleLoss(nn.Module):
         logit_n = an * (sn - delta_n) * self.gamma
 
         label = F.one_hot(label, num_classes=normed_feature.size(1))
-        pred_class_logits = label * logit_p + (1.0 - label) * logit_n
+        pred_class_logits = label * logit_p + (1.0 - label) * logit_n # incorrect
         return pred_class_logits
 
-    def forward_focalize(self, normed_feature, label):
-        class_logits = self.get_logits(normed_feature, label)
+    def forward_focalize(self, normed_feature, label, normed_feature_augment=None):
+        class_logits = self.get_logits(normed_feature, label, normed_feature_augment)
         ce_loss = F.cross_entropy(class_logits, label, reduction="none", label_smoothing=0.1)
         pt = torch.exp(-ce_loss)
         # mean over the batch
         focal_loss = (1 - pt) ** self.gamma * ce_loss
         return focal_loss
 
-    def forward(self, normed_feature: Tensor, label: Tensor) -> Tensor:
-        sp, sn = self.convert_label_to_similarity(normed_feature, label)
+    def forward(self, normed_feature: Tensor, label: Tensor, normed_feature_augment: Tensor = None) -> Tensor:
+        sp, sn = self.convert_label_to_similarity(normed_feature, label, normed_feature_augment)
         ap = torch.clamp_min(- sp.detach() + 1 + self.m, min=0.)
         an = torch.clamp_min(sn.detach() + self.m, min=0.)
 
@@ -636,7 +648,7 @@ class CircleLoss(nn.Module):
 
         loss = self.soft_plus(torch.logsumexp(logit_n, dim=0) + torch.logsumexp(logit_p, dim=0))
 
-        return loss / normed_feature.size(0)
+        return loss / label.size(0)
 
 
 def normalize_rank(x, axis=-1):
