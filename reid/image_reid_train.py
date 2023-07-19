@@ -27,6 +27,7 @@ cudnn.benchmark = True
 class reidDataset(Dataset):
     def __init__(self, images, train_classes, transform=None, get_crop=False):
         self.images = images
+        self.train_classes = train_classes
         self.transform = transform
         self.images_pseudo = []
         self._continual = False
@@ -65,9 +66,9 @@ class reidDataset(Dataset):
 
     def add_pseudo(self, pseudo_labeled_data, num_class_new):
         self.images_pseudo.extend(pseudo_labeled_data)
-        self.class_stats = self.class_stats + [0 for _ in range(num_class_new - 751)]
+        self.class_stats = self.class_stats + [0 for _ in range(num_class_new - self.train_classes)]
         for image in self.images_pseudo:
-            if image[1] >= 751:
+            if image[1] >= self.train_classes:
                 self.class_stats[image[1]] += 1
         if self.get_crop:
             pure_images = list(map(lambda x: x[0], self.images_pseudo))

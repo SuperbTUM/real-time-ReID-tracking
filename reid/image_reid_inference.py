@@ -1,4 +1,3 @@
-from dataset_market import Market1501
 import argparse
 import torch
 import torch.nn as nn
@@ -16,8 +15,10 @@ from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
 from backbones.resnet50 import ft_net
 
+from dataset_market import Market1501
+from dataset_dukemtmc import DukeMTMCreID
 from train_utils import to_numpy, DataLoaderX
-from image_reid_train import MarketDataset
+from image_reid_train import reidDataset
 from inference_utils import diminish_camera_bias
 
 # @credit to Zhedong
@@ -169,7 +170,7 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
             cam = seq = None
         elif len(sample1) == 3:
             img1, true_label, cam = sample1
-            seq = 0
+            seq = torch.tensor(0, dtype=torch.int32)
         else:
             img1, true_label, cam, seq = sample1
         img2 = sample2[0]
@@ -199,6 +200,7 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
 
 def parser():
     args = argparse.ArgumentParser()
+    args.add_argument("--dataset", type=str, choices=["market1501", "dukemtmc"], default="market1501")
     args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
     args.add_argument("--ckpt", help="where the checkpoint of vit is, can either be a onnx or pt", type=str,
                       default="checkpoint/vision_transformer_checkpoint.pt")
@@ -217,7 +219,12 @@ def parser():
 
 if __name__ == "__main__":
     params = parser()
-    dataset = Market1501(root="/".join((params.root, "Market1501")))
+    if params.dataset == "market1501":
+        dataset = Market1501(root="/".join((params.root, "Market1501")))
+    elif params.dataset == "dukemtmc":
+        dataset = DukeMTMCreID(root=params.root)
+    else:
+        raise NotImplementedError("Only market and dukemtmc datasets are supported!\n")
 
     if params.backbone == "plr_osnet":
         transform_test = transforms.Compose([transforms.Resize((256, 128)),
@@ -328,7 +335,7 @@ if __name__ == "__main__":
         providers = ["CUDAExecutionProvider"]
         ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
     # experimental, needs batch size of 2
-    market_gallery = MarketDataset(dataset.gallery, transform_test, False)
+    market_gallery = reidDataset(dataset.gallery, dataset.num_train_pids, transform_test, False)
     dataloader1 = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     # gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True
     # if params.ckpt.endswith("onnx") else False, params.use_side)
@@ -358,7 +365,7 @@ if __name__ == "__main__":
     from inference_utils import smooth_tracklets
     gallery_embeddings = smooth_tracklets(gallery_embeddings, gallery_seqs, indices_pseudo)
 
-    market_query = MarketDataset(dataset.query, transform_test, False)
+    market_query = reidDataset(dataset.query, dataset.num_train_pids, transform_test, False)
     dataloader1 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     # query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True
     # if params.ckpt.endswith("onnx") else False, params.use_side)
