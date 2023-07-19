@@ -10,6 +10,7 @@ from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
 from train_utils import *
 from dataset_market import Market1501
+from dataset_dukemtmc import DukeMTMCreID
 from train_prepare import WarmupMultiStepLR, RandomIdentitySampler, RandomErasing
 
 import argparse
@@ -23,17 +24,17 @@ cudnn.benchmark = True
 
 # assert export_yolo()
 
-class MarketDataset(Dataset):
-    def __init__(self, images, transform=None, get_crop=False):
+class reidDataset(Dataset):
+    def __init__(self, images, train_classes, transform=None, get_crop=False):
         self.images = images
         self.transform = transform
         self.images_pseudo = []
         self._continual = False
         self.cropped = []
         self.cropped_pseudo = []
-        self.class_stats = [0 for _ in range(751)]
+        self.class_stats = [0 for _ in range(train_classes)]
         for image in images:
-            if image[1] < 751:
+            if image[1] < train_classes:
                 self.class_stats[image[1]] += 1
         self.get_crop = get_crop
         if get_crop:
@@ -466,6 +467,7 @@ def parser():
         else:
             raise argparse.ArgumentTypeError('value not in range %s-%s' % (min, max))
     args = argparse.ArgumentParser()
+    args.add_argument("--dataset", type=str, choices=["market1501", "dukemtmc"], default="market1501")
     args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
     args.add_argument("--ckpt", help="where the checkpoint of vit is, can either be a onnx or pt", type=str,
                       default="vision_transformer_checkpoint.pt")
@@ -490,7 +492,12 @@ def parser():
 
 if __name__ == "__main__":
     params = parser()
-    dataset = Market1501(root="/".join((params.root, "Market1501")))
+    if params.dataset == "market1501":
+        dataset = Market1501(root="/".join((params.root, "Market1501")))
+    elif params.dataset == "dukemtmc":
+        dataset = DukeMTMCreID(root=params.root)
+    else:
+        raise NotImplementedError("Only market and dukemtmc datasets are supported!\n")
     providers = ["CUDAExecutionProvider"]
 
     if params.backbone in ("plr_osnet", "seres18", "baseline", "cares18"):
@@ -506,7 +513,7 @@ if __name__ == "__main__":
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             transforms.RandomErasing(),
         ])
-        market_dataset = MarketDataset(dataset.train, transform_train)
+        market_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
         torch.cuda.empty_cache()
         if params.backbone == "plr_osnet":
             model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
@@ -532,7 +539,7 @@ if __name__ == "__main__":
                                                      ]
                                                     )
                 merged_datasets = dataset.gallery + dataset.query
-                dataset_test = MarketDataset(merged_datasets, transform_test)
+                dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
                 pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True)
@@ -561,7 +568,7 @@ if __name__ == "__main__":
                                                                   std=(0.229, 0.224, 0.225)),
                                              ]
                                             )
-        market_dataset = MarketDataset(dataset.train, transform_train)
+        market_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
 
         if params.backbone.startswith("vit"):
             model = vit_t(img_size=(448, 224), num_classes=dataset.num_train_pids, loss="triplet",
@@ -576,7 +583,7 @@ if __name__ == "__main__":
                                                          params.accelerate)
             if params.continual:
                 merged_datasets = dataset.gallery + dataset.query
-                dataset_test = MarketDataset(merged_datasets, transform_test)
+                dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
                 # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
                 #                               pin_memory=True)
 
@@ -608,7 +615,7 @@ if __name__ == "__main__":
 
             if params.continual:
                 merged_datasets = dataset.gallery + dataset.query
-                dataset_test = MarketDataset(merged_datasets, transform_test)
+                dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
                 # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
                 #                               pin_memory=True)
 
