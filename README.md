@@ -188,6 +188,11 @@ CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)
 | Value            | 0.9270 | 0.9742 | 0.9828 | 0.7786 | `44.399` |
 | Strong Inference | 0.9233 | 0.9742 | 0.9825 | 0.7871 | `44.399` |
 
+Dataset: DukeMTMC
+
+| Metric           | Acc@1  | Acc@5  | Acc@10 | mAP    |
+|------------------|--------|--------|--------|--------|
+| Value            | 0.8110 | 0.8932 | 0.9206 | 0.6301 |
 
 **Tracking**
 

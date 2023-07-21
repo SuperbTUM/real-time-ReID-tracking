@@ -29,6 +29,9 @@ def weights_init_classifier(m):
             nn.init.normal_(submodule.weight, std=0.001)
             if submodule.bias is not None:
                 nn.init.constant_(submodule.bias, 0.0)
+        elif classname.find('BatchNorm1d') != -1:
+            torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
+            torch.nn.init.constant_(m.bias.data, 0.0)
 
 # This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):
