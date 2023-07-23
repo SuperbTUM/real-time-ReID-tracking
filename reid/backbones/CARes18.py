@@ -9,89 +9,25 @@ from .batchrenorm import BatchRenormalization2D
 from .attention_pooling import AttentionPooling
 
 
-class CASEBlock(nn.Module):
-    def __init__(self, channel, reduction=16):
-        super(CASEBlock, self).__init__()
-        # self.conv_1x1 = nn.Conv2d(in_channels=channel, out_channels=channel//reduction, kernel_size=1, stride=1, bias=False)
-        self.conv_1x1 = nn.Linear(channel, channel // reduction, bias=False)  # bias=False
-
-        self.relu = nn.ReLU(inplace=True)
-        self.bn = BatchRenormalization2D(channel // reduction)  # nn.BatchNorm2d(channel//reduction)
-
-        # self.F_h = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
-        # self.F_w = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
-        self.F_h = nn.Linear(channel // reduction, channel, bias=False)  # bias=False
-        self.F_w = nn.Linear(channel // reduction, channel, bias=False)  # bias=False
-
-        self.sigmoid = nn.Sigmoid()
-
-        self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
-        self.fc1 = nn.Linear(channel, max(1, channel // 16), bias=False)  # bias=False
-        self.fc2 = nn.Linear(max(1, channel // 16), channel, bias=False)  # bias=False
-
-        torch.nn.init.kaiming_normal_(self.fc1.weight.data, a=0, mode='fan_out')
-        torch.nn.init.kaiming_normal_(self.fc2.weight.data, a=0, mode='fan_out')
-        torch.nn.init.kaiming_normal_(self.conv_1x1.weight.data, a=0, mode='fan_out')
-        torch.nn.init.kaiming_normal_(self.F_h.weight.data, a=0, mode='fan_out')
-        torch.nn.init.kaiming_normal_(self.F_w.weight.data, a=0, mode='fan_out')
-
-    def forward(self, x):
-        h, w = x.size(2), x.size(3)
-
-        features = x
-        x = self.globalavgpooling(x)
-        x = x.squeeze()
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        attn = x.unsqueeze(2).unsqueeze(3)
-        x = features * self.sigmoid(attn)
-
-        x_h = F.adaptive_avg_pool2d(x, (h, 1)).permute(0, 1, 3, 2) #B,C,W,1, B,C,H,1
-        x_w = F.adaptive_avg_pool2d(x, (1, w))
-
-        concat = torch.cat((x_h, x_w), 3).permute(0, 2, 3, 1)  # (32, 64, 1, 96) -> (32, 1, 96, 64)
-
-        # x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
-        x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat).permute(0, 3, 1, 2)))  # (32, 4, 1, 96)
-
-        x_cat_conv_split_h, x_cat_conv_split_w = x_cat_conv_relu.split([h, w], 3)
-
-        # s_h = self.sigmoid_h(self.F_h(x_cat_conv_split_h.permute(0, 1, 3, 2)))
-        # s_w = self.sigmoid_w(self.F_w(x_cat_conv_split_w))
-        s_h = self.sigmoid(
-            self.F_h(x_cat_conv_split_h.permute(0, 3, 2, 1)).permute(0, 3, 1, 2))  # (32, 64, 1, 64) -> (32, 64, 64, 1)
-        s_w = self.sigmoid(
-            self.F_w(x_cat_conv_split_w.permute(0, 2, 3, 1)).permute(0, 3, 1, 2))  # (32, 32, 4, 1) -> (32, 64, 1, 32)
-
-        out = x * s_h.expand_as(x) * s_w.expand_as(x)
-        return out
-
-
 class CABlock(nn.Module):
-    def __init__(self, channel, reduction=16):
+    def __init__(self, channel, reduction=16, renorm=False):
         super(CABlock, self).__init__()
 
         # self.conv_1x1 = nn.Conv2d(in_channels=channel, out_channels=channel//reduction, kernel_size=1, stride=1, bias=False)
         self.conv_1x1 = nn.Linear(channel, channel//reduction, bias=False)  # bias=False
 
         self.relu = nn.ReLU(inplace=True)
-        self.bn = BatchRenormalization2D(channel//reduction)#nn.BatchNorm2d(channel//reduction)
+        if renorm:
+            self.bn = BatchRenormalization2D(channel//reduction)
+        else:
+            nn.BatchNorm2d(channel//reduction)
 
         # self.F_h = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
         # self.F_w = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
         self.F_h = nn.Linear(channel//reduction, channel, bias=False)  # bias=False
         self.F_w = nn.Linear(channel//reduction, channel, bias=False)  # bias=False
 
-        self.sigmoid_h = nn.Sigmoid()
-        self.sigmoid_w = nn.Sigmoid()
-
-        # for m in self.modules():
-        #     if isinstance(m, nn.Conv2d):
-        #         n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-        #         m.weight.data.normal_(0, math.sqrt(2. / n))
-        #         if m.bias is not None:
-        #             m.bias.data.zero_()
+        self.sigmoid = nn.Sigmoid()
 
         torch.nn.init.kaiming_normal_(self.conv_1x1.weight.data, a=0, mode='fan_out')
         # torch.nn.init.constant_(self.conv_1x1.bias.data, 0.0)
@@ -114,10 +50,43 @@ class CABlock(nn.Module):
 
         # s_h = self.sigmoid_h(self.F_h(x_cat_conv_split_h.permute(0, 1, 3, 2)))
         # s_w = self.sigmoid_w(self.F_w(x_cat_conv_split_w))
-        s_h = self.sigmoid_h(self.F_h(x_cat_conv_split_h.permute(0, 3, 2, 1)).permute(0, 3, 1, 2)) # (32, 64, 1, 64) -> (32, 64, 64, 1)
-        s_w = self.sigmoid_w(self.F_w(x_cat_conv_split_w.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)) # (32, 32, 4, 1) -> (32, 64, 1, 32)
+        s_h = self.sigmoid(self.F_h(x_cat_conv_split_h.permute(0, 3, 2, 1)).permute(0, 3, 1, 2)) # (32, 64, 1, 64) -> (32, 64, 64, 1)
+        s_w = self.sigmoid(self.F_w(x_cat_conv_split_w.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)) # (32, 32, 4, 1) -> (32, 64, 1, 32)
 
         out = x * s_h.expand_as(x) * s_w.expand_as(x)
+
+        return out
+
+
+class CASEBlock(CABlock):
+    def __init__(self, channel, reduction=16, renorm=False):
+        super(CASEBlock, self).__init__(channel, reduction, renorm)
+        self.F_c = nn.Linear(channel // reduction, channel, bias=False)  # bias=False
+        torch.nn.init.kaiming_normal_(self.F_c.weight.data, a=0, mode='fan_out')
+
+    def forward(self, x):
+        h, w = x.size(2), x.size(3)
+
+        x_h = F.adaptive_avg_pool2d(x, (h, 1)).permute(0, 1, 3, 2)
+        x_w = F.adaptive_avg_pool2d(x, (1, w))
+        x_c = F.adaptive_avg_pool2d(x, 1)
+        concat = torch.cat((x_h, x_w, x_c), 3).permute(0, 2, 3, 1)  # (32, 64, 1, 97) ->
+
+        # x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
+        x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat).permute(0, 3, 1, 2)))  # (32, 4, 1, 97)
+
+        x_cat_conv_split_h, x_cat_conv_split_w, x_cat_conv_split_c = x_cat_conv_relu.split([h, w, 1], 3)
+
+        # s_h = self.sigmoid_h(self.F_h(x_cat_conv_split_h.permute(0, 1, 3, 2)))
+        # s_w = self.sigmoid_w(self.F_w(x_cat_conv_split_w))
+        s_h = self.sigmoid(
+            self.F_h(x_cat_conv_split_h.permute(0, 3, 2, 1)).permute(0, 3, 1, 2))  # (32, 64, 1, 64) -> (32, 64, 64, 1)
+        s_w = self.sigmoid(
+            self.F_w(x_cat_conv_split_w.permute(0, 2, 3, 1)).permute(0, 3, 1, 2))  # (32, 32, 4, 1) -> (32, 64, 1, 32)
+        s_c = self.sigmoid(
+            self.F_c(x_cat_conv_split_c.permute(0, 2, 3, 1)).permute(0, 3, 1, 2))
+
+        out = x * s_h.expand_as(x) * s_w.expand_as(x) * s_c.expand_as(x)
 
         return out
 
@@ -147,7 +116,7 @@ class CABasicBlock(nn.Module):
         else:
             self.block_pre = block
             self.block_post = None
-        self.cablock = CABlock(dim)
+        self.cablock = CABlock(dim, renorm=renorm)
 
     def forward(self, x):
         branch = x
