@@ -355,7 +355,7 @@ if __name__ == "__main__":
     dists = euclidean_dist(gallery_embeddings, gallery_embeddings) # * 0.1 + compute_jaccard_distance(gallery_embeddings) * 0.9
     dists[dists < 0] = 0.
     dists[dists > 1] = 1.
-    cluster_method = DBSCAN(eps=0.25, min_samples=6, metric="precomputed", n_jobs=-1)
+    cluster_method = DBSCAN(eps=0.25, min_samples=dataset.num_gallery_cams, metric="precomputed", n_jobs=-1)
     pseudo_labels = cluster_method.fit_predict(dists)
     indices_pseudo = (pseudo_labels != -1)
     num_labels = max(pseudo_labels) + 1
