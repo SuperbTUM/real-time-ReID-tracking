@@ -139,7 +139,7 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         if self.step_counter > 2000 and self.d_max < self.max_d_max:
             self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
-        x_normed = torch.cat(x_normed, dim=0)
+        x_normed = torch.stack(x_normed, dim=0)
         return x_normed
 
 
