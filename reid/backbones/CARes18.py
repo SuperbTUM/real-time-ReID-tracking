@@ -95,13 +95,19 @@ class CABasicBlock(nn.Module):
     def __init__(self, block, dim, renorm, ibn, se_attn, restride=False):
         super(CABasicBlock, self).__init__()
         if restride:
-            # block.conv1 = nn.Conv2d(dim >> 1, dim, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-            # block.downsample[0] = nn.Conv2d(dim >> 1, dim, kernel_size=(1, 1), stride=(1, 1), bias=False)
             block.conv1.stride = (1, 1)
             block.downsample[0].stride = (1, 1)
         if renorm:
+            bn1_weight = block.bn1.weight.data.reshape(1, block.bn1.weight.data.size(0), 1, 1)
+            bn1_bias = block.bn1.bias.data.reshape(1, block.bn1.bias.data.size(0), 1, 1)
+            bn2_weight = block.bn2.weight.data.reshape(1, block.bn2.weight.data.size(0), 1, 1)
+            bn2_bias = block.bn2.bias.data.reshape(1, block.bn2.bias.data.size(0), 1, 1)
             block.bn1 = BatchRenormalization2D(dim)
+            block.bn1.gamma.data = bn1_weight
+            block.bn1.beta.data = bn1_bias
             block.bn2 = BatchRenormalization2D(dim)
+            block.bn2.gamma.data = bn2_weight
+            block.bn2.beta.data = bn2_bias
         if ibn:
             # bn1 will be covered
             block.bn1 = IBN(dim)

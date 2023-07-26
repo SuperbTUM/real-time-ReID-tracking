@@ -22,7 +22,7 @@ class BatchRenormalization2D(nn.Module):
         self.eps = eps
         self.momentum = torch.tensor(momentum)
 
-        self.gamma = torch.nn.Parameter(torch.ones((1, num_features, 1, 1)), requires_grad=False)
+        self.gamma = torch.nn.Parameter(torch.ones((1, num_features, 1, 1)), requires_grad=True)
         self.beta = torch.nn.Parameter(torch.zeros((1, num_features, 1, 1)), requires_grad=True)
 
         self.running_avg_mean = torch.ones((1, num_features, 1, 1), requires_grad=False)
