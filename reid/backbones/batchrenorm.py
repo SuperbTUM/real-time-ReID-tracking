@@ -25,8 +25,8 @@ class BatchRenormalization2D(nn.Module):
         self.gamma = torch.nn.Parameter(torch.ones((1, num_features, 1, 1)), requires_grad=True)
         self.beta = torch.nn.Parameter(torch.zeros((1, num_features, 1, 1)), requires_grad=True)
 
-        self.running_avg_mean = torch.ones((1, num_features, 1, 1), requires_grad=False)
-        self.running_avg_std = torch.zeros((1, num_features, 1, 1), requires_grad=False)
+        self.running_avg_mean = torch.ones((1, num_features, 1, 1), requires_grad=True)
+        self.running_avg_std = torch.zeros((1, num_features, 1, 1), requires_grad=True)
 
         self.max_r_max = 3.0
         self.max_d_max = 5.0

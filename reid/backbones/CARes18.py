@@ -98,16 +98,29 @@ class CABasicBlock(nn.Module):
             block.conv1.stride = (1, 1)
             block.downsample[0].stride = (1, 1)
         if renorm:
+            # experimental
             bn1_weight = block.bn1.weight.data.reshape(1, block.bn1.weight.data.size(0), 1, 1)
             bn1_bias = block.bn1.bias.data.reshape(1, block.bn1.bias.data.size(0), 1, 1)
+            bn1_running_mean = block.bn1.running_mean.data.reshape(1, block.bn1.running_mean.data.size(0), 1, 1)
+            bn1_running_var = block.bn1.running_var.data.reshape(1, block.bn1.running_var.data.size(0), 1, 1)
+
             bn2_weight = block.bn2.weight.data.reshape(1, block.bn2.weight.data.size(0), 1, 1)
             bn2_bias = block.bn2.bias.data.reshape(1, block.bn2.bias.data.size(0), 1, 1)
+            bn2_running_mean = block.bn2.running_mean.data.reshape(1, block.bn2.running_mean.data.size(0), 1, 1)
+            bn2_running_var = block.bn2.running_var.data.reshape(1, block.bn2.running_var.data.size(0), 1, 1)
+
             block.bn1 = BatchRenormalization2D(dim)
-            block.bn1.gamma.data = bn1_weight
-            block.bn1.beta.data = bn1_bias
+            block.bn1.gamma.data = bn1_weight.clone()
+            block.bn1.beta.data = bn1_bias.clone()
+            block.bn1.running_avg_mean = bn1_running_mean.clone()
+            block.bn1.running_avg_std = bn1_running_var.clone()
+
             block.bn2 = BatchRenormalization2D(dim)
-            block.bn2.gamma.data = bn2_weight
-            block.bn2.beta.data = bn2_bias
+            block.bn2.gamma.data = bn2_weight.clone()
+            block.bn2.beta.data = bn2_bias.clone()
+            block.bn2.running_avg_mean = bn2_running_mean.clone()
+            block.bn2.running_avg_std = bn2_running_var.clone()
+
         if ibn:
             # bn1 will be covered
             block.bn1 = IBN(dim)
@@ -221,7 +234,7 @@ class CARes18_IBN(nn.Module):
             nn.Linear(512, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
-            nn.Dropout(),
+            nn.Dropout(0.25),
             nn.Linear(256, num_class, bias=False),
         )
         self.classifier.apply(weights_init_classifier)
