@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 
 
 # use deeplabv3_resnet50 instead of deeplabv3_resnet101 to reduce the model size
-model = torch.hub.load('pytorch/vision:v0.10.0', 'deeplabv3_resnet50', pretrained=True)
+model = torch.hub.load('pytorch/vision:v0.10.0', 'deeplabv3_resnet50', weights="DEFAULT")
 model.eval()
 scriptedm = torch.jit.script(model).cuda()
 
