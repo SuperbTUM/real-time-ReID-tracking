@@ -356,8 +356,8 @@ class TripletBeta(TripletLoss):
         dist_ap, dist_an = [], []
         for i in range(n):
             positive = dist[i][mask[i]].max()
-            if positive < 1e-6 and dist_augment is not None:
-                positive = dist_augment[i][mask[i]].max()
+            if dist_augment is not None:
+                positive = max(positive, dist_augment[i][mask[i]].max())
             dist_ap.append(positive)
             if dist_augment is not None:
                 dist_an.append(max(dist[i][mask[i] == 0].min(), dist_augment[i][mask[i] == 0].min()))
