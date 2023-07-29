@@ -81,7 +81,7 @@ class GeM(nn.Module):
 
 
 class IBN(nn.Module):
-    def __init__(self, in_channels, ratio=0.5):
+    def __init__(self, in_channels, ratio=0.5, renorm=False):
         """
         Half do instance norm, half do batch norm
         """
@@ -90,8 +90,10 @@ class IBN(nn.Module):
         self.ratio = ratio
         self.half = int(self.in_channels * ratio)
         self.IN = nn.InstanceNorm2d(self.half, affine=True)
-        # self.BN = nn.BatchNorm2d(self.in_channels - self.half)
-        self.BN = BatchRenormalization2D(self.in_channels - self.half) # experimental
+        if renorm:
+            self.BN = BatchRenormalization2D(self.in_channels - self.half) # experimental
+        else:
+            self.BN = nn.BatchNorm2d(self.in_channels - self.half)
         # experimental
         # self.IN.weight.data.fill_(1.)
         # self.IN.bias.data.zero_()
@@ -111,16 +113,8 @@ class SEBasicBlock(nn.Module):
             block.conv1.stride = (1, 1)
             block.downsample[0].stride = (1, 1)
         if renorm:
-            bn1_weight = block.bn1.weight.data.reshape(1, block.bn1.weight.data.size(0), 1, 1)
-            bn1_bias = block.bn1.bias.data.reshape(1, block.bn1.bias.data.size(0), 1, 1)
-            bn2_weight = block.bn2.weight.data.reshape(1, block.bn2.weight.data.size(0), 1, 1)
-            bn2_bias = block.bn2.bias.data.reshape(1, block.bn2.bias.data.size(0), 1, 1)
             block.bn1 = BatchRenormalization2D(dim)
-            block.bn1.gamma.data = bn1_weight
-            block.bn1.beta.data = bn1_bias
             block.bn2 = BatchRenormalization2D(dim)
-            block.bn2.gamma.data = bn2_weight
-            block.bn2.beta.data = bn2_bias
         if ibn:
             # bn1 will be covered
             block.bn1 = IBN(dim)

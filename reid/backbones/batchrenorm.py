@@ -12,6 +12,7 @@ class BatchRenormalization2D(nn.Module):
 
     def __init__(self,
                  num_features,
+                 dict_state=None,
                  eps=1e-05,
                  momentum=0.1,
                  r_d_max_inc_step=1e-5,
@@ -37,6 +38,26 @@ class BatchRenormalization2D(nn.Module):
 
         self.register_buffer('r_max', torch.tensor(r_max))
         self.register_buffer('d_max', torch.tensor(d_max))
+
+        self.dict_state = dict_state
+        self._load_params_from_bn()
+
+    def _load_params_from_bn(self):
+        if self.dict_state is None:
+            return
+        weight = self.dict_state['weight'].data
+        weight = weight.reshape(1, weight.size(0), 1, 1)
+        bias = self.dict_state['bias'].data
+        bias = bias.reshape(1, bias.size(0), 1, 1)
+        running_mean = self.dict_state['running_mean'].data
+        running_mean = running_mean.reshape(1, running_mean.size(0), 1, 1)
+        running_var = self.dict_state['running_var']
+        running_var = running_var.data.reshape(1, running_var.size(0), 1, 1)
+
+        self.gamma.data = weight.clone()
+        self.beta.data = bias.clone()
+        self.running_avg_mean.data = running_mean.clone()
+        self.running_avg_std.data = running_var.clone()
 
     def forward(self, x):
 
@@ -71,8 +92,8 @@ class BatchRenormalization2D(nn.Module):
 
 class BatchRenormalization2D_Noniid(BatchRenormalization2D):
     """Dedicated for metric learning where sampling is non-iid"""
-    def __init__(self, num_features, num_instance, eps=1e-05, momentum=0.1, r_d_max_inc_step=1e-5):
-        super(BatchRenormalization2D_Noniid, self).__init__(num_features, eps, momentum, r_d_max_inc_step)
+    def __init__(self, num_features, num_instance, dict_state=None, eps=1e-05, momentum=0.1, r_d_max_inc_step=1e-5):
+        super(BatchRenormalization2D_Noniid, self).__init__(num_features, dict_state, eps, momentum, r_d_max_inc_step)
         self.num_instance = num_instance
 
     def forward(self, x):
@@ -124,6 +145,7 @@ class BatchRenormalization1D(nn.Module):
 
     def __init__(self,
                  num_features,
+                 dict_state=None,
                  eps=1e-05,
                  momentum=0.1,
                  r_d_max_inc_step=1e-5,
@@ -149,6 +171,26 @@ class BatchRenormalization1D(nn.Module):
 
         self.register_buffer('r_max', torch.tensor(r_max))
         self.register_buffer('d_max', torch.tensor(d_max))
+
+        self.dict_state = dict_state
+        self._load_params_from_bn()
+
+    def _load_params_from_bn(self):
+        if self.dict_state is None:
+            return
+        weight = self.dict_state['weight'].data
+        weight = weight.reshape(1, weight.size(0))
+        bias = self.dict_state['bias'].data
+        bias = bias.reshape(1, bias.size(0))
+        running_mean = self.dict_state['running_mean'].data
+        running_mean = running_mean.reshape(1, running_mean.size(0))
+        running_var = self.dict_state['running_var']
+        running_var = running_var.data.reshape(1, running_var.size(0))
+
+        self.gamma.data = weight.clone()
+        self.beta.data = bias.clone()
+        self.running_avg_mean.data = running_mean.clone()
+        self.running_avg_std.data = running_var.clone()
 
     def forward(self, x):
 

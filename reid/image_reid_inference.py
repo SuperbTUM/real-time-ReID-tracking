@@ -351,14 +351,22 @@ if __name__ == "__main__":
 
     gallery_embeddings = (gallery_embeddings1 + gallery_embeddings2) / 2.0
     from train_prepare import euclidean_dist
-    from sklearn.cluster import DBSCAN
     dists = euclidean_dist(gallery_embeddings, gallery_embeddings) # * 0.1 + compute_jaccard_distance(gallery_embeddings) * 0.9
     dists[dists < 0] = 0.
     dists[dists > 1] = 1.
-    cluster_method = DBSCAN(eps=0.25, min_samples=dataset.num_gallery_cams, metric="precomputed", n_jobs=-1)
+    eps = 0.2
+    try:
+        from cuml import DBSCAN
+        print("CUML Imported!")
+        cluster_method = DBSCAN(eps=eps, min_samples=dataset.num_gallery_cams, metric="precomputed")
+        dists = dists.cpu().numpy()
+    except ImportError:
+        from sklearn.cluster import DBSCAN
+        cluster_method = DBSCAN(eps=eps, min_samples=dataset.num_gallery_cams, metric="precomputed", n_jobs=-1)
     pseudo_labels = cluster_method.fit_predict(dists)
     indices_pseudo = (pseudo_labels != -1)
     num_labels = max(pseudo_labels) + 1
+    assert num_labels >= 0.2 * dataset.num_train_pids
     gallery_seqs = gallery_seqs * dataset.num_gallery_cams * num_labels + gallery_cams * num_labels + pseudo_labels
 
     gallery_embeddings = diminish_camera_bias(gallery_embeddings, gallery_cams)

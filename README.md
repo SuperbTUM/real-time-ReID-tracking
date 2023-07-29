@@ -1,20 +1,6 @@
 # Real-time ReID Tracking w/. Strong Feature Extractor & GAN
 [Slides](https://docs.google.com/presentation/d/1cs5wEIcJWV5H6F5xnWDV0ikYf-uWuFvZj3byTBs4sMQ/edit#slide=id.p), Manuscript(Coming Soon...)
 
-## TODOs
-
-- [x] To work with latest YoloV8-DeepOCSort implementation towards a new benchmark(important!) and apply necessary changes on current repository.
-
-- [ ] To debug and tune a SPGAN model for synthetic image generation based on Market1501.
-
-- [x] To check if triplet loss w/. penalty is helpful in object re-identification/image retrieval/person search.
-
-- [ ] To work with sequential side information on ViT and Swin-transformer.
-
-- [x] To check whether background information is helpful with a hyperparameter to zoom, inspired by an ECCV18' paper.
-
-
-
 ## Introduction
 
 From Sort to OCSort, we are becoming aware that deep feature extractor is crucial in both re-identification and multiple object tracking.
@@ -43,6 +29,11 @@ You are suggested to install other dependencies with
 
 ```bash
 pip --disable-pip-version-check install -r requirements.txt
+```
+
+With >= Python3.9, you can install CUML with
+```bash
+pip install cuml-cu11 --extra-index-url=https://pypi.nvidia.com
 ```
 
 Optionally, using `faiss` is highly recommended.
