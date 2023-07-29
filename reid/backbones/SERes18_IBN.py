@@ -5,7 +5,7 @@ from torch.nn import functional as F
 import math
 from collections import OrderedDict
 
-from .batchrenorm import BatchRenormalization2D, BatchRenormalization1D
+from .batchrenorm import BatchRenormalization2D, BatchRenormalization1D, BatchRenormalization2D_Noniid
 from .attention_pooling import AttentionPooling
 
 
@@ -81,7 +81,7 @@ class GeM(nn.Module):
 
 
 class IBN(nn.Module):
-    def __init__(self, in_channels, ratio=0.5, renorm=False):
+    def __init__(self, in_channels, ratio=0.5, renorm=False, non_iid=0):
         """
         Half do instance norm, half do batch norm
         """
@@ -91,7 +91,10 @@ class IBN(nn.Module):
         self.half = int(self.in_channels * ratio)
         self.IN = nn.InstanceNorm2d(self.half, affine=True)
         if renorm:
-            self.BN = BatchRenormalization2D(self.in_channels - self.half) # experimental
+            if non_iid:
+                self.BN = BatchRenormalization2D_Noniid(self.in_channels - self.half, non_iid)
+            else:
+                self.BN = BatchRenormalization2D(self.in_channels - self.half) # experimental
         else:
             self.BN = nn.BatchNorm2d(self.in_channels - self.half)
         # experimental

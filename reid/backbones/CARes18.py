@@ -10,7 +10,7 @@ from .attention_pooling import AttentionPooling
 
 
 class CABlock(nn.Module):
-    def __init__(self, channel, reduction=16, renorm=False):
+    def __init__(self, channel, reduction=16, renorm=False, non_iid=0):
         super(CABlock, self).__init__()
 
         # self.conv_1x1 = nn.Conv2d(in_channels=channel, out_channels=channel//reduction, kernel_size=1, stride=1, bias=False)
@@ -18,7 +18,10 @@ class CABlock(nn.Module):
 
         self.relu = nn.ReLU(inplace=True)
         if renorm:
-            self.bn = BatchRenormalization2D(channel//reduction)
+            if non_iid:
+                self.bn = BatchRenormalization2D_Noniid(channel//reduction, non_iid)
+            else:
+                self.bn = BatchRenormalization2D(channel//reduction)
         else:
             self.bn = nn.BatchNorm2d(channel//reduction)
 
@@ -59,8 +62,8 @@ class CABlock(nn.Module):
 
 
 class CASEBlock(CABlock):
-    def __init__(self, channel, reduction=16, renorm=False):
-        super(CASEBlock, self).__init__(channel, reduction, renorm)
+    def __init__(self, channel, reduction=16, renorm=False, non_iid=0):
+        super(CASEBlock, self).__init__(channel, reduction, renorm, non_iid)
         self.F_c = nn.Linear(channel // reduction, channel, bias=False)  # bias=False
         torch.nn.init.kaiming_normal_(self.F_c.weight.data, a=0, mode='fan_out')
 
@@ -92,7 +95,7 @@ class CASEBlock(CABlock):
 
 
 class CABasicBlock(nn.Module):
-    def __init__(self, block, dim, renorm, ibn, se_attn, restride=False, non_iid=False):
+    def __init__(self, block, dim, renorm, ibn, restride=False, non_iid=0):
         super(CABasicBlock, self).__init__()
         if restride:
             block.conv1.stride = (1, 1)
@@ -100,28 +103,28 @@ class CABasicBlock(nn.Module):
         if renorm:
             # experimental
             if non_iid:
-                block.bn1 = BatchRenormalization2D_Noniid(dim, block.bn1.state_dict())
-                block.bn2 = BatchRenormalization2D_Noniid(dim, block.bn2.state_dict())
+                block.bn1 = BatchRenormalization2D_Noniid(dim, non_iid, block.bn1.state_dict())
+                block.bn2 = BatchRenormalization2D_Noniid(dim, non_iid, block.bn2.state_dict())
             else:
                 block.bn1 = BatchRenormalization2D(dim, block.bn1.state_dict())
                 block.bn2 = BatchRenormalization2D(dim, block.bn2.state_dict())
 
         if ibn:
             # bn1 will be covered
-            block.bn1 = IBN(dim, renorm=renorm)
+            block.bn1 = IBN(dim, renorm=renorm, non_iid=non_iid)
         # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
             self.block_pre = nn.Sequential(*list(block.children())[:-1])
             self.block_post = block.downsample
             if renorm:
                 if non_iid:
-                    self.block_post[1] = BatchRenormalization2D_Noniid(2 * dim, self.block_post[1].state_dict())
+                    self.block_post[1] = BatchRenormalization2D_Noniid(2 * dim, non_iid, self.block_post[1].state_dict())
                 else:
                     self.block_post[1] = BatchRenormalization2D(2 * dim, self.block_post[1].state_dict())
         else:
             self.block_pre = block
             self.block_post = None
-        self.cablock = CABlock(dim, renorm=renorm)
+        self.cablock = CABlock(dim, renorm=renorm, non_iid=non_iid)
 
     def forward(self, x):
         branch = x
@@ -136,12 +139,12 @@ class CABasicBlock(nn.Module):
 class CAPreActBasicBlock(CABasicBlock):
     """I did not think of a proper pretrained weight to load
     """
-    def __init__(self, block, dim, renorm, ibn, se_attn, restride=False, non_iid=False):
-        super(CAPreActBasicBlock, self).__init__(block, dim, renorm, ibn, se_attn, restride, non_iid)
+    def __init__(self, block, dim, renorm, ibn, restride=False, non_iid=0):
+        super(CAPreActBasicBlock, self).__init__(block, dim, renorm, ibn, restride, non_iid)
         in_planes = block.conv1.in_channels
         if renorm:
             if non_iid:
-                block.bn1 = BatchRenormalization2D_Noniid(in_planes, block.bn1.state_dict())
+                block.bn1 = BatchRenormalization2D_Noniid(in_planes, non_iid, block.bn1.state_dict())
             else:
                 block.bn1 = BatchRenormalization2D(in_planes, block.bn1.state_dict())
         if ibn:
@@ -174,15 +177,14 @@ class CARes18_IBN(nn.Module):
                  needs_norm=False,
                  pooling="gem",
                  renorm=False,
-                 se_attn=False,
                  is_reid=False,
-                 non_iid=False):
+                 non_iid=0):
         super().__init__()
         model = models.resnet18(weights=resnet18_pretrained, progress=False)
         self.conv0 = model.conv1
         if renorm:
             if non_iid:
-                self.bn0 = BatchRenormalization2D_Noniid(64, model.bn1.state_dict())
+                self.bn0 = BatchRenormalization2D_Noniid(64, non_iid, model.bn1.state_dict())
             else:
                 self.bn0 = BatchRenormalization2D(64, model.bn1.state_dict())
         else:
@@ -190,22 +192,22 @@ class CARes18_IBN(nn.Module):
         self.relu0 = model.relu
         self.pooling0 = model.maxpool
 
-        self.basicBlock11 = CABasicBlock(model.layer1[0], 64, renorm, True, se_attn, non_iid=non_iid)
+        self.basicBlock11 = CABasicBlock(model.layer1[0], 64, renorm, True, non_iid=non_iid)
 
-        self.basicBlock12 = CABasicBlock(model.layer1[1], 64, renorm, True, se_attn, non_iid=non_iid)
+        self.basicBlock12 = CABasicBlock(model.layer1[1], 64, renorm, True, non_iid=non_iid)
 
-        self.basicBlock21 = CABasicBlock(model.layer2[0], 128, renorm, True, se_attn, non_iid=non_iid)
+        self.basicBlock21 = CABasicBlock(model.layer2[0], 128, renorm, True, non_iid=non_iid)
 
-        self.basicBlock22 = CABasicBlock(model.layer2[1], 128, renorm, True, se_attn, non_iid=non_iid)
+        self.basicBlock22 = CABasicBlock(model.layer2[1], 128, renorm, True, non_iid=non_iid)
 
-        self.basicBlock31 = CABasicBlock(model.layer3[0], 256, renorm, True, se_attn, non_iid=non_iid)
+        self.basicBlock31 = CABasicBlock(model.layer3[0], 256, renorm, True, non_iid=non_iid)
 
-        self.basicBlock32 = CABasicBlock(model.layer3[1], 256, renorm, True, se_attn, non_iid=non_iid)
+        self.basicBlock32 = CABasicBlock(model.layer3[1], 256, renorm, True, non_iid=non_iid)
 
         # last stride = 1
-        self.basicBlock41 = CABasicBlock(model.layer4[0], 512, renorm, False, se_attn, True, non_iid=non_iid)
+        self.basicBlock41 = CABasicBlock(model.layer4[0], 512, renorm, False, True, non_iid=non_iid)
 
-        self.basicBlock42 = CABasicBlock(model.layer4[1], 512, renorm, False, se_attn, non_iid=non_iid)
+        self.basicBlock42 = CABasicBlock(model.layer4[1], 512, renorm, False, non_iid=non_iid)
 
         if pooling == "gem":
             self.avgpooling = GeM()
