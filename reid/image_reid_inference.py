@@ -337,10 +337,6 @@ if __name__ == "__main__":
     # experimental, needs batch size of 2
     market_gallery = reidDataset(dataset.gallery, dataset.num_train_pids, transform_test, False)
     dataloader1 = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    # gallery_embeddings, gallery_labels, gallery_cams = inference(model, dataloader, dataset.num_gallery_cams, True
-    # if params.ckpt.endswith("onnx") else False, params.use_side)
-    # gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
-    # market_gallery_augment = MarketDataset(dataset.gallery, transform_test_flip, False)
     market_gallery.transform = transform_test_flip
     dataloader2 = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     gallery_embeddings, gallery_labels, gallery_cams, gallery_seqs = inference_efficient(model, dataloader1, dataloader2, dataset.num_gallery_cams, params.use_side)
@@ -375,10 +371,6 @@ if __name__ == "__main__":
 
     market_query = reidDataset(dataset.query, dataset.num_train_pids, transform_test, False)
     dataloader1 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    # query_embeddings, query_labels, query_cams = inference(model, dataloader, dataset.num_query_cams, True
-    # if params.ckpt.endswith("onnx") else False, params.use_side)
-    # query_embeddings = F.normalize(query_embeddings, dim=1)
-    # market_query_augment = MarketDataset(dataset.query, transform_test_flip, False)
     market_query.transform = transform_test_flip
     dataloader2 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False,
                               pin_memory=True)

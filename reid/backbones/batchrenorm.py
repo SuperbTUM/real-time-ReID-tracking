@@ -62,7 +62,8 @@ class BatchRenormalization2D(nn.Module):
     def forward(self, x):
 
         batch_ch_mean = torch.mean(x, dim=(0, 2, 3), keepdim=True)
-        batch_ch_std = torch.clamp(torch.std(x, dim=(0, 2, 3), keepdim=True), self.eps, 1e10)
+        # in version 2.0: correction, otherwise: unbiased=False
+        batch_ch_std = torch.clamp(torch.std(x, dim=(0, 2, 3), correction=0, keepdim=True), self.eps, 1e10)
 
         if self.training:
             self.num_tracked_batch += 1
@@ -78,10 +79,8 @@ class BatchRenormalization2D(nn.Module):
             if self.num_tracked_batch > 2000 and self.d_max < self.max_d_max:
                 self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
-            self.running_avg_mean = (1 - self.momentum) * self.running_avg_mean + self.momentum * (
-                        batch_ch_mean.data - self.running_avg_mean)
-            self.running_avg_std = (1 - self.momentum) * self.running_avg_std + self.momentum * (
-                        batch_ch_std.data - self.running_avg_std)
+            self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
+            self.running_avg_std = self.running_avg_std + self.momentum * (batch_ch_std.data - self.running_avg_std)
 
         else:
             x = (x - self.running_avg_mean) / self.running_avg_std
@@ -108,7 +107,8 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         for i, x_mini in enumerate(x_splits):
 
             batch_ch_mean = torch.mean(x_mini, dim=(0, 2, 3), keepdim=True)
-            batch_ch_std = torch.clamp(torch.std(x_mini, dim=(0, 2, 3), keepdim=True), self.eps, 1e10)
+            # in version 2.0: correction, otherwise: unbiased=False
+            batch_ch_std = torch.clamp(torch.std(x_mini, dim=(0, 2, 3), correction=0, keepdim=True), self.eps, 1e10)
 
             if self.training:
                 r = torch.clamp(batch_ch_std / self.running_avg_std, 1.0 / self.r_max, self.r_max).data
@@ -118,10 +118,8 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
                 x_mini = ((x_mini - batch_ch_mean) * r) / batch_ch_std + d
                 x_mini = self.gamma * x_mini + self.beta
 
-                self.running_avg_mean = (1 - self.momentum) * self.running_avg_mean + self.momentum * (
-                        batch_ch_mean.data - self.running_avg_mean)
-                self.running_avg_std = (1 - self.momentum) * self.running_avg_std + self.momentum * (
-                        batch_ch_std.data - self.running_avg_std)
+                self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
+                self.running_avg_std = self.running_avg_std + self.momentum * (batch_ch_std.data - self.running_avg_std)
 
             else:
                 x_mini = (x_mini - self.running_avg_mean) / self.running_avg_std
@@ -195,7 +193,8 @@ class BatchRenormalization1D(nn.Module):
     def forward(self, x):
 
         batch_ch_mean = torch.mean(x, dim=0, keepdim=True)
-        batch_ch_std = torch.clamp(torch.std(x, dim=0, keepdim=True), self.eps, 1e10)
+        # in version 2.0: correction, otherwise: unbiased=False
+        batch_ch_std = torch.clamp(torch.std(x, dim=0, correction=0, keepdim=True), self.eps, 1e10)
 
         if self.training:
             r = torch.clamp(batch_ch_std / self.running_avg_std, 1.0 / self.r_max, self.r_max).data
@@ -211,10 +210,8 @@ class BatchRenormalization1D(nn.Module):
             if self.d_max < self.max_d_max:
                 self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
-            self.running_avg_mean = (1 - self.momentum) * self.running_avg_mean + self.momentum * (
-                    batch_ch_mean.data - self.running_avg_mean)
-            self.running_avg_std = (1 - self.momentum) * self.running_avg_std + self.momentum * (
-                    batch_ch_std.data - self.running_avg_std)
+            self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
+            self.running_avg_std = self.running_avg_std + self.momentum * (batch_ch_std.data - self.running_avg_std)
 
         else:
             x = (x - self.running_avg_mean) / self.running_avg_std
