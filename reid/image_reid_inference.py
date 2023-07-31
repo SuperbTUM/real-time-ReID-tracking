@@ -214,6 +214,7 @@ def parser():
                                                                             "resnet50",
                                                                             "baseline"])
     args.add_argument("--use_side", action="store_true")
+    args.add_argument("--renorm", action="store_true")
     return args.parse_args()
 
 
@@ -256,9 +257,9 @@ if __name__ == "__main__":
                                  std=(0.229, 0.224, 0.225)),
         ])
         if params.backbone == "seres18":
-            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=True).cuda()
+            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm).cuda()
         else:
-            model = cares18_ibn(dataset.num_train_pids, renorm=True).cuda()
+            model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm).cuda()
     elif params.backbone == "resnet50":
         transform_test = transforms.Compose([transforms.Resize((256, 128)),
                                              transforms.ToTensor(),

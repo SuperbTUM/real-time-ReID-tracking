@@ -554,7 +554,7 @@ class HybridLossWeighted(nn.Module):
                  smoothing=0.1,
                  epsilon=0,
                  lamda=0.0005,
-                 alpha=0.4,
+                 alpha=0.0,
                  triplet_smooth=False,
                  class_stats=None,
                  circle_factor=0.):
@@ -565,7 +565,7 @@ class HybridLossWeighted(nn.Module):
             self.triplet = TripletBeta(margin, alpha, triplet_smooth, reduction="none")
         else:
             self.triplet = WeightedRegularizedTriplet()
-        self.smooth = FocalLoss(smoothing, epsilon, class_stats)  # LabelSmoothing(smoothing, epsilon)
+        self.smooth = LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
         self.circle = CircleLoss()
         self.lamda = lamda
         self.circle_factor = circle_factor

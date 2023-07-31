@@ -111,7 +111,10 @@ class CABasicBlock(nn.Module):
 
         if ibn:
             # bn1 will be covered
-            block.bn1 = IBN(dim, renorm=renorm, non_iid=non_iid)
+            if renorm:
+                pretrained_in = block.bn1.IN
+                block.bn1 = IBN(dim, renorm=renorm, non_iid=non_iid)
+                block.bn1 = pretrained_in
         # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
             self.block_pre = nn.Sequential(*list(block.children())[:-1])
@@ -180,7 +183,8 @@ class CARes18_IBN(nn.Module):
                  is_reid=False,
                  non_iid=0):
         super().__init__()
-        model = models.resnet18(weights=resnet18_pretrained, progress=False)
+        # model = models.resnet18(weights=resnet18_pretrained, progress=False)
+        model = torch.hub.load("XingangPan/IBN-Net", "resnet18_ibn_a", pretrained=True)
         self.conv0 = model.conv1
         if renorm:
             if non_iid:

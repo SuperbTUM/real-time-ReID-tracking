@@ -98,8 +98,8 @@ class IBN(nn.Module):
         else:
             self.BN = nn.BatchNorm2d(self.in_channels - self.half)
         # experimental
-        # self.IN.weight.data.fill_(1.)
-        # self.IN.bias.data.zero_()
+        self.IN.weight.data.fill_(1.)
+        self.IN.bias.data.zero_()
 
     def forward(self, x):
         split = torch.split(x, self.half, 1)
