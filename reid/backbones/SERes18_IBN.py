@@ -6,7 +6,6 @@ import math
 from collections import OrderedDict
 
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization1D, BatchRenormalization2D_Noniid
-from .attention_pooling import AttentionPooling
 
 
 def weights_init_kaiming(m):
@@ -41,9 +40,9 @@ class SEBlock(nn.Module):
             self.globalavgpooling = GeM()
         else:
             self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
-        self.fc1 = nn.Linear(c_in, max(1, c_in // 16))  # bias=False
+        self.fc1 = nn.Linear(c_in, max(1, c_in // 16), bias=False)  # bias=False
         self.relu = nn.ReLU(inplace=True)
-        self.fc2 = nn.Linear(max(1, c_in // 16), c_in)  # bias=False
+        self.fc2 = nn.Linear(max(1, c_in // 16), c_in, bias=False)  # bias=False
         self.sigmoid = nn.Sigmoid()
         self.c_in = c_in
 
@@ -269,18 +268,18 @@ class SERse18_IBN(nn.Module):
 
         self.basicBlock11 = SEBasicBlock(model.layer1[0], 64, renorm, True, se_attn)
 
-        self.basicBlock12 = SEBasicBlock(model.layer1[1], 64, renorm, False, se_attn)
+        self.basicBlock12 = SEBasicBlock(model.layer1[1], 64, renorm, True, se_attn)
 
         self.basicBlock21 = SEBasicBlock(model.layer2[0], 128, renorm, True, se_attn)
 
-        self.basicBlock22 = SEBasicBlock(model.layer2[1], 128, renorm, False, se_attn)
+        self.basicBlock22 = SEBasicBlock(model.layer2[1], 128, renorm, True, se_attn)
 
         self.basicBlock31 = SEBasicBlock(model.layer3[0], 256, renorm, True, se_attn)
 
-        self.basicBlock32 = SEBasicBlock(model.layer3[1], 256, renorm, False, se_attn)
+        self.basicBlock32 = SEBasicBlock(model.layer3[1], 256, renorm, True, se_attn)
 
         # last stride = 1
-        self.basicBlock41 = SEBasicBlock(model.layer4[0], 512, renorm, True, se_attn, True)
+        self.basicBlock41 = SEBasicBlock(model.layer4[0], 512, renorm, False, se_attn, True)
 
         self.basicBlock42 = SEBasicBlock(model.layer4[1], 512, renorm, False, se_attn)
 
@@ -289,26 +288,20 @@ class SERse18_IBN(nn.Module):
         else:
             self.avgpooling = model.avgpool
 
-        # if renorm:
-        #     self.bnneck = BatchRenormalization1D(512)
-        #     self.bnneck.beta.requires_grad_(False)
-        # else:
-        #     self.bnneck = nn.BatchNorm1d(512)
-        #     self.bnneck.bias.requires_grad_(False)
+        if renorm:
+            self.bnneck = BatchRenormalization1D(512)
+            self.bnneck.beta.requires_grad_(False)
+        else:
+            self.bnneck = nn.BatchNorm1d(512)
+            self.bnneck.bias.requires_grad_(False)
 
-        self.bnneck = nn.BatchNorm1d(512)
-        self.bnneck.bias.requires_grad_(False)
         self.bnneck.apply(weights_init_kaiming)
 
         self.classifier = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(inplace=True),
-            nn.Dropout(),
-            nn.Linear(256, num_class, bias=False),
+            nn.Linear(512, num_class, bias=False),
         )
         self.classifier.apply(weights_init_classifier)
-        # self.needs_norm = needs_norm
+        self.needs_norm = needs_norm
         self.is_reid = is_reid
         self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
         self.cam_factor = 1.5
@@ -330,8 +323,8 @@ class SERse18_IBN(nn.Module):
 
         x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
-        x = self.bnneck(feature)
-        x = self.classifier(x)
+        x_normed = self.bnneck(feature)
+        x = self.classifier(x_normed)
         if cam is not None:
             cam_feature = feature + self.cam_factor * self.cam_bias[cam] # This is not good
             trunc_normal_(cam_feature, std=0.02)
@@ -340,6 +333,8 @@ class SERse18_IBN(nn.Module):
             return cam_feature, x
         if self.is_reid:
             return feature
+        if self.needs_norm:
+            return x_normed, x
         return feature, x
 
 

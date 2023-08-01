@@ -5,8 +5,7 @@ import torch.nn.functional as F
 from torchvision import models
 from collections import OrderedDict
 from .SERes18_IBN import GeM, IBN, trunc_normal_, weights_init_classifier, weights_init_kaiming
-from .batchrenorm import BatchRenormalization2D, BatchRenormalization2D_Noniid
-from .attention_pooling import AttentionPooling
+from .batchrenorm import BatchRenormalization2D, BatchRenormalization2D_Noniid, BatchRenormalization1D
 
 
 class CABlock(nn.Module):
@@ -61,37 +60,37 @@ class CABlock(nn.Module):
         return out
 
 
-class CASEBlock(CABlock):
-    def __init__(self, channel, reduction=16, renorm=False, non_iid=0):
-        super(CASEBlock, self).__init__(channel, reduction, renorm, non_iid)
-        self.F_c = nn.Linear(channel // reduction, channel, bias=False)  # bias=False
-        torch.nn.init.kaiming_normal_(self.F_c.weight.data, a=0, mode='fan_out')
-
-    def forward(self, x):
-        h, w = x.size(2), x.size(3)
-
-        x_h = F.adaptive_avg_pool2d(x, (h, 1)).permute(0, 1, 3, 2)
-        x_w = F.adaptive_avg_pool2d(x, (1, w))
-        x_c = F.adaptive_avg_pool2d(x, 1)
-        concat = torch.cat((x_h, x_w, x_c), 3).permute(0, 2, 3, 1)  # (32, 64, 1, 97) ->
-
-        # x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
-        x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat).permute(0, 3, 1, 2)))  # (32, 4, 1, 97)
-
-        x_cat_conv_split_h, x_cat_conv_split_w, x_cat_conv_split_c = x_cat_conv_relu.split([h, w, 1], 3)
-
-        # s_h = self.sigmoid_h(self.F_h(x_cat_conv_split_h.permute(0, 1, 3, 2)))
-        # s_w = self.sigmoid_w(self.F_w(x_cat_conv_split_w))
-        s_h = self.sigmoid(
-            self.F_h(x_cat_conv_split_h.permute(0, 3, 2, 1)).permute(0, 3, 1, 2))  # (32, 64, 1, 64) -> (32, 64, 64, 1)
-        s_w = self.sigmoid(
-            self.F_w(x_cat_conv_split_w.permute(0, 2, 3, 1)).permute(0, 3, 1, 2))  # (32, 32, 4, 1) -> (32, 64, 1, 32)
-        s_c = self.sigmoid(
-            self.F_c(x_cat_conv_split_c.permute(0, 2, 3, 1)).permute(0, 3, 1, 2))
-
-        out = x * s_h.expand_as(x) * s_w.expand_as(x) * s_c.expand_as(x)
-
-        return out
+# class CASEBlock(CABlock):
+#     def __init__(self, channel, reduction=16, renorm=False, non_iid=0):
+#         super(CASEBlock, self).__init__(channel, reduction, renorm, non_iid)
+#         self.F_c = nn.Linear(channel // reduction, channel, bias=False)  # bias=False
+#         torch.nn.init.kaiming_normal_(self.F_c.weight.data, a=0, mode='fan_out')
+#
+#     def forward(self, x):
+#         h, w = x.size(2), x.size(3)
+#
+#         x_h = F.adaptive_avg_pool2d(x, (h, 1)).permute(0, 1, 3, 2)
+#         x_w = F.adaptive_avg_pool2d(x, (1, w))
+#         x_c = F.adaptive_avg_pool2d(x, 1)
+#         concat = torch.cat((x_h, x_w, x_c), 3).permute(0, 2, 3, 1)  # (32, 64, 1, 97) ->
+#
+#         # x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
+#         x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat).permute(0, 3, 1, 2)))  # (32, 4, 1, 97)
+#
+#         x_cat_conv_split_h, x_cat_conv_split_w, x_cat_conv_split_c = x_cat_conv_relu.split([h, w, 1], 3)
+#
+#         # s_h = self.sigmoid_h(self.F_h(x_cat_conv_split_h.permute(0, 1, 3, 2)))
+#         # s_w = self.sigmoid_w(self.F_w(x_cat_conv_split_w))
+#         s_h = self.sigmoid(
+#             self.F_h(x_cat_conv_split_h.permute(0, 3, 2, 1)).permute(0, 3, 1, 2))  # (32, 64, 1, 64) -> (32, 64, 64, 1)
+#         s_w = self.sigmoid(
+#             self.F_w(x_cat_conv_split_w.permute(0, 2, 3, 1)).permute(0, 3, 1, 2))  # (32, 32, 4, 1) -> (32, 64, 1, 32)
+#         s_c = self.sigmoid(
+#             self.F_c(x_cat_conv_split_c.permute(0, 2, 3, 1)).permute(0, 3, 1, 2))
+#
+#         out = x * s_h.expand_as(x) * s_w.expand_as(x) * s_c.expand_as(x)
+#
+#         return out
 
 
 class CABasicBlock(nn.Module):
@@ -100,19 +99,22 @@ class CABasicBlock(nn.Module):
         if restride:
             block.conv1.stride = (1, 1)
             block.downsample[0].stride = (1, 1)
+        if ibn:
+            pretrained_in = block.bn1.IN
         if renorm:
             # experimental
             if non_iid:
-                block.bn1 = BatchRenormalization2D_Noniid(dim, non_iid, block.bn1.state_dict())
+                if not ibn:
+                    block.bn1 = BatchRenormalization2D_Noniid(dim, non_iid, block.bn1.state_dict())
                 block.bn2 = BatchRenormalization2D_Noniid(dim, non_iid, block.bn2.state_dict())
             else:
-                block.bn1 = BatchRenormalization2D(dim, block.bn1.state_dict())
+                if not ibn:
+                    block.bn1 = BatchRenormalization2D(dim, block.bn1.state_dict())
                 block.bn2 = BatchRenormalization2D(dim, block.bn2.state_dict())
 
         if ibn:
             # bn1 will be covered
             if renorm:
-                pretrained_in = block.bn1.IN
                 block.bn1 = IBN(dim, renorm=renorm, non_iid=non_iid)
                 block.bn1 = pretrained_in
         # block.relu = AconC(dim)
@@ -218,23 +220,17 @@ class CARes18_IBN(nn.Module):
         else:
             self.avgpooling = model.avgpool
 
-        # if renorm:
-        #     self.bnneck = BatchRenormalization1D(512)
-        #     self.bnneck.beta.requires_grad_(False)
-        # else:
-        #     self.bnneck = nn.BatchNorm1d(512)
-        #     self.bnneck.bias.requires_grad_(False)
+        if renorm:
+            self.bnneck = BatchRenormalization1D(512)
+            self.bnneck.beta.requires_grad_(False)
+        else:
+            self.bnneck = nn.BatchNorm1d(512)
+            self.bnneck.bias.requires_grad_(False)
 
-        self.bnneck = nn.BatchNorm1d(512)
-        self.bnneck.bias.requires_grad_(False)
         self.bnneck.apply(weights_init_kaiming)
 
         self.classifier = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.25),
-            nn.Linear(256, num_class, bias=False),
+            nn.Linear(512, num_class, bias=False),
         )
         self.classifier.apply(weights_init_classifier)
         self.needs_norm = needs_norm
