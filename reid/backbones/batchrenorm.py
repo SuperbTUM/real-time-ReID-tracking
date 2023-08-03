@@ -68,16 +68,16 @@ class BatchRenormalization2D(nn.Module):
 
         if self.training:
             self.num_tracked_batch += 1
-            r = torch.clamp(torch.sqrt(batch_ch_var_biased / self.running_avg_var), 1.0 / self.r_max, self.r_max).data
+            r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)), 1.0 / self.r_max, self.r_max).data
             d = torch.clamp((batch_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps), -self.d_max, self.d_max).data
 
             x = ((x - batch_ch_mean) * r) / torch.sqrt(batch_ch_var_biased + self.eps) + d
             x = self.gamma * x + self.beta
 
-            if self.num_tracked_batch > 5000 and self.r_max < self.max_r_max:
-                self.r_max += 0.5 * self.r_max_inc_step * x.shape[0]
+            if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
+                self.r_max += self.r_max_inc_step * x.shape[0]
 
-            if self.num_tracked_batch > 2000 and self.d_max < self.max_d_max:
+            if self.num_tracked_batch > 200 and self.d_max < self.max_d_max:
                 self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
             self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
@@ -92,8 +92,16 @@ class BatchRenormalization2D(nn.Module):
 
 class BatchRenormalization2D_Noniid(BatchRenormalization2D):
     """Dedicated for metric learning where sampling is non-iid"""
-    def __init__(self, num_features, num_instance, dict_state=None, eps=1e-05, momentum=0.1, r_d_max_inc_step=1e-5):
-        super(BatchRenormalization2D_Noniid, self).__init__(num_features, dict_state, eps, momentum, r_d_max_inc_step)
+    def __init__(self,
+                 num_features,
+                 num_instance,
+                 dict_state=None,
+                 eps=1e-05,
+                 momentum=0.1,
+                 r_d_max_inc_step=1e-5,
+                 r_max=1.0,
+                 d_max=0.0):
+        super(BatchRenormalization2D_Noniid, self).__init__(num_features, dict_state, eps, momentum, r_d_max_inc_step, r_max, d_max)
         self.num_instance = num_instance
 
     def forward(self, x):
@@ -115,7 +123,7 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
             batch_ch_var_biased = torch.var(x, dim=(0, 2, 3), unbiased=False, keepdim=True)
 
             if self.training:
-                r = torch.clamp(torch.sqrt(batch_ch_var_biased / self.running_avg_var), 1.0 / self.r_max, self.r_max).data
+                r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)), 1.0 / self.r_max, self.r_max).data
                 d = torch.clamp((batch_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps), -self.d_max,
                                 self.d_max).data
 
@@ -133,10 +141,10 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
                 x_normed[self.num_instance * j + i % self.num_instance] = x_mini[j]
 
         self.num_tracked_batch += 1
-        if self.num_tracked_batch > 5000 and self.r_max < self.max_r_max:
-            self.r_max += 0.5 * self.r_max_inc_step * x.shape[0]
+        if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
+            self.r_max += self.r_max_inc_step * x.shape[0]
 
-        if self.num_tracked_batch > 2000 and self.d_max < self.max_d_max:
+        if self.num_tracked_batch > 200 and self.d_max < self.max_d_max:
             self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
         x_normed = torch.stack(x_normed, dim=0)
@@ -202,17 +210,19 @@ class BatchRenormalization1D(nn.Module):
         batch_ch_var_biased = torch.var(x, dim=0, unbiased=False, keepdim=True)
 
         if self.training:
-            r = torch.clamp(torch.sqrt(batch_ch_var_biased / self.running_avg_var), 1.0 / self.r_max, self.r_max).data
+            self.num_tracked_batch += 1
+
+            r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)), 1.0 / self.r_max, self.r_max).data
             d = torch.clamp((batch_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps), -self.d_max,
                             self.d_max).data
 
             x = ((x - batch_ch_mean) * r) / torch.sqrt(batch_ch_var_biased + self.eps) + d
             x = self.gamma * x + self.beta
 
-            if self.r_max < self.max_r_max:
-                self.r_max += 0.5 * self.r_max_inc_step * x.shape[0]
+            if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
+                self.r_max += self.r_max_inc_step * x.shape[0]
 
-            if self.d_max < self.max_d_max:
+            if self.num_tracked_batch > 200 and self.d_max < self.max_d_max:
                 self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
             self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
