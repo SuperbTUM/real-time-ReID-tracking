@@ -63,14 +63,15 @@ class BatchRenormalization2D(nn.Module):
 
         batch_ch_mean = torch.mean(x, dim=(0, 2, 3), keepdim=True)
         # in version 2.0: correction, otherwise: unbiased=False
-        batch_ch_var = torch.var(x, dim=(0, 2, 3), correction=0, keepdim=True)
+        batch_ch_var_unbiased = torch.var(x, dim=(0, 2, 3), unbiased=True, keepdim=True)
+        batch_ch_var_biased = torch.var(x, dim=(0, 2, 3), unbiased=False, keepdim=True)
 
         if self.training:
             self.num_tracked_batch += 1
-            r = torch.clamp(batch_ch_var / self.running_avg_var, 1.0 / self.r_max, self.r_max).data
+            r = torch.clamp(torch.sqrt(batch_ch_var_biased / self.running_avg_var), 1.0 / self.r_max, self.r_max).data
             d = torch.clamp((batch_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps), -self.d_max, self.d_max).data
 
-            x = ((x - batch_ch_mean) * r) / torch.sqrt(batch_ch_var + self.eps) + d
+            x = ((x - batch_ch_mean) * r) / torch.sqrt(batch_ch_var_biased + self.eps) + d
             x = self.gamma * x + self.beta
 
             if self.num_tracked_batch > 5000 and self.r_max < self.max_r_max:
@@ -80,10 +81,10 @@ class BatchRenormalization2D(nn.Module):
                 self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
             self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
-            self.running_avg_var = self.running_avg_var + self.momentum * (batch_ch_var.data - self.running_avg_var)
+            self.running_avg_var = self.running_avg_var + self.momentum * (batch_ch_var_unbiased.data - self.running_avg_var)
 
         else:
-            x = (x - self.running_avg_mean) / torch.sqrt(batch_ch_var + self.eps)
+            x = (x - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps)
             x = self.gamma * x + self.beta
 
         return x
@@ -110,18 +111,19 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
 
             batch_ch_mean = torch.mean(x_mini, dim=(0, 2, 3), keepdim=True)
             # in version 2.0: correction, otherwise: unbiased=False
-            batch_ch_var = torch.var(x_mini, dim=(0, 2, 3), correction=0, keepdim=True)
+            batch_ch_var_unbiased = torch.var(x_mini, dim=(0, 2, 3), unbiased=True, keepdim=True)
+            batch_ch_var_biased = torch.var(x, dim=(0, 2, 3), unbiased=False, keepdim=True)
 
             if self.training:
-                r = torch.clamp(batch_ch_var / self.running_avg_var, 1.0 / self.r_max, self.r_max).data
+                r = torch.clamp(torch.sqrt(batch_ch_var_biased / self.running_avg_var), 1.0 / self.r_max, self.r_max).data
                 d = torch.clamp((batch_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps), -self.d_max,
                                 self.d_max).data
 
-                x_mini = ((x_mini - batch_ch_mean) * r) / torch.sqrt(batch_ch_var + self.eps) + d
+                x_mini = ((x_mini - batch_ch_mean) * r) / torch.sqrt(batch_ch_var_biased + self.eps) + d
                 x_mini = self.gamma * x_mini + self.beta
 
                 self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
-                self.running_avg_var = self.running_avg_var + self.momentum * (batch_ch_var.data - self.running_avg_var)
+                self.running_avg_var = self.running_avg_var + self.momentum * (batch_ch_var_unbiased.data - self.running_avg_var)
 
             else:
                 x_mini = (x_mini - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps)
@@ -196,14 +198,15 @@ class BatchRenormalization1D(nn.Module):
 
         batch_ch_mean = torch.mean(x, dim=0, keepdim=True)
         # in version 2.0: correction, otherwise: unbiased=False
-        batch_ch_var = torch.var(x, dim=0, correction=0, keepdim=True)
+        batch_ch_var_unbiased = torch.var(x, dim=0, unbiased=True, keepdim=True)
+        batch_ch_var_biased = torch.var(x, dim=0, unbiased=False, keepdim=True)
 
         if self.training:
-            r = torch.clamp(batch_ch_var / self.running_avg_var, 1.0 / self.r_max, self.r_max).data
+            r = torch.clamp(torch.sqrt(batch_ch_var_biased / self.running_avg_var), 1.0 / self.r_max, self.r_max).data
             d = torch.clamp((batch_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps), -self.d_max,
                             self.d_max).data
 
-            x = ((x - batch_ch_mean) * r) / torch.sqrt(batch_ch_var + self.eps) + d
+            x = ((x - batch_ch_mean) * r) / torch.sqrt(batch_ch_var_biased + self.eps) + d
             x = self.gamma * x + self.beta
 
             if self.r_max < self.max_r_max:
@@ -213,7 +216,7 @@ class BatchRenormalization1D(nn.Module):
                 self.d_max += 2 * self.d_max_inc_step * x.shape[0]
 
             self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
-            self.running_avg_var = self.running_avg_var + self.momentum * (batch_ch_var.data - self.running_avg_var)
+            self.running_avg_var = self.running_avg_var + self.momentum * (batch_ch_var_unbiased.data - self.running_avg_var)
 
         else:
             x = (x - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps)
