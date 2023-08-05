@@ -75,10 +75,10 @@ class BatchRenormalization2D(nn.Module):
             x = self.gamma * x + self.beta
 
             if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
-                self.r_max += self.r_max_inc_step * x.shape[0]
+                self.r_max += 1.2 * self.r_max_inc_step * x.shape[0]
 
-            if self.num_tracked_batch > 200 and self.d_max < self.max_d_max:
-                self.d_max += 2 * self.d_max_inc_step * x.shape[0]
+            if self.num_tracked_batch > 500 and self.d_max < self.max_d_max:
+                self.d_max += 4.8 * self.d_max_inc_step * x.shape[0]
 
             self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
             self.running_avg_var = self.running_avg_var + self.momentum * (batch_ch_var_unbiased.data - self.running_avg_var)
@@ -140,12 +140,13 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
             for j in range(x_mini.size(0)):
                 x_normed[self.num_instance * j + i % self.num_instance] = x_mini[j]
 
-        self.num_tracked_batch += 1
-        if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
-            self.r_max += self.r_max_inc_step * x.shape[0]
+        if self.training:
+            self.num_tracked_batch += 1
+            if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
+                self.r_max += 1.2 * self.r_max_inc_step * x.shape[0]
 
-        if self.num_tracked_batch > 200 and self.d_max < self.max_d_max:
-            self.d_max += 2 * self.d_max_inc_step * x.shape[0]
+            if self.num_tracked_batch > 500 and self.d_max < self.max_d_max:
+                self.d_max += 4.8 * self.d_max_inc_step * x.shape[0]
 
         x_normed = torch.stack(x_normed, dim=0)
         return x_normed
@@ -220,10 +221,10 @@ class BatchRenormalization1D(nn.Module):
             x = self.gamma * x + self.beta
 
             if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
-                self.r_max += self.r_max_inc_step * x.shape[0]
+                self.r_max += 1.2 * self.r_max_inc_step * x.shape[0]
 
-            if self.num_tracked_batch > 200 and self.d_max < self.max_d_max:
-                self.d_max += 2 * self.d_max_inc_step * x.shape[0]
+            if self.num_tracked_batch > 500 and self.d_max < self.max_d_max:
+                self.d_max += 4.8 * self.d_max_inc_step * x.shape[0]
 
             self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
             self.running_avg_var = self.running_avg_var + self.momentum * (batch_ch_var_unbiased.data - self.running_avg_var)
