@@ -1,4 +1,7 @@
-from train_prepare import *
+import numpy as np
+
+from torch.utils.data import DataLoader
+from prefetch_generator import BackgroundGenerator
 import torch.onnx
 import torch.distributed as dist
 import h5py
@@ -6,10 +9,18 @@ from PIL import Image
 import cv2
 import os
 import matplotlib.pyplot as plt
-import onnxruntime
 from segmentation import batched_extraction
 
 from ultralytics import YOLO
+
+
+def to_numpy(tensor):
+    return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+
+
+class DataLoaderX(DataLoader):
+    def __iter__(self):
+        return BackgroundGenerator(super().__iter__())
 
 
 def transform_dataset_hdf5(gt_paths, img_width, img_height):

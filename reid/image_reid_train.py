@@ -1,6 +1,13 @@
+import os
+from PIL import Image
+
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.backends.cudnn as cudnn
+from torch.autograd import Variable
 from torch.utils.data import Dataset
-from tqdm import tqdm
+from torchvision import transforms
 
 from backbones.baseline_lite import ft_baseline
 from backbones.plr_osnet import plr_osnet
@@ -8,12 +15,14 @@ from backbones.SERes18_IBN import seres18_ibn
 from backbones.CARes18 import cares18_ibn
 from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
-from train_utils import *
+from train_utils import redetection, recrop, check_parameters, DataLoaderX, plot_loss, to_numpy
+from data_augment import LGT, Fuse_RGB_Gray_Sketch, Fuse_Gray
 from dataset_market import Market1501
 from dataset_dukemtmc import DukeMTMCreID
-from train_prepare import WarmupMultiStepLR, RandomIdentitySampler, RandomErasing
+from train_prepare import WarmupMultiStepLR, RandomIdentitySampler, RandomErasing, HybridLoss, HybridLossWeighted, to_onnx, euclidean_dist
 
 import argparse
+from tqdm import tqdm
 import onnxruntime
 import madgrad
 from sklearn.cluster import DBSCAN
@@ -480,7 +489,7 @@ def parser():
                                                                             "swin_v1",
                                                                             "swin_v2",
                                                                             "baseline"])
-    args.add_argument("--epochs", type=int, default=120)
+    args.add_argument("--epochs", type=int, default=160)
     args.add_argument("--epsilon", help="for polyloss, 0 by default", type=range_type, default=0.0, metavar="[-1, 6]")
     args.add_argument("--margin", help="for triplet loss", default=0.0, type=float)
     args.add_argument("--center_lamda", help="for center loss", default=0.0, type=float)
@@ -508,8 +517,7 @@ if __name__ == "__main__":
             transforms.RandomHorizontalFlip(),
             transforms.Pad(10),
             transforms.RandomCrop((256, 128)),
-            LGT(0.4),
-            transforms.RandomGrayscale(0.05),
+            Fuse_Gray(0.35, 0.05),
             # transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             transforms.RandomErasing(),
@@ -525,7 +533,7 @@ if __name__ == "__main__":
             if params.backbone == "seres18":
                 model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
             elif params.backbone == "cares18":
-                model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams, non_iid=params.instance).cuda()
+                model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams, non_iid=0).cuda()
             else:
                 model = ft_baseline(dataset.num_train_pids).cuda()
             print("model size: {:.3f} MB".format(check_parameters(model)))

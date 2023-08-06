@@ -3,28 +3,19 @@ from torch import Tensor
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 from torch.autograd import Variable
-from prefetch_generator import BackgroundGenerator
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
-from torchvision import transforms
 
 import torch.onnx
 import numpy as np
 import random
 import math
-from PIL import Image
 from bisect import bisect_right
 from typing import Tuple
 from collections import defaultdict
-import cv2
 
 cudnn.deterministic = True
 cudnn.benchmark = True
-
-
-class DataLoaderX(DataLoader):
-    def __iter__(self):
-        return BackgroundGenerator(super().__iter__())
 
 
 class FocalLoss(nn.Module):
@@ -74,6 +65,7 @@ class LabelSmoothing(nn.Module):
 
     def forward(self, x, target):
         logprobs = F.log_softmax(x, dim=-1)
+        probs = F.softmax(x, dim=-1)
         target = target.long()
         if self.k_sparse > 0:
             topk = x.topk(self.k_sparse, dim=-1)[0]
@@ -85,7 +77,7 @@ class LabelSmoothing(nn.Module):
             nll_loss = nll_loss.squeeze(1)
         smooth_loss = -logprobs.mean(dim=-1)
         smoothed_labels = F.one_hot(target, x.size(-1)) * self.confidence + self.smoothing / x.size(-1)
-        one_minus_pt = torch.sum(smoothed_labels * (1 - logprobs), dim=-1)
+        one_minus_pt = torch.sum(smoothed_labels * (1 - probs), dim=-1)
         loss = self.confidence * nll_loss + self.smoothing * smooth_loss
         poly_loss = loss + one_minus_pt * self.epsilon
         if self.class_weights is not None:
@@ -512,7 +504,7 @@ class HybridLoss(nn.Module):
                  smoothing=0.1,
                  epsilon=0,
                  lamda=0.0005,
-                 alpha=0.4,
+                 alpha=0.0,
                  triplet_smooth=False,
                  class_stats=None,
                  circle_factor=0.):
@@ -523,7 +515,7 @@ class HybridLoss(nn.Module):
             self.triplet = TripletBeta(margin, alpha, triplet_smooth)
         else:
             self.triplet = WeightedRegularizedTriplet()
-        self.smooth = FocalLoss(smoothing, epsilon, class_stats)  # LabelSmoothing(smoothing, epsilon)
+        self.smooth = LabelSmoothing(smoothing, epsilon)#FocalLoss(smoothing, epsilon, class_stats)  # LabelSmoothing(smoothing, epsilon)
         self.circle = CircleLoss()
         self.lamda = lamda
         self.circle_factor = circle_factor
@@ -772,110 +764,7 @@ def to_onnx(model, input_dummy, input_names=["input"], output_names=["outputs"])
                           input_names=input_names,
                           output_names=output_names)
 
-
-def to_numpy(tensor):
-    return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
-
-
-# This is the code of Local Grayscale Transformation
-
-class LGT(object):
-
-    def __init__(self, probability=0.2, sl=0.02, sh=0.4, r1=0.3):
-        self.probability = probability
-        self.sl = sl
-        self.sh = sh
-        self.r1 = r1
-
-    def __call__(self, img):
-        """
-        :param img: should be a tensor for the sake of preprocessing convenience
-        :return:
-        """
-        if isinstance(img, torch.Tensor):
-            img = transforms.ToPILImage()(img)
-        new = img.convert("L")  # Convert from here to the corresponding grayscale image
-        np_img = np.array(new, dtype=np.uint8)
-        img_gray = np.dstack([np_img, np_img, np_img])
-
-        if random.uniform(0, 1) >= self.probability:
-            return transforms.ToTensor()(img)
-
-        for attempt in range(100):
-            area = img.size[0] * img.size[1]
-            target_area = random.uniform(self.sl, self.sh) * area
-            aspect_ratio = random.uniform(self.r1, 1 / self.r1)
-
-            h = int(round(math.sqrt(target_area * aspect_ratio)))
-            w = int(round(math.sqrt(target_area / aspect_ratio)))
-
-            if w < img.size[1] and h < img.size[0]:
-                x1 = random.randint(0, img.size[0] - h)
-                y1 = random.randint(0, img.size[1] - w)
-                img = np.asarray(img).astype('float')
-
-                img[y1:y1 + h, x1:x1 + w, 0] = img_gray[y1:y1 + h, x1:x1 + w, 0]
-                img[y1:y1 + h, x1:x1 + w, 1] = img_gray[y1:y1 + h, x1:x1 + w, 1]
-                img[y1:y1 + h, x1:x1 + w, 2] = img_gray[y1:y1 + h, x1:x1 + w, 2]
-
-                img = Image.fromarray(img.astype('uint8'))
-
-                return transforms.ToTensor()(img)
-
-        return transforms.ToTensor()(img)
-
-
-def toSketch(img):  # Convert visible  image to sketch image
-    img_np = np.asarray(img)
-    img_inv = 255 - img_np
-    img_blur = cv2.GaussianBlur(img_inv, ksize=(27, 27), sigmaX=0, sigmaY=0)
-    img_blend = cv2.divide(img_np, 255 - img_blur, scale=256)
-    img_blend = Image.fromarray(img_blend)
-    return img_blend
-
-
-"""
-Randomly select several channels of visible image (R, G, B), gray image (gray), and sketch image (sketch) 
-to fuse them into a new 3-channel image.
-"""
-
-
-def random_choose(r, g, b, gray_or_sketch):
-    p = [r, g, b, gray_or_sketch, gray_or_sketch]
-    idx = [0, 1, 2, 3, 4]
-    random.shuffle(idx)
-    return Image.merge('RGB', [p[idx[0]], p[idx[1]], p[idx[2]]])
-
-
-# 10(%Grayscale) 5%(Grayscale-RGB) 5%(Sketch-RGB)
-class Fuse_RGB_Gray_Sketch(object):
-    def __init__(self, G=0.1, G_rgb=0.05, S_rgb=0.05):
-        self.G = G
-        self.G_rgb = G_rgb
-        self.S_rgb = S_rgb
-
-    def __call__(self, img):
-        if isinstance(img, torch.Tensor):
-            img = transforms.ToPILImage()(img)
-        r, g, b = img.split()
-        gray = img.convert('L')  # convert visible  image to grayscale images
-        p = random.random()
-        if p < self.G:  # just Grayscale
-            img = Image.merge('RGB', [gray, gray, gray])
-
-        elif p < self.G + self.G_rgb:  # fuse Grayscale-RGB
-            img2 = random_choose(r, g, b, gray)
-            img = img2
-
-        elif p < self.G + self.G_rgb + self.S_rgb:  # fuse Sketch-RGB
-            sketch = toSketch(gray)
-            img3 = random_choose(r, g, b, sketch)
-            img = img3
-        return transforms.ToTensor()(img)
-
-
 # @credit to Alibaba
-
 def No_index(a, b):
     assert isinstance(a, list)
     return [i for i, j in enumerate(a) if j != b]

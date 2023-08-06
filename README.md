@@ -85,12 +85,12 @@ We train the model on both image-based dataset and video-based dataset(w/. groun
 
 For non-continual image training
 ```python
-python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005
+python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005
 ```
 
 For continual image training
 ```python
-python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --continual
+python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005 --continual
 ```
 
 For image testing
