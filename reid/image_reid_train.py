@@ -176,12 +176,13 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     try:
         to_onnx(model.module,
                 torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"), # bs=2, experimental
+                params.dataset,
                 # torch.ones(1, dtype=torch.long)),
                 # input_names=["input", "index"],
                 output_names=["embeddings", "outputs"])
     except: # There may be op issue
         pass
-    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint.pt")
+    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint_{}.pt".format(params.dataset))
     return model, loss_stats
 
 
@@ -242,8 +243,9 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
     loss_func2.center.save()
     to_onnx(model.module,
             torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),
+            params.dataset,
             output_names=["y1", "y2", "fea"])
-    torch.save(model.state_dict(), "checkpoint/plr_osnet_checkpoint.pt")
+    torch.save(model.state_dict(), "checkpoint/plr_osnet_checkpoint_{}.pt".format(params.dataset))
     return model, loss_stats
 
 
@@ -307,9 +309,10 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
     to_onnx(model.module,
             (torch.randn(2, 3, 448, 224, requires_grad=True, device="cuda"),
              torch.ones(2, dtype=torch.long)),
+            params.dataset,
             input_names=["input", "index"],
             output_names=["embeddings", "outputs"])
-    torch.save(model.state_dict(), "checkpoint/vision_transformer_checkpoint.pt")
+    torch.save(model.state_dict(), "checkpoint/vision_transformer_checkpoint_{}.pt".format(params.dataset))
     return model, loss_stats
 
 
@@ -342,7 +345,12 @@ def representation_only(model):
     return model
 
 
-def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side=False) -> tuple:
+def produce_pseudo_data(model,
+                        dataset_test,
+                        merged_datasets,
+                        all_cam=6,
+                        use_onnx=False,
+                        use_side=False) -> tuple:
     model.eval()
     pseudo_data = []
     embeddings = []
@@ -357,7 +365,7 @@ def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side
                     cam = seq = None
                 elif len(sample) == 3:
                     img, _, cam = sample
-                    seq = 0
+                    seq = torch.zeros(params.bs, dtype=torch.int32)
                 else:
                     img, _, cam, seq = sample
                 img = img.cuda(non_blocking=True)
@@ -377,7 +385,7 @@ def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side
                 cam = seq = None
             elif len(sample) == 3:
                 img, _, cam = sample
-                seq = 0
+                seq = torch.zeros(2, dtype=torch.int32)
             else:
                 img, _, cam, seq = sample
             if use_side:
@@ -391,45 +399,65 @@ def produce_pseudo_data(model, dataset_test, all_cam=6, use_onnx=False, use_side
             seqs.append(seq)
     embeddings = F.normalize(torch.cat(embeddings, dim=0), dim=1, p=2)
     dists = euclidean_dist(embeddings, embeddings)
-    cluster_method = DBSCAN(eps=0.25, min_samples=6, metric="precomputed", n_jobs=-1)
+    cluster_method = DBSCAN(eps=0.2, min_samples=dataset.num_train_cams, metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
     cams = torch.cat(cams, dim=0)
     seqs = torch.cat(seqs, dim=0)
-    for i, label in enumerate(labels):
-        if label != -1:
-            pseudo_data.append((
-                dataset_test[i][0],
-                label + dataset.num_train_pids,
-                cams[i].item(),
-                seqs[i].item()
-            ))
+    if params.dataset == 'market1501':
+        for i, label in enumerate(labels):
+            if label != -1:
+                pseudo_data.append((
+                    merged_datasets[i][0],
+                    label + dataset.num_train_pids,
+                    cams[i].item(),
+                    seqs[i].item()
+                ))
+    else:
+        for i, label in enumerate(labels):
+            if label != -1:
+                pseudo_data.append((
+                    merged_datasets[i][0],
+                    label + dataset.num_train_pids,
+                    cams[i].item()
+                ))
     print("Inference completed! {} more pseudo-labels obtained!".format(len(pseudo_data)))
     return pseudo_data, max(labels) + 1 + dataset.num_train_pids
 
 
-def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=False, tmp_feat_dim=256):
+def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=False, tmp_feat_dim=512):
     model.train()
     model.needs_norm = False
     model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False)
     nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    if params.instance > 0:
+        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=5e-4)
+    else:
+        custom_sampler = None
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
     loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda, class_stats=class_stats)#WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
-    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+    dataloader = DataLoaderX(dataset,
+                             batch_size=batch_size,
+                             num_workers=4,
+                             shuffle=not params.instance,
+                             pin_memory=True,
+                             sampler=custom_sampler,
+                             drop_last=True)
     if accelerate:
         accelerator = Accelerator()
         model = model.to(accelerator.device)
         model, dataloader, optimizer, scheduler = accelerator.prepare(model, dataloader, optimizer,
                                                                       scheduler)
     loss_stats = []
-    transforms_augment = nn.Sequential(
-        # transforms.Pad([10, 10]),
-        # transforms.RandomCrop((256, 128)),
-        transforms.RandomHorizontalFlip(p=1.))
-    scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
+    #transforms_augment = nn.Sequential(
+    #    # transforms.Pad([10, 10]),
+    #    # transforms.RandomCrop((256, 128)),
+    #    transforms.RandomHorizontalFlip(p=1.))
+    #scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
     # Additionally train 10 epochs
     for epoch in range(10):
         iterator = tqdm(dataloader)
@@ -439,11 +467,12 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
             optimizer.zero_grad()
             optimizer_center.zero_grad()
             images = images.cuda(non_blocking=True)
-            images_augment = scripted_transforms_augment(images)
+            # images_augment = scripted_transforms_augment(images)
             label = Variable(label).cuda(non_blocking=True)
             embeddings, outputs = model(images)
-            embeddings_augment, _ = model(images_augment)
-            loss = loss_func(embeddings, outputs, label, embeddings_augment, sample_weights / batch_size)
+            # embeddings_augment, _ = model(images_augment)
+            loss = loss_func(embeddings, outputs, label, weights=sample_weights / batch_size)
+            # loss = loss_func(embeddings, outputs, label, embeddings_augment, sample_weights / batch_size)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:
@@ -462,10 +491,11 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
     try:
         to_onnx(model.module,
                 torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),
+                params.dataset,
                 output_names=["embeddings", "outputs"])
     except RuntimeError:
         pass
-    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint.pt")
+    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint_{}.pt".format(params.dataset))
     return model, loss_stats
 
 
@@ -550,14 +580,14 @@ if __name__ == "__main__":
                 merged_datasets = dataset.gallery + dataset.query
                 dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
 
-                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True)
+                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 market_dataset.set_cross_domain()
                 model = representation_only(model)
                 torch.cuda.empty_cache()
-                model, loss_stats = train_cnn_continual(model, market_dataset, num_class_new, params.bs, params.accelerate)
+                model, loss_stats = train_cnn_continual(model, market_dataset, num_class_new, params.bs, params.accelerate, 512)
                 market_dataset.reset_cross_domain()
 
     else:
@@ -596,9 +626,9 @@ if __name__ == "__main__":
                 # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
                 #                               pin_memory=True)
 
-                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
+                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
 
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 market_dataset.set_cross_domain()
@@ -628,8 +658,8 @@ if __name__ == "__main__":
                 # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
                 #                               pin_memory=True)
 
-                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model.onnx", providers=providers)
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, dataset.num_gallery_cams, use_onnx=True, use_side=True)
+                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
                 market_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 market_dataset.set_cross_domain()

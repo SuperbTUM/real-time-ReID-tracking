@@ -85,12 +85,12 @@ We train the model on both image-based dataset and video-based dataset(w/. groun
 
 For non-continual image training
 ```python
-python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005
+python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005
 ```
 
 For continual image training
 ```python
-python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon 1.0 --margin 0.3 --center_lamda 0.0005 --continual
+python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --continual
 ```
 
 For image testing
@@ -134,21 +134,24 @@ The speed is acquired with `time` package after the synchronization of CUDA.
 
 ## Evaluation
 
+[Metric-learning]
+
+Market1501
+
+| Metric | Acc@1  | mAP    |
+|--------|--------|--------|
+| Value  | 0.9201 | 0.7948 |
+
+DukeMTMC
+
+| Metric | Acc@1  | mAP    |
+|--------|--------|--------|
+| Value  | 0.8236 | 0.6795 |
+
+[Ordinary]
 **Re-identification**
 
 Dataset: Market1501. More can be found on [wiki](https://github.com/SuperbTUM/real-time-ReID-tracking/wiki).
-
-Model Size Comparison
-
-| Model     | Res18  | CARes18 | CARes18-IBrN | SERes18 |
-|-----------|--------|---------|--------------|---------|
-| Size (MB) | 45.870 | 44.420  | 44.399       | 44.246  |
-
-Baseline: Res18(ImageNet1k-pretrained)-Softmax+SoftTriplet
-    
-| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    | Size      |
-|--------|--------|--------|--------|--------|-----------|
-| Value  | 0.7812 | 0.9112 | 0.9406 | 0.5609 | 45.870 MB |
 
 CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augment)+Center-Continual
 

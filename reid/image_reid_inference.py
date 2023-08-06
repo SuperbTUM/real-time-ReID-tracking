@@ -215,6 +215,7 @@ def parser():
                                                                             "baseline"])
     args.add_argument("--use_side", action="store_true")
     args.add_argument("--renorm", action="store_true")
+    args.add_argument("--eps", type=float, default=0.2)
     return args.parse_args()
 
 
@@ -351,15 +352,14 @@ if __name__ == "__main__":
     dists = euclidean_dist(gallery_embeddings, gallery_embeddings) # * 0.1 + compute_jaccard_distance(gallery_embeddings) * 0.9
     dists[dists < 0] = 0.
     dists[dists > 1] = 1.
-    eps = 0.2
     try:
         from cuml import DBSCAN
         print("CUML Imported!")
-        cluster_method = DBSCAN(eps=eps, min_samples=dataset.num_gallery_cams, metric="precomputed")
+        cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_gallery_cams, metric="precomputed")
         dists = dists.cpu().numpy()
     except ImportError:
         from sklearn.cluster import DBSCAN
-        cluster_method = DBSCAN(eps=eps, min_samples=dataset.num_gallery_cams, metric="precomputed", n_jobs=-1)
+        cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_gallery_cams, metric="precomputed", n_jobs=-1)
     pseudo_labels = cluster_method.fit_predict(dists)
     indices_pseudo = (pseudo_labels != -1)
     num_labels = max(pseudo_labels) + 1

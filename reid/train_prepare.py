@@ -145,7 +145,7 @@ class CenterLoss(nn.Module):
         mask = labels.eq(classes.expand(batch_size, self.num_classes))
 
         dist = []
-        indices = torch.zeros_like(labels)
+        indices = torch.zeros(batch_size, dtype=torch.int32)
         for i in range(batch_size):
             value = distmat[i][mask[i]] if x_augment is None else (distmat[i][mask[i]] + distmat_augment[i][
                 mask[i]]) / 2.
@@ -551,7 +551,7 @@ class HybridLossWeighted(nn.Module):
                  class_stats=None,
                  circle_factor=0.):
         super().__init__()
-        self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
+        self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, ckpt="center_ckpt.pt")
         if margin > 0.:
             # self.triplet = TripletLoss(margin, alpha, triplet_smooth)  # Smooth only works for hard triplet loss now
             self.triplet = TripletBeta(margin, alpha, triplet_smooth, reduction="none")
@@ -734,7 +734,7 @@ class RankedLoss(object):
         return total_loss
 
 
-def to_onnx(model, input_dummy, input_names=["input"], output_names=["outputs"]):
+def to_onnx(model, input_dummy, dataset_name, input_names=["input"], output_names=["outputs"]):
     import os
     if not os.path.exists("checkpoint"):
         os.mkdir("checkpoint")
@@ -746,7 +746,7 @@ def to_onnx(model, input_dummy, input_names=["input"], output_names=["outputs"])
             dynamic_axes[output_name] = {0: 'batch_size'}
         torch.onnx.export(model,
                           input_dummy,
-                          "checkpoint/reid_model.onnx",
+                          "checkpoint/reid_model_{}.onnx".format(dataset_name),
                           export_params=True,
                           opset_version=10,
                           do_constant_folding=True,
