@@ -1,8 +1,6 @@
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import models
 from collections import OrderedDict
 from .SERes18_IBN import GeM, IBN, trunc_normal_, weights_init_classifier, weights_init_kaiming
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization2D_Noniid, BatchRenormalization1D
@@ -99,8 +97,8 @@ class CABasicBlock(nn.Module):
         if restride:
             block.conv1.stride = (1, 1)
             block.downsample[0].stride = (1, 1)
-        if ibn:
-            pretrained_in = block.bn1.IN
+        # if ibn:
+        #     pretrained_in = block.bn1.IN
         if renorm:
             # experimental
             if non_iid:
@@ -115,8 +113,12 @@ class CABasicBlock(nn.Module):
         if ibn:
             # bn1 will be covered
             if renorm:
-                block.bn1 = IBN(dim, renorm=renorm, non_iid=non_iid)
-                block.bn1 = pretrained_in
+                if non_iid:
+                    block.bn1.BN = BatchRenormalization2D_Noniid(dim >> 1, non_iid, block.bn1.BN.state_dict())
+                else:
+                    block.bn1.BN = BatchRenormalization2D(dim >> 1, block.bn1.BN.state_dict())
+            #     block.bn1 = IBN(dim, renorm=renorm, non_iid=non_iid)
+            #     block.bn1.IN = pretrained_in
         # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
             self.block_pre = nn.Sequential(*list(block.children())[:-1])

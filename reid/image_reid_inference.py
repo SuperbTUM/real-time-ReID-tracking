@@ -215,7 +215,7 @@ def parser():
                                                                             "baseline"])
     args.add_argument("--use_side", action="store_true")
     args.add_argument("--renorm", action="store_true")
-    args.add_argument("--eps", type=float, default=0.2)
+    args.add_argument("--eps", type=float, default=0.25)
     return args.parse_args()
 
 
@@ -344,10 +344,32 @@ if __name__ == "__main__":
     gallery_embeddings, gallery_labels, gallery_cams, gallery_seqs = inference_efficient(model, dataloader1, dataloader2, dataset.num_gallery_cams, params.use_side)
     gallery_embeddings1 = torch.stack([i[0].squeeze() for i in gallery_embeddings])
     gallery_embeddings2 = torch.stack([i[1].squeeze() for i in gallery_embeddings])
-    gallery_embeddings1 = F.normalize(gallery_embeddings1, dim=1)
-    gallery_embeddings2 = F.normalize(gallery_embeddings2, dim=1)
+    # gallery_embeddings1 = F.normalize(gallery_embeddings1, dim=1)
+    # gallery_embeddings2 = F.normalize(gallery_embeddings2, dim=1)
 
     gallery_embeddings = (gallery_embeddings1 + gallery_embeddings2) / 2.0
+    gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
+
+    market_query = reidDataset(dataset.query, dataset.num_train_pids, transform_test, False)
+    dataloader1 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
+    market_query.transform = transform_test_flip
+    dataloader2 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False,
+                              pin_memory=True)
+    query_embeddings, query_labels, query_cams, query_seqs = inference_efficient(model, dataloader1, dataloader2,
+                                                                                 dataset.num_query_cams,
+                                                                                 params.use_side)
+    query_embeddings1 = torch.stack([i[0].squeeze() for i in query_embeddings])
+    query_embeddings2 = torch.stack([i[1].squeeze() for i in query_embeddings])
+    # query_embeddings1 = F.normalize(query_embeddings1, dim=1)
+    # query_embeddings2 = F.normalize(query_embeddings2, dim=1)
+
+    query_embeddings = (query_embeddings1 + query_embeddings2) / 2.0
+    query_embeddings = F.normalize(query_embeddings, dim=1)
+
+    merged_embeddings = torch.cat((gallery_embeddings, query_embeddings), dim=0)
+    merged_cams = torch.cat((gallery_cams, query_cams), dim=0)
+    merged_embeddings = diminish_camera_bias(merged_embeddings, merged_cams)
+
     from train_prepare import euclidean_dist
     dists = euclidean_dist(gallery_embeddings, gallery_embeddings) # * 0.1 + compute_jaccard_distance(gallery_embeddings) * 0.9
     dists[dists < 0] = 0.
@@ -366,23 +388,11 @@ if __name__ == "__main__":
     assert num_labels >= 0.2 * dataset.num_train_pids
     gallery_seqs = gallery_seqs * dataset.num_gallery_cams * num_labels + gallery_cams * num_labels + pseudo_labels
 
-    gallery_embeddings = diminish_camera_bias(gallery_embeddings, gallery_cams)
+    gallery_embeddings = merged_embeddings[:len(dataset.gallery)]
     from inference_utils import smooth_tracklets
     gallery_embeddings = smooth_tracklets(gallery_embeddings, gallery_seqs, indices_pseudo)
 
-    market_query = reidDataset(dataset.query, dataset.num_train_pids, transform_test, False)
-    dataloader1 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    market_query.transform = transform_test_flip
-    dataloader2 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False,
-                              pin_memory=True)
-    query_embeddings, query_labels, query_cams, query_seqs = inference_efficient(model, dataloader1, dataloader2, dataset.num_query_cams, params.use_side)
-    query_embeddings1 = torch.stack([i[0].squeeze() for i in query_embeddings])
-    query_embeddings2 = torch.stack([i[1].squeeze() for i in query_embeddings])
-    query_embeddings1 = F.normalize(query_embeddings1, dim=1)
-    query_embeddings2 = F.normalize(query_embeddings2, dim=1)
-
-    query_embeddings = (query_embeddings1 + query_embeddings2) / 2.0
-    query_embeddings = diminish_camera_bias(query_embeddings, query_cams)
+    query_embeddings = merged_embeddings[len(dataset.gallery):]
 
     CMC = torch.IntTensor(gallery_embeddings.size(0)).zero_()
     ap = 0.0

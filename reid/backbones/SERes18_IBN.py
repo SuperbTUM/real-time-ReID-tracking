@@ -80,7 +80,7 @@ class GeM(nn.Module):
 
 
 class IBN(nn.Module):
-    def __init__(self, in_channels, ratio=0.5, renorm=False, non_iid=0):
+    def __init__(self, in_channels, ratio=0.5, renorm=False, non_iid=0, dict_state=None):
         """
         Half do instance norm, half do batch norm
         """
@@ -91,9 +91,9 @@ class IBN(nn.Module):
         self.IN = nn.InstanceNorm2d(self.half, affine=True)
         if renorm:
             if non_iid:
-                self.BN = BatchRenormalization2D_Noniid(self.in_channels - self.half, non_iid)
+                self.BN = BatchRenormalization2D_Noniid(self.in_channels - self.half, non_iid, dict_state)
             else:
-                self.BN = BatchRenormalization2D(self.in_channels - self.half) # experimental
+                self.BN = BatchRenormalization2D(self.in_channels - self.half, dict_state) # experimental
         else:
             self.BN = nn.BatchNorm2d(self.in_channels - self.half)
         # experimental
