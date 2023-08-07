@@ -399,7 +399,7 @@ def produce_pseudo_data(model,
             seqs.append(seq)
     embeddings = F.normalize(torch.cat(embeddings, dim=0), dim=1, p=2)
     dists = euclidean_dist(embeddings, embeddings)
-    cluster_method = DBSCAN(eps=0.2, min_samples=dataset.num_train_cams, metric="precomputed", n_jobs=-1)
+    cluster_method = DBSCAN(eps=0.25, min_samples=dataset.num_train_cams, metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
     cams = torch.cat(cams, dim=0)
     seqs = torch.cat(seqs, dim=0)
@@ -431,7 +431,7 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
     nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(dataset, params.instance)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=5e-4)
+        optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=5e-4)
     else:
         custom_sampler = None
         optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)

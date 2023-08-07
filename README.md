@@ -95,7 +95,7 @@ python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm
 
 For image testing
 ```python
-python reid/image_reid_inference.py --backbone cares18 --bs 1 --ckpt checkpoint/reid_model.onnx
+python reid/image_reid_inference.py --backbone cares18 --bs 1 --ckpt checkpoint/reid_model.onnx --eps 0.2
 ```
 
 For video training
@@ -138,15 +138,15 @@ The speed is acquired with `time` package after the synchronization of CUDA.
 
 Market1501
 
-| Metric | Acc@1  | mAP    |
-|--------|--------|--------|
-| Value  | 0.9305 | 0.8194 |
+| Metric | Acc@1         | mAP           |
+|--------|---------------|---------------|
+| Value  | 0.9350/0.9279 | 0.8147/0.8185 |
 
 DukeMTMC
 
-| Metric | Acc@1  | mAP    |
-|--------|--------|--------|
-| Value  | 0.8236 | 0.6795 |
+| Metric | Acc@1         | mAP           |
+|--------|---------------|---------------|
+| Value  | 0.8371/0.8115 | 0.6893/0.7012 |
 
 [Ordinary]
 **Re-identification**

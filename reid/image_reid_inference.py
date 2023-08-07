@@ -253,6 +253,8 @@ if __name__ == "__main__":
         transform_test_flip = transforms.Compose([
             transforms.Resize((256, 128)),
             transforms.RandomHorizontalFlip(p=1.0),
+            transforms.Pad(10),
+            transforms.RandomCrop((256, 128)), # experimental
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                  std=(0.229, 0.224, 0.225)),
