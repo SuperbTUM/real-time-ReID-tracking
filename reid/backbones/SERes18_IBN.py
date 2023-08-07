@@ -115,11 +115,14 @@ class SEBasicBlock(nn.Module):
             block.conv1.stride = (1, 1)
             block.downsample[0].stride = (1, 1)
         if renorm:
-            block.bn1 = BatchRenormalization2D(dim)
-            block.bn2 = BatchRenormalization2D(dim)
+            if not ibn:
+                block.bn1 = BatchRenormalization2D(dim, block.bn1.state_dict())
+            block.bn2 = BatchRenormalization2D(dim, block.bn2.state_dict())
         if ibn:
             # bn1 will be covered
-            block.bn1 = IBN(dim)
+            # block.bn1 = IBN(dim)
+            if renorm:
+                block.bn1.BN = BatchRenormalization2D(dim >> 1, block.bn1.BN.state_dict())
         # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
             self.block_pre = nn.Sequential(OrderedDict(list(block.named_children())[:-1]))
@@ -257,10 +260,11 @@ class SERse18_IBN(nn.Module):
                  se_attn=False,
                  is_reid=False):
         super().__init__()
-        model = models.resnet18(weights=resnet18_pretrained, progress=False)
+        # model = models.resnet18(weights=resnet18_pretrained, progress=False)
+        model = torch.hub.load("XingangPan/IBN-Net", "resnet18_ibn_a", pretrained=True)
         self.conv0 = model.conv1
         if renorm:
-            self.bn0 = BatchRenormalization2D(64)
+            self.bn0 = BatchRenormalization2D(64, self.bn0.state_dict())
         else:
             self.bn0 = model.bn1
         self.relu0 = model.relu

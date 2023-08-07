@@ -14,6 +14,7 @@ class CABlock(nn.Module):
         self.conv_1x1 = nn.Linear(channel, channel//reduction, bias=False)  # bias=False
 
         self.relu = nn.ReLU(inplace=True)
+        # self.relu = nn.SiLU(inplace=True)
         if renorm:
             if non_iid:
                 self.bn = BatchRenormalization2D_Noniid(channel//reduction, non_iid)

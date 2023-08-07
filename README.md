@@ -85,12 +85,12 @@ We train the model on both image-based dataset and video-based dataset(w/. groun
 
 For non-continual image training
 ```python
-python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005
+python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --instance 8
 ```
 
 For continual image training
 ```python
-python reid/image_reid_train.py --bs 16 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --continual
+python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --instance 8 --continual
 ```
 
 For image testing
@@ -134,22 +134,23 @@ The speed is acquired with `time` package after the synchronization of CUDA.
 
 ## Evaluation
 
-[Metric-learning]
+**Re-identification**
 
-Market1501
+[Metric-learning] W/o. or W/. tracklet smoothing
+
+Market1501, inference eps = 0.2
 
 | Metric | Acc@1         | mAP           |
 |--------|---------------|---------------|
 | Value  | 0.9350/0.9279 | 0.8147/0.8185 |
 
-DukeMTMC
+DukeMTMC, inference eps = 0.25
 
 | Metric | Acc@1         | mAP           |
 |--------|---------------|---------------|
 | Value  | 0.8371/0.8115 | 0.6893/0.7012 |
 
-[Ordinary]
-**Re-identification**
+~~[Ordinary]~~
 
 Dataset: Market1501. More can be found on [wiki](https://github.com/SuperbTUM/real-time-ReID-tracking/wiki).
 
