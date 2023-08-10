@@ -136,58 +136,40 @@ The speed is acquired with `time` package after the synchronization of CUDA.
 
 **Re-identification**
 
-[Metric-learning] W/o. or W/. tracklet smoothing
+* Metric-learning
+
+W/o. or W/. tracklet smoothing
 
 Market1501, inference eps = 0.2
 
-| Metric | Acc@1         | mAP           |
-|--------|---------------|---------------|
-| Value  | 0.9350/0.9279 | 0.8147/0.8185 |
+| Metric         | Acc@1  | mAP    |
+|----------------|--------|--------|
+| W/o. smoothing | 0.9350 | 0.8147 |
+| W/. smoothing  | 0.9279 | 0.8185 |
+
 
 DukeMTMC, inference eps = 0.25
 
-| Metric | Acc@1         | mAP           |
-|--------|---------------|---------------|
-| Value  | 0.8371/0.8115 | 0.6893/0.7012 |
+| Metric         | Acc@1  | mAP    |
+|----------------|--------|--------|
+| W/o. smoothing | 0.8353 | 0.6948 |
+| W/. smoothing  | 0.8061 | 0.7069 |
 
-~~[Ordinary]~~
+* Domain Transfer
 
-Dataset: Market1501. More can be found on [wiki](https://github.com/SuperbTUM/real-time-ReID-tracking/wiki).
+Market1501 -> DukeMTMC
 
-CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augment)+Center-Continual
+| Metric         | Acc@1 | mAP |
+|----------------|-------|-----|
+| W/o. smoothing | -     | -   |
+| W/. smoothing  | -     | -   |
 
-| Metric           | Acc@1 | Acc@5 | Acc@10 | mAP |
-|------------------|-------|-------|--------|-----|
-| Value            | -     | -     | -      | -   |
+DukeMTMC -> Market1501
 
-CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/. poly=-1.0)+TripletPenalty(W/. augment)+Center;
-[Checkpoint](https://drive.google.com/file/d/1osOKwuygDGbqZzNBnqzcMsdTbz5JyCmc/view?usp=sharing)
-
-| Metric | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|--------|--------|--------|--------|--------|
-| Value  | 0.9181 | 0.9712 | 0.9813 | 0.7719 |
-
-CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center-Continual
-
-| Metric           | Acc@1    | Acc@5  | Acc@10 | mAP      |
-|------------------|----------|--------|--------|----------|
-| Value            | `0.9290` | 0.9718 | 0.9816 | 0.7919   |
-| Strong Inference | `0.9290` | 0.9709 | 0.9813 | 0.7966   |
-| Jaccard Distance | 0.9157   | 0.9694 | 0.9798 | `0.8184` |
-
-CARes18-IBN-BatchReNorm-WeightedFocalLoss(W/o. poly)+TripletPenalty(W/. augment)+Center; 
-[Checkpoint](https://drive.google.com/file/d/1eyK1wFZullwdXDZkJ8fgpnOV4AiqDtfu/view?usp=drive_link)
-
-| Metric           | Acc@1  | Acc@5  | Acc@10 | mAP    | Size(MB) |
-|------------------|--------|--------|--------|--------|----------|
-| Value            | 0.9270 | 0.9742 | 0.9828 | 0.7786 | `44.399` |
-| Strong Inference | 0.9233 | 0.9742 | 0.9825 | 0.7871 | `44.399` |
-
-Dataset: DukeMTMC
-
-| Metric           | Acc@1  | Acc@5  | Acc@10 | mAP    |
-|------------------|--------|--------|--------|--------|
-| Value            | 0.8110 | 0.8932 | 0.9206 | 0.6301 |
+| Metric         | Acc@1  | mAP    |
+|----------------|--------|--------|
+| W/o. smoothing | 0.6475 | 0.3743 |
+| W/. smoothing  | -      | -      |
 
 **Tracking**
 
