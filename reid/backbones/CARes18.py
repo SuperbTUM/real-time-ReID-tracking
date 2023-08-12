@@ -179,10 +179,8 @@ class CARes18_IBN(nn.Module):
     """
 
     def __init__(self,
-                 resnet18_pretrained="IMAGENET1K_V1",
                  num_class=751,
                  num_cams=6,
-                 needs_norm=False,
                  pooling="gem",
                  renorm=False,
                  is_reid=False,
@@ -236,7 +234,6 @@ class CARes18_IBN(nn.Module):
             nn.Linear(512, num_class, bias=False),
         )
         self.classifier.apply(weights_init_classifier)
-        self.needs_norm = needs_norm
         self.is_reid = is_reid
         self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
         self.cam_factor = 1.5
@@ -258,19 +255,19 @@ class CARes18_IBN(nn.Module):
 
         x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
-        if cam is not None:
+        if cam is not None: # before or after bn?
             feature = feature + self.cam_factor * self.cam_bias[cam]
             trunc_normal_(feature, std=0.02)
-        if self.is_reid:
-            return feature
         x_norm = self.bnneck(feature)
         x = self.classifier(x_norm)
-        if self.needs_norm:
+        if self.is_reid:
+            return x
+        if not self.training:
             return x_norm, x
-        return feature, x
+        return feature, x_norm, x
 
 
-def cares18_ibn(num_classes=751, pretrained="IMAGENET1K_V1", loss="triplet", **kwargs):
+def cares18_ibn(num_classes=751, loss="triplet", **kwargs):
     if loss == "triplet":
         is_reid = False
     elif loss == "softmax":
@@ -278,7 +275,6 @@ def cares18_ibn(num_classes=751, pretrained="IMAGENET1K_V1", loss="triplet", **k
     else:
         raise NotImplementedError
     model = CARes18_IBN(num_class=num_classes,
-                        resnet18_pretrained=pretrained,
                         is_reid=is_reid,
                         **kwargs)
     return model

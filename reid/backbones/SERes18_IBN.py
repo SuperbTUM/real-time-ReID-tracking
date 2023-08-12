@@ -251,10 +251,8 @@ class SERse18_IBN(nn.Module):
     i.e. Divide into eight and concatenate them
     """
     def __init__(self,
-                 resnet18_pretrained="IMAGENET1K_V1",
                  num_class=751,
                  num_cams=6,
-                 needs_norm=True,
                  pooling="gem",
                  renorm=False,
                  se_attn=False,
@@ -305,7 +303,6 @@ class SERse18_IBN(nn.Module):
             nn.Linear(512, num_class, bias=False),
         )
         self.classifier.apply(weights_init_classifier)
-        self.needs_norm = needs_norm
         self.is_reid = is_reid
         self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
         self.cam_factor = 1.5
@@ -327,22 +324,19 @@ class SERse18_IBN(nn.Module):
 
         x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
+        if cam is not None:
+            feature = feature + self.cam_factor * self.cam_bias[cam] # This is not good
+            trunc_normal_(feature, std=0.02)
         x_normed = self.bnneck(feature)
         x = self.classifier(x_normed)
-        if cam is not None:
-            cam_feature = feature + self.cam_factor * self.cam_bias[cam] # This is not good
-            trunc_normal_(cam_feature, std=0.02)
-            if self.is_reid:
-                return cam_feature
-            return cam_feature, x
         if self.is_reid:
-            return feature
-        if self.needs_norm:
+            return x
+        if not self.training:
             return x_normed, x
-        return feature, x
+        return feature, x_normed, x
 
 
-def seres18_ibn(num_classes=751, pretrained="IMAGENET1K_V1", loss="triplet", **kwargs):
+def seres18_ibn(num_classes=751, loss="triplet", **kwargs):
     if loss == "triplet":
         is_reid = False
     elif loss == "softmax":
@@ -350,7 +344,6 @@ def seres18_ibn(num_classes=751, pretrained="IMAGENET1K_V1", loss="triplet", **k
     else:
         raise NotImplementedError
     model = SERse18_IBN(num_class=num_classes,
-                        resnet18_pretrained=pretrained,
                         is_reid=is_reid,
                         **kwargs)
     return model

@@ -141,8 +141,6 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model = model.to(accelerator.device)
         model, dataloader, optimizer, lr_scheduler, optimizer_center = accelerator.prepare(model, dataloader, optimizer, lr_scheduler, optimizer_center)
     loss_stats = []
-    # transforms_augment = nn.Sequential(transforms.RandomHorizontalFlip(p=1))
-    # scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
         for sample in iterator:
@@ -153,9 +151,8 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             # images_flip = scripted_transforms_augment(images)
             label = Variable(label).cuda(non_blocking=True)
             # cams = cams.cuda(non_blocking=True)
-            embeddings, outputs = model(images)#, cams)
-            # embeddings_augment, _ = model(images_flip)
-            loss = loss_func(embeddings, outputs, label)
+            embeddings, normed_embeddings, outputs = model(images)#, cams)
+            loss = loss_func(embeddings, normed_embeddings, outputs, label)
             # loss = loss_func(embeddings, outputs, label, embeddings_augment)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
@@ -170,7 +167,6 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
             iterator.set_description(description)
         lr_scheduler.step()
-    model.needs_norm = True
     model.eval()
     loss_func.center.save()
     try:
@@ -469,9 +465,9 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
             images = images.cuda(non_blocking=True)
             # images_augment = scripted_transforms_augment(images)
             label = Variable(label).cuda(non_blocking=True)
-            embeddings, outputs = model(images)
+            embeddings, normed_embeddings, outputs = model(images)
             # embeddings_augment, _ = model(images_augment)
-            loss = loss_func(embeddings, outputs, label, weights=sample_weights / batch_size)
+            loss = loss_func(embeddings, normed_embeddings, outputs, label, weights=sample_weights / batch_size)
             # loss = loss_func(embeddings, outputs, label, embeddings_augment, sample_weights / batch_size)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)

@@ -520,7 +520,13 @@ class HybridLoss(nn.Module):
         self.lamda = lamda
         self.circle_factor = circle_factor
 
-    def forward(self, embeddings, outputs, targets, embeddings_augment=None, outputs_augment=None):
+    def forward(self,
+                embeddings,
+                normed_embeddings,
+                outputs,
+                targets,
+                embeddings_augment=None,
+                outputs_augment=None):
         """
         features: feature vectors
         targets: ground truth labels
@@ -562,7 +568,14 @@ class HybridLossWeighted(nn.Module):
         self.lamda = lamda
         self.circle_factor = circle_factor
 
-    def forward(self, embeddings, outputs, targets, embeddings_augment=None, weights=None, outputs_augment=None):
+    def forward(self,
+                embeddings,
+                normed_embeddings,
+                outputs,
+                targets,
+                embeddings_augment=None,
+                weights=None,
+                outputs_augment=None):
         """
         features: feature vectors
         targets: ground truth labels
@@ -757,7 +770,7 @@ def to_onnx(model, input_dummy, dataset_name, input_names=["input"], output_name
     except:
         torch.onnx.export(model,
                           input_dummy,
-                          "checkpoint/reid_model.onnx",
+                          "checkpoint/reid_model_{}.onnx".format(dataset_name),
                           export_params=True,
                           opset_version=10,
                           do_constant_folding=True,
