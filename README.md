@@ -144,31 +144,31 @@ Market1501, inference eps = 0.2
 
 | Metric         | Acc@1  | mAP    |
 |----------------|--------|--------|
-| W/o. smoothing | 0.9350 | 0.8147 |
-| W/. smoothing  | 0.9279 | 0.8185 |
+| W/o. smoothing | 0.9329 | 0.8139 |
+| W/. smoothing  | 0.9308 | 0.8240 |
 
 
 DukeMTMC, inference eps = 0.25
 
 | Metric         | Acc@1  | mAP    |
 |----------------|--------|--------|
-| W/o. smoothing | 0.8353 | 0.6948 |
-| W/. smoothing  | 0.8061 | 0.7069 |
+| W/o. smoothing | 0.8340 | 0.6949 |
+| W/. smoothing  | 0.8151 | 0.7376 |
 
 * Domain Transfer
 
 Market1501 -> DukeMTMC
 
-| Metric         | Acc@1 | mAP |
-|----------------|-------|-----|
-| W/o. smoothing | -     | -   |
-| W/. smoothing  | -     | -   |
+| Metric         | Acc@1  | mAP    |
+|----------------|--------|--------|
+| W/o. smoothing | 0.5516 | 0.3433 |
+| W/. smoothing  | -      | -      |
 
 DukeMTMC -> Market1501
 
 | Metric         | Acc@1  | mAP    |
 |----------------|--------|--------|
-| W/o. smoothing | 0.6475 | 0.3743 |
+| W/o. smoothing | 0.6793 | 0.3754 |
 | W/. smoothing  | -      | -      |
 
 **Tracking**

@@ -370,30 +370,33 @@ if __name__ == "__main__":
 
     merged_embeddings = torch.cat((gallery_embeddings, query_embeddings), dim=0)
     merged_cams = torch.cat((gallery_cams, query_cams), dim=0)
-    merged_embeddings = diminish_camera_bias(merged_embeddings, merged_cams)
+    merged_seqs = torch.cat((gallery_seqs, query_seqs), dim=0)
 
     from train_prepare import euclidean_dist
-    dists = euclidean_dist(gallery_embeddings, gallery_embeddings) # * 0.1 + compute_jaccard_distance(gallery_embeddings) * 0.9
+    dists = euclidean_dist(merged_embeddings, merged_embeddings) # * 0.1 + compute_jaccard_distance(gallery_embeddings) * 0.9
     dists[dists < 0] = 0.
     dists[dists > 1] = 1.
     try:
         from cuml import DBSCAN
         print("CUML Imported!")
-        cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_gallery_cams, metric="precomputed")
+        cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_gallery_cams+1, metric="precomputed")
         dists = dists.cpu().numpy()
     except ImportError:
         from sklearn.cluster import DBSCAN
-        cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_gallery_cams, metric="precomputed", n_jobs=-1)
+        cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_gallery_cams+1, metric="precomputed", n_jobs=-1)
     pseudo_labels = cluster_method.fit_predict(dists)
     indices_pseudo = (pseudo_labels != -1)
     num_labels = max(pseudo_labels) + 1
     assert num_labels >= 0.2 * dataset.num_train_pids
-    gallery_seqs = gallery_seqs * dataset.num_gallery_cams * num_labels + gallery_cams * num_labels + pseudo_labels
+    # merged_seqs = merged_seqs * dataset.num_gallery_cams * num_labels + merged_cams * num_labels + pseudo_labels
+    merged_seqs = merged_seqs * num_labels + pseudo_labels
+
+    merged_embeddings = diminish_camera_bias(merged_embeddings, merged_cams)
+
+    from inference_utils import smooth_tracklets
+    merged_embeddings = smooth_tracklets(merged_embeddings, merged_seqs, indices_pseudo)
 
     gallery_embeddings = merged_embeddings[:len(dataset.gallery)]
-    from inference_utils import smooth_tracklets
-    gallery_embeddings = smooth_tracklets(gallery_embeddings, gallery_seqs, indices_pseudo)
-
     query_embeddings = merged_embeddings[len(dataset.gallery):]
 
     CMC = torch.IntTensor(gallery_embeddings.size(0)).zero_()
