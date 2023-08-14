@@ -395,7 +395,7 @@ def produce_pseudo_data(model,
             seqs.append(seq)
     embeddings = F.normalize(torch.cat(embeddings, dim=0), dim=1, p=2)
     dists = euclidean_dist(embeddings, embeddings)
-    cluster_method = DBSCAN(eps=0.25, min_samples=dataset.num_train_cams, metric="precomputed", n_jobs=-1)
+    cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_train_cams+1, metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
     cams = torch.cat(cams, dim=0)
     seqs = torch.cat(seqs, dim=0)
@@ -422,7 +422,6 @@ def produce_pseudo_data(model,
 
 def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=False, tmp_feat_dim=512):
     model.train()
-    model.needs_norm = False
     model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False)
     nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
     if params.instance > 0:
@@ -482,7 +481,6 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
             description = "epoch: {}, Triplet loss: {:.4f}".format(epoch, loss)
             iterator.set_description(description)
         scheduler.step()
-    # model.needs_norm = True
     model.eval()
     try:
         to_onnx(model.module,
@@ -519,6 +517,7 @@ def parser():
     args.add_argument("--epsilon", help="for polyloss, 0 by default", type=range_type, default=0.0, metavar="[-1, 6]")
     args.add_argument("--margin", help="for triplet loss", default=0.0, type=float)
     args.add_argument("--center_lamda", help="for center loss", default=0.0, type=float)
+    args.add_argument("--eps", default=0.25, type=float, help="clustering eps for continual training")
     args.add_argument("--continual", action="store_true")
     args.add_argument("--accelerate", action="store_true")
     args.add_argument("--renorm", action="store_true")
@@ -543,17 +542,17 @@ if __name__ == "__main__":
             transforms.RandomHorizontalFlip(),
             transforms.Pad(10),
             transforms.RandomCrop((256, 128)),
-            Fuse_Gray(0.35, 0.05),
+            Fuse_Gray(0.4, 0.05),
             # transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             transforms.RandomErasing(),
         ])
-        market_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
+        source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
         torch.cuda.empty_cache()
         if params.backbone == "plr_osnet":
             model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
             model = nn.DataParallel(model)
-            model, loss_stats = train_plr_osnet(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
+            model, loss_stats = train_plr_osnet(model, source_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                                 params.accelerate)
         else:
             if params.backbone == "seres18":
@@ -564,7 +563,7 @@ if __name__ == "__main__":
                 model = ft_baseline(dataset.num_train_pids).cuda()
             print("model size: {:.3f} MB".format(check_parameters(model)))
             model = nn.DataParallel(model)
-            model, loss_stats = train_cnn(model, market_dataset, params.bs, params.epochs, dataset.num_train_pids,
+            model, loss_stats = train_cnn(model, source_dataset, params.bs, params.epochs, dataset.num_train_pids,
                                           params.accelerate)
 
             if params.continual:
@@ -579,12 +578,12 @@ if __name__ == "__main__":
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
                 pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True)
                 del dataset_test
-                market_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
-                market_dataset.set_cross_domain()
+                source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
+                source_dataset.set_cross_domain()
                 model = representation_only(model)
                 torch.cuda.empty_cache()
-                model, loss_stats = train_cnn_continual(model, market_dataset, num_class_new, params.bs, params.accelerate, 512)
-                market_dataset.reset_cross_domain()
+                model, loss_stats = train_cnn_continual(model, source_dataset, num_class_new, params.bs, params.accelerate, 512)
+                source_dataset.reset_cross_domain()
 
     else:
         transform_train = transforms.Compose([
@@ -603,14 +602,14 @@ if __name__ == "__main__":
                                                                   std=(0.229, 0.224, 0.225)),
                                              ]
                                             )
-        market_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
+        source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
 
         if params.backbone.startswith("vit"):
             model = vit_t(img_size=(448, 224), num_classes=dataset.num_train_pids, loss="triplet",
                           camera=dataset.num_train_cams,
                           sequence=dataset.num_train_seqs, side_info=True).cuda()
             model = nn.DataParallel(model)
-            model, loss_stats = train_vision_transformer(model, market_dataset, 384,
+            model, loss_stats = train_vision_transformer(model, source_dataset, 384,
                                                          params.bs, params.epochs,
                                                          dataset.num_train_pids,
                                                          dataset.num_train_cams,
@@ -619,29 +618,27 @@ if __name__ == "__main__":
             if params.continual:
                 merged_datasets = dataset.gallery + dataset.query
                 dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
-                # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
-                #                               pin_memory=True)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
 
                 pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
-                market_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
-                market_dataset.set_cross_domain()
+                source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
+                source_dataset.set_cross_domain()
                 model = side_info_only(model)
-                model, loss_stats = train_vision_transformer(model, market_dataset, 384,
+                model, loss_stats = train_vision_transformer(model, source_dataset, 384,
                                                              params.bs, params.epochs,
                                                              dataset.num_train_pids,
                                                              dataset.num_train_cams,
                                                              dataset.num_train_seqs)
-                market_dataset.reset_cross_domain()
+                source_dataset.reset_cross_domain()
         elif params.backbone.startswith("swin"):
             model = swin_t(num_classes=dataset.num_train_pids, loss="triplet",
                            camera=dataset.num_train_cams, sequence=dataset.num_train_seqs,
                            side_info=True,
                            version=params.backbone[-2:]).cuda()
             model = nn.DataParallel(model)
-            model, loss_stats = train_vision_transformer(model, market_dataset, 96,
+            model, loss_stats = train_vision_transformer(model, source_dataset, 96,
                                                          params.bs, params.epochs,
                                                          dataset.num_train_pids,
                                                          dataset.num_train_cams,
@@ -657,15 +654,15 @@ if __name__ == "__main__":
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
                 pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True, use_side=True)
                 del dataset_test
-                market_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
-                market_dataset.set_cross_domain()
+                source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
+                source_dataset.set_cross_domain()
                 model = side_info_only(model)
-                model, loss_stats = train_vision_transformer(model, market_dataset, 96,
+                model, loss_stats = train_vision_transformer(model, source_dataset, 96,
                                                              params.bs, params.epochs,
                                                              dataset.num_train_pids,
                                                              dataset.num_train_cams,
                                                              dataset.num_train_seqs)
-                market_dataset.reset_cross_domain()
+                source_dataset.reset_cross_domain()
         else:
             raise NotImplementedError
 
