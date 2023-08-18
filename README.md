@@ -39,7 +39,8 @@ pip install cuml-cu11 --extra-index-url=https://pypi.nvidia.com
 Optionally, using `faiss` is highly recommended.
 
 ```bash
-conda install -c pytorch faiss-cpu
+conda install -c conda-forge faiss-gpu
+conda install faiss-gpu=1.7.4
 ```
 
 
@@ -146,6 +147,7 @@ Market1501, inference eps = 0.2
 |----------------|--------|--------|
 | W/o. smoothing | 0.9329 | 0.8139 |
 | W/. smoothing  | 0.9308 | 0.8240 |
+| Jaccard        | 0.9340 | 0.8646 |
 
 
 DukeMTMC, inference eps = 0.25
@@ -154,6 +156,7 @@ DukeMTMC, inference eps = 0.25
 |----------------|--------|--------|
 | W/o. smoothing | 0.8340 | 0.6949 |
 | W/. smoothing  | 0.8151 | 0.7376 |
+| Jaccard        | 0.8344 | 0.7617 |
 
 * Domain Transfer
 

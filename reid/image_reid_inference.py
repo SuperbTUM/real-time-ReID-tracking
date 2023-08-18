@@ -20,6 +20,7 @@ from dataset_dukemtmc import DukeMTMCreID
 from train_utils import to_numpy, DataLoaderX
 from image_reid_train import reidDataset
 from inference_utils import diminish_camera_bias
+from faiss_utils import compute_jaccard_distance
 
 # @credit to Zhedong
 #######################################################################
@@ -372,8 +373,8 @@ if __name__ == "__main__":
     merged_cams = torch.cat((gallery_cams, query_cams), dim=0)
     merged_seqs = torch.cat((gallery_seqs, query_seqs), dim=0)
 
-    from train_prepare import euclidean_dist
-    dists = euclidean_dist(merged_embeddings, merged_embeddings) # * 0.1 + compute_jaccard_distance(gallery_embeddings) * 0.9
+    # from train_prepare import euclidean_dist
+    dists = compute_jaccard_distance(merged_embeddings, search_option=1, use_float16=True)# euclidean_dist(merged_embeddings, merged_embeddings) #
     dists[dists < 0] = 0.
     dists[dists > 1] = 1.
     try:

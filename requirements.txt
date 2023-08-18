@@ -8,4 +8,3 @@ ultralytics
 prefetch_generator
 gdown
 scikit-learn
-faiss-gpu==1.6.4
