@@ -19,6 +19,7 @@ cudnn.benchmark = True
 
 
 class FocalLoss(nn.Module):
+    """In exploration of how to combine bnneck with focal loss"""
     def __init__(self, smoothing=0.1, epsilon=0., alpha=None, gamma=2.0):
         super(FocalLoss, self).__init__()
         self.alpha = alpha
@@ -84,6 +85,50 @@ class LabelSmoothing(nn.Module):
             poly_loss *= self.class_weights[target]
         # return loss.mean()
         return poly_loss.mean()
+
+
+class LabelSmoothingMixup(LabelSmoothing):
+    def __init__(self, smoothing=0.1, epsilon=0., k_sparse=-1, class_weights=None):
+        super(LabelSmoothingMixup, self).__init__(smoothing, epsilon, k_sparse, class_weights)
+
+    def forward(self, x, target_a, target_b, lam):
+        logprobs = F.log_softmax(x, dim=-1)
+        probs = F.softmax(x, dim=-1)
+        target_a = target_a.long()
+        if self.k_sparse > 0:
+            topk = x.topk(self.k_sparse, dim=-1)[0]
+            pos_loss = torch.logsumexp(topk, dim=-1)
+            neg_loss = torch.gather(x, 1, target_a[:, None].expand(-1, x.size(1)))[:, 0]
+            nll_loss = (pos_loss - neg_loss).sum()
+        else:
+            nll_loss = -logprobs.gather(dim=-1, index=target_a.unsqueeze(1))
+            nll_loss = nll_loss.squeeze(1)
+        smooth_loss = -logprobs.mean(dim=-1)
+        smoothed_labels = F.one_hot(target_a, x.size(-1)) * self.confidence + self.smoothing / x.size(-1)
+        one_minus_pt = torch.sum(smoothed_labels * (1 - probs), dim=-1)
+        loss = self.confidence * nll_loss + self.smoothing * smooth_loss
+        poly_loss_a = loss + one_minus_pt * self.epsilon
+        if self.class_weights is not None:
+            poly_loss_a *= self.class_weights[target_a]
+
+        target_b = target_b.long()
+        if self.k_sparse > 0:
+            topk = x.topk(self.k_sparse, dim=-1)[0]
+            pos_loss = torch.logsumexp(topk, dim=-1)
+            neg_loss = torch.gather(x, 1, target_b[:, None].expand(-1, x.size(1)))[:, 0]
+            nll_loss = (pos_loss - neg_loss).sum()
+        else:
+            nll_loss = -logprobs.gather(dim=-1, index=target_b.unsqueeze(1))
+            nll_loss = nll_loss.squeeze(1)
+        smooth_loss = -logprobs.mean(dim=-1)
+        smoothed_labels = F.one_hot(target_b, x.size(-1)) * self.confidence + self.smoothing / x.size(-1)
+        one_minus_pt = torch.sum(smoothed_labels * (1 - probs), dim=-1)
+        loss = self.confidence * nll_loss + self.smoothing * smooth_loss
+        poly_loss_b = loss + one_minus_pt * self.epsilon
+        if self.class_weights is not None:
+            poly_loss_b *= self.class_weights[target_b]
+
+        return poly_loss_a * lam + poly_loss_b * (1-lam)
 
 
 class CenterLoss(nn.Module):
@@ -554,6 +599,7 @@ class HybridLossWeighted(nn.Module):
                  lamda=0.0005,
                  alpha=0.0,
                  triplet_smooth=False,
+                 mixup=False,
                  class_stats=None,
                  circle_factor=0.):
         super().__init__()
@@ -563,9 +609,13 @@ class HybridLossWeighted(nn.Module):
             self.triplet = TripletBeta(margin, alpha, triplet_smooth, reduction="none")
         else:
             self.triplet = WeightedRegularizedTriplet()
-        self.smooth = LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
+        if mixup:
+            self.smooth = LabelSmoothingMixup(smoothing, epsilon)
+        else:
+            self.smooth = LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
         self.circle = CircleLoss()
         self.lamda = lamda
+        self.mixup = mixup
         self.circle_factor = circle_factor
 
     def forward(self,
@@ -575,12 +625,18 @@ class HybridLossWeighted(nn.Module):
                 targets,
                 embeddings_augment=None,
                 weights=None,
-                outputs_augment=None):
+                outputs_augment=None,
+                targets_a=None,
+                targets_b=None,
+                lam=None):
         """
         features: feature vectors
         targets: ground truth labels
         """
-        smooth_loss = self.smooth(outputs, targets)
+        if self.mixup:
+            smooth_loss = self.smooth(outputs, targets_a, targets_b, lam)
+        else:
+            smooth_loss = self.smooth(outputs, targets)
         if outputs_augment is not None:
             circle_loss = self.circle(normalize_rank(outputs, 1), targets, normalize_rank(outputs_augment, 1))
         else:

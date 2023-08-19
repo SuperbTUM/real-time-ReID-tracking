@@ -175,3 +175,27 @@ def check_parameters(model):
         buffer_size += buffer.nelement() * buffer.element_size()
     size_all_mb = (param_size + buffer_size) / 1024 ** 2
     return size_all_mb
+
+
+def mixup_data(x, y, alpha=.99, intra_only=False):
+    '''Returns mixed inputs, pairs of targets, and lambda'''
+    if alpha > 0:
+        distri = torch.distributions.beta.Beta(alpha, alpha)
+        lam = distri.sample().item()
+    else:
+        lam = alpha
+
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size, device=device)
+    if intra_only:
+        mixed_x = []
+        for i, (y_a, y_b) in enumerate(zip(y, y[index])):
+            if y_a == y_b:
+                mixed_x.append(x[i])
+            else:
+                mixed_x.append(lam * x[i] + (1 - lam) * x[index[i]])
+        mixed_x = torch.stack(mixed_x)
+    else:
+        mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam

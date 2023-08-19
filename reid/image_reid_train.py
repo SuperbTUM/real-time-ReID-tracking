@@ -448,11 +448,7 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
         model, dataloader, optimizer, scheduler = accelerator.prepare(model, dataloader, optimizer,
                                                                       scheduler)
     loss_stats = []
-    #transforms_augment = nn.Sequential(
-    #    # transforms.Pad([10, 10]),
-    #    # transforms.RandomCrop((256, 128)),
-    #    transforms.RandomHorizontalFlip(p=1.))
-    #scripted_transforms_augment = torch.jit.script(transforms_augment).cuda()
+
     # Additionally train 10 epochs
     for epoch in range(10):
         iterator = tqdm(dataloader)
