@@ -152,7 +152,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             label = Variable(label).cuda(non_blocking=True)
             # cams = cams.cuda(non_blocking=True)
             embeddings, normed_embeddings, outputs = model(images)#, cams)
-            loss = loss_func(embeddings, normed_embeddings, outputs, label)
+            loss = loss_func(embeddings, outputs, label)
             # loss = loss_func(embeddings, outputs, label, embeddings_augment)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
@@ -538,7 +538,7 @@ if __name__ == "__main__":
             transforms.RandomHorizontalFlip(),
             transforms.Pad(10),
             transforms.RandomCrop((256, 128)),
-            Fuse_Gray(0.4, 0.05),
+            Fuse_Gray(0.35, 0.05),
             # transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             transforms.RandomErasing(),

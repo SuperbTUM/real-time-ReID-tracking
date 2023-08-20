@@ -567,9 +567,9 @@ class HybridLoss(nn.Module):
 
     def forward(self,
                 embeddings,
-                normed_embeddings,
                 outputs,
                 targets,
+                normed_embeddings=None,
                 embeddings_augment=None,
                 outputs_augment=None):
         """
@@ -620,9 +620,9 @@ class HybridLossWeighted(nn.Module):
 
     def forward(self,
                 embeddings,
-                normed_embeddings,
                 outputs,
                 targets,
+                normed_embeddings=None,
                 embeddings_augment=None,
                 weights=None,
                 outputs_augment=None,
