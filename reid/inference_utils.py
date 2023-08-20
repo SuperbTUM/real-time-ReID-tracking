@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 
-def diminish_camera_bias(embeddings, cams, la=0.005):
+def diminish_camera_bias(embeddings, cams, la=0.05):
     num_cams = cams.max().int()
     for i in range(num_cams+1):
         cur_embeddings = embeddings[cams == i]
