@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,49 +11,54 @@ class CABlock(nn.Module):
     def __init__(self, channel, reduction=16, renorm=False, non_iid=0):
         super(CABlock, self).__init__()
 
-        # self.conv_1x1 = nn.Conv2d(in_channels=channel, out_channels=channel//reduction, kernel_size=1, stride=1, bias=False)
-        self.conv_1x1 = nn.Linear(channel, channel//reduction, bias=False)  # bias=False
+        mip = max(8, channel // reduction)
+
+        self.conv_1x1 = nn.Conv2d(in_channels=channel, out_channels=mip, kernel_size=1, stride=1, bias=False)
+        # self.conv_1x1 = nn.Linear(channel, mip, bias=False)  # bias=False
 
         self.relu = nn.ReLU(inplace=True)
         # self.relu = nn.SiLU(inplace=True)
         if renorm:
             if non_iid:
-                self.bn = BatchRenormalization2D_Noniid(channel//reduction, non_iid)
+                self.bn = BatchRenormalization2D_Noniid(mip, non_iid)
             else:
-                self.bn = BatchRenormalization2D(channel//reduction)
+                self.bn = BatchRenormalization2D(mip)
         else:
-            self.bn = nn.BatchNorm2d(channel//reduction)
+            self.bn = nn.BatchNorm2d(mip)
 
-        # self.F_h = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
-        # self.F_w = nn.Conv2d(in_channels=channel//reduction, out_channels=channel, kernel_size=1, stride=1, bias=False)
-        self.F_h = nn.Linear(channel//reduction, channel, bias=False)  # bias=False
-        self.F_w = nn.Linear(channel//reduction, channel, bias=False)  # bias=False
+        self.F_h = nn.Conv2d(in_channels=mip, out_channels=channel, kernel_size=1, stride=1, bias=False)
+        self.F_w = nn.Conv2d(in_channels=mip, out_channels=channel, kernel_size=1, stride=1, bias=False)
+        # self.F_h = nn.Linear(mip, channel, bias=False)  # bias=False
+        # self.F_w = nn.Linear(mip, channel, bias=False)  # bias=False
 
         self.sigmoid = nn.Sigmoid()
 
-        torch.nn.init.kaiming_normal_(self.conv_1x1.weight.data, a=0, mode='fan_out')
-        # torch.nn.init.constant_(self.conv_1x1.bias.data, 0.0)
-        torch.nn.init.kaiming_normal_(self.F_h.weight.data, a=0, mode='fan_out')
-        # torch.nn.init.constant_(self.F_h.bias.data, 0.0)
-        torch.nn.init.kaiming_normal_(self.F_w.weight.data, a=0, mode='fan_out')
-        # torch.nn.init.constant_(self.F_w.bias.data, 0.0)
+        # torch.nn.init.kaiming_normal_(self.conv_1x1.weight.data, a=0, mode='fan_out')
+        # torch.nn.init.kaiming_normal_(self.F_h.weight.data, a=0, mode='fan_out')
+        # torch.nn.init.kaiming_normal_(self.F_w.weight.data, a=0, mode='fan_out')
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
 
     def forward(self, x):
         h, w = x.size(2), x.size(3)
 
         x_h = F.adaptive_avg_pool2d(x, (h, 1)).permute(0, 1, 3, 2)
         x_w = F.adaptive_avg_pool2d(x, (1, w))
-        concat = torch.cat((x_h, x_w), 3).permute(0, 2, 3, 1) # (32, 64, 1, 96) -> (32, 1, 96, 64)
+        concat = torch.cat((x_h, x_w), 3)#.permute(0, 2, 3, 1) # (32, 64, 1, 96) -> (32, 1, 96, 64)
 
-        # x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
-        x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat).permute(0, 3, 1, 2))) # (32, 4, 1, 96)
+        x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
+        #x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat).permute(0, 3, 1, 2))) # (32, 4, 1, 96)
 
         x_cat_conv_split_h, x_cat_conv_split_w = x_cat_conv_relu.split([h, w], 3)
+        x_cat_conv_split_h = x_cat_conv_split_h.permute(0, 1, 3, 2)
 
-        # s_h = self.sigmoid_h(self.F_h(x_cat_conv_split_h.permute(0, 1, 3, 2)))
-        # s_w = self.sigmoid_w(self.F_w(x_cat_conv_split_w))
-        s_h = self.sigmoid(self.F_h(x_cat_conv_split_h.permute(0, 3, 2, 1)).permute(0, 3, 1, 2)) # (32, 64, 1, 64) -> (32, 64, 64, 1)
-        s_w = self.sigmoid(self.F_w(x_cat_conv_split_w.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)) # (32, 32, 4, 1) -> (32, 64, 1, 32)
+        s_h = self.sigmoid(self.F_h(x_cat_conv_split_h))
+        s_w = self.sigmoid(self.F_w(x_cat_conv_split_w))
+
+        #s_h = self.sigmoid(self.F_h(x_cat_conv_split_h.permute(0, 3, 2, 1)).permute(0, 3, 1, 2)) # (32, 64, 1, 64) -> (32, 64, 64, 1)
+        #s_w = self.sigmoid(self.F_w(x_cat_conv_split_w.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)) # (32, 32, 4, 1) -> (32, 64, 1, 32)
 
         out = x * s_h.expand_as(x) * s_w.expand_as(x)
 
@@ -98,8 +104,6 @@ class CABasicBlock(nn.Module):
         if restride:
             block.conv1.stride = (1, 1)
             block.downsample[0].stride = (1, 1)
-        # if ibn:
-        #     pretrained_in = block.bn1.IN
         if renorm:
             # experimental
             if non_iid:
