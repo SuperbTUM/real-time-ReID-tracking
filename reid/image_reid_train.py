@@ -151,11 +151,11 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             # images_flip = scripted_transforms_augment(images)
             label = Variable(label).cuda(non_blocking=True)
             # cams = cams.cuda(non_blocking=True)
-            embeddings, normed_embeddings, outputs = model(images)#, cams)
+            embeddings, outputs = model(images)#, cams)
             loss = loss_func(embeddings, outputs, label)
             # loss = loss_func(embeddings, outputs, label, embeddings_augment)
             loss_stats.append(loss.cpu().item())
-            nn.utils.clip_grad_norm_(model.parameters(), 10)
+            # nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:
                 accelerator.backward(loss)
             else:

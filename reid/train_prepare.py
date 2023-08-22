@@ -310,7 +310,7 @@ class TripletLoss(nn.Module):
         margin (float, optional): margin for triplet. Default is 0.3.
     """
 
-    def __init__(self, margin=0.3, alpha=0.4, smooth=False, sigma=1.0, reduction="mean"):
+    def __init__(self, margin=0.3, alpha=0., smooth=False, sigma=1.0, reduction="mean"):
         super(TripletLoss, self).__init__()
         self.margin = margin
         if alpha == 0:
@@ -392,7 +392,6 @@ class TripletBeta(TripletLoss):
         else:
             dist_augment = None
 
-        # dist = 0.9 * dist + 0.1 * cosine_dist(inputs, inputs)
         # For each anchor, find the hardest positive and negative
         mask = targets.expand(n, n).eq(targets.expand(n, n).t())
         dist_ap, dist_an = [], []

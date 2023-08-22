@@ -5,32 +5,9 @@ from torch.nn import functional as F
 import math
 from collections import OrderedDict
 
+from .weight_init import weights_init_kaiming, weights_init_classifier
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization1D, BatchRenormalization2D_Noniid
 
-
-def weights_init_kaiming(m):
-    classname = m.__class__.__name__
-    # print(classname)
-    if classname.find('Conv') != -1:
-        torch.nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in') # For old pytorch, you may use kaiming_normal.
-    elif classname.find('Linear') != -1:
-        torch.nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_out')
-        torch.nn.init.constant_(m.bias.data, 0.0)
-    elif classname.find('BatchNorm1d') != -1:
-        torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
-        torch.nn.init.constant_(m.bias.data, 0.0)
-
-
-def weights_init_classifier(m):
-    for submodule in m.modules():
-        classname = submodule.__class__.__name__
-        if classname.find('Linear') != -1:
-            nn.init.normal_(submodule.weight, std=0.001)
-            if submodule.bias is not None:
-                nn.init.constant_(submodule.bias, 0.0)
-        elif classname.find('BatchNorm1d') != -1:
-            torch.nn.init.normal_(submodule.weight.data, 1.0, 0.02)
-            torch.nn.init.constant_(submodule.bias.data, 0.0)
 
 # This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):

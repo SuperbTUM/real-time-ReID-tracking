@@ -3,12 +3,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
-from .SERes18_IBN import GeM, IBN, trunc_normal_, weights_init_classifier, weights_init_kaiming
+from .weight_init import weights_init_classifier, weights_init_kaiming
+from .SERes18_IBN import GeM, IBN, trunc_normal_
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization2D_Noniid, BatchRenormalization1D
 
 
 class CABlock(nn.Module):
-    def __init__(self, channel, reduction=16, renorm=False, non_iid=0):
+    def __init__(self, channel, reduction=8, renorm=False, non_iid=0):
         super(CABlock, self).__init__()
 
         mip = max(8, channel // reduction)
@@ -122,8 +123,7 @@ class CABasicBlock(nn.Module):
                     block.bn1.BN = BatchRenormalization2D_Noniid(dim >> 1, non_iid, block.bn1.BN.state_dict())
                 else:
                     block.bn1.BN = BatchRenormalization2D(dim >> 1, block.bn1.BN.state_dict())
-            #     block.bn1 = IBN(dim, renorm=renorm, non_iid=non_iid)
-            #     block.bn1.IN = pretrained_in
+
         # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
             self.block_pre = nn.Sequential(*list(block.children())[:-1])
@@ -223,7 +223,7 @@ class CARes18_IBN(nn.Module):
         if pooling == "gem":
             self.avgpooling = GeM()
         else:
-            self.avgpooling = model.avgpool
+            self.avgpooling = nn.AdaptiveAvgPool2d(1)
 
         if renorm:
             self.bnneck = BatchRenormalization1D(512)
@@ -268,7 +268,7 @@ class CARes18_IBN(nn.Module):
             return x
         if not self.training:
             return x_norm, x
-        return feature, x_norm, x
+        return feature, x
 
 
 def cares18_ibn(num_classes=751, loss="triplet", **kwargs):
