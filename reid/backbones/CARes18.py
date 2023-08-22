@@ -12,7 +12,7 @@ class CABlock(nn.Module):
     def __init__(self, channel, reduction=8, renorm=False, non_iid=0):
         super(CABlock, self).__init__()
 
-        mip = max(8, channel // reduction)
+        mip = channel // reduction
 
         self.conv_1x1 = nn.Conv2d(in_channels=channel, out_channels=mip, kernel_size=1, stride=1, bias=False)
         # self.conv_1x1 = nn.Linear(channel, mip, bias=False)  # bias=False

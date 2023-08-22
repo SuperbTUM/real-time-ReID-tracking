@@ -20,7 +20,7 @@ class ClassBlock(nn.Module):
         add_block.apply(weights_init_kaiming)
 
         classifier = []
-        classifier += [nn.Linear(input_dim, class_num)]
+        classifier += [nn.Linear(input_dim, class_num, bias=False)]
         classifier = nn.Sequential(*classifier)
         classifier.apply(weights_init_classifier)
 
