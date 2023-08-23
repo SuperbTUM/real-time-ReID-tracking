@@ -185,8 +185,9 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
             # input_ortvalue.update_inplace(to_numpy(img))
             # index_ortvalue.update_inplace(to_numpy(cam + all_cam * seq))
         # ort_session.run_with_iobinding(io_binding)
-        embeddings = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]  # embeddings_ortvalue.numpy()#ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
-        embeddings = torch.from_numpy(embeddings)
+        # experimental
+        embeddings, outputs = ort_session.run(["embeddings", "outputs"], ort_inputs)  # embeddings_ortvalue.numpy()#ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
+        embeddings = torch.from_numpy(np.concatenate((embeddings, outputs), axis=1))
         embeddings_total.append(embeddings)
         true_labels.append(true_label)
         true_cams.append(cam)
@@ -373,7 +374,7 @@ if __name__ == "__main__":
     merged_cams = torch.cat((gallery_cams, query_cams), dim=0)
     merged_seqs = torch.cat((gallery_seqs, query_seqs), dim=0)
 
-    # from train_prepare import euclidean_dist
+    # from losses.utils import euclidean_dist
     dists = compute_jaccard_distance(merged_embeddings, search_option=1, use_float16=True)# euclidean_dist(merged_embeddings, merged_embeddings) #
     dists[dists < 0] = 0.
     dists[dists > 1] = 1.

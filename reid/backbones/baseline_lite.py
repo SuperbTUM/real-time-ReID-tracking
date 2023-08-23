@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from torchvision import models
-from torch.autograd import Variable
 
 from .weight_init import weights_init_kaiming, weights_init_classifier
 
@@ -10,12 +9,13 @@ from .weight_init import weights_init_kaiming, weights_init_classifier
 
 # Defines the new fc layer and classification layer
 class ClassBlock(nn.Module):
-    def __init__(self, input_dim, class_num, bnorm=True, return_f=False):
+    def __init__(self, input_dim, class_num, bnorm=True, return_f=True):
         super(ClassBlock, self).__init__()
         self.return_f = return_f
         add_block = []
         if bnorm:
             add_block += [nn.BatchNorm1d(input_dim)]
+            add_block[-1].bias.requires_grad_(False)
         add_block = nn.Sequential(*add_block)
         add_block.apply(weights_init_kaiming)
 
@@ -31,7 +31,7 @@ class ClassBlock(nn.Module):
         x_normed = self.add_block(x)
         x_classified = self.classifier(x_normed)
         if self.return_f:
-            return x, x_classified
+            return x_normed, x_classified
         return x_classified
 
 
@@ -60,5 +60,7 @@ class ft_baseline(nn.Module):
         x = self.model.layer4(x)
         x = self.model.avgpool(x)
         feature = x.view(x.size(0), x.size(1))
-        x = self.classifier(feature)
-        return feature, x
+        featured_normed, x = self.classifier(feature)
+        if self.training:
+            return feature, x
+        return featured_normed, x

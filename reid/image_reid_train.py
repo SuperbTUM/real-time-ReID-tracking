@@ -19,7 +19,10 @@ from train_utils import redetection, recrop, check_parameters, DataLoaderX, plot
 from data_augment import LGT, Fuse_RGB_Gray_Sketch, Fuse_Gray
 from dataset_market import Market1501
 from dataset_dukemtmc import DukeMTMCreID
-from train_prepare import WarmupMultiStepLR, RandomIdentitySampler, RandomErasing, HybridLoss, HybridLossWeighted, to_onnx, euclidean_dist
+from train_prepare import WarmupMultiStepLR, RandomErasing, to_onnx
+from data_prepare import RandomIdentitySampler
+from losses.hybrid_losses import HybridLoss, HybridLossWeighted
+from losses.utils import euclidean_dist
 
 import argparse
 from tqdm import tqdm
