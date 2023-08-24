@@ -24,7 +24,7 @@ class HybridLoss(nn.Module):
             self.triplet = TripletLoss(margin, alpha, triplet_smooth)  # Smooth only works for hard triplet loss now
         else:
             self.triplet = WeightedRegularizedTriplet()
-        self.smooth = LabelSmoothing(smoothing, epsilon)#FocalLoss(smoothing, epsilon, class_stats)  # LabelSmoothing(smoothing, epsilon)
+        self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon)#FocalLoss(smoothing, epsilon, class_stats)  # LabelSmoothing(smoothing, epsilon)
         self.circle = CircleLoss()
         self.lamda = lamda
         self.circle_factor = circle_factor

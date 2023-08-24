@@ -1,13 +1,10 @@
 import torch
 import torch.backends.cudnn as cudnn
-from torch.utils.data import DataLoader
 
 import torch.onnx
-import numpy as np
 import random
 import math
 from bisect import bisect_right
-from collections import defaultdict
 
 cudnn.deterministic = True
 cudnn.benchmark = True
