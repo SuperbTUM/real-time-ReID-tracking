@@ -1,7 +1,8 @@
 import torch
 import torch.backends.cudnn as cudnn
 
-import torch.onnx
+import onnx
+from onnxsim import simplify
 import random
 import math
 from bisect import bisect_right
@@ -39,6 +40,11 @@ def to_onnx(model, input_dummy, dataset_name, input_names=["input"], output_name
                           do_constant_folding=True,
                           input_names=input_names,
                           output_names=output_names)
+    # experimental
+    model = onnx.load("checkpoint/reid_model_{}.onnx".format(dataset_name))
+    model_simp, check = simplify(model)
+    assert check, "Simplified ONNX model could not be validated"
+    onnx.save(model_simp, "checkpoint/reid_model_{}_simp.onnx".format(dataset_name))
 
 
 class WarmUpScheduler(torch.optim.lr_scheduler._LRScheduler):

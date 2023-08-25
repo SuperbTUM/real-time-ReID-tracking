@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-import torch.onnx
-
 
 class FocalLoss(nn.Module):
     """In exploration of how to combine bnneck with focal loss"""

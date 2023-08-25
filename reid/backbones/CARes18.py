@@ -43,10 +43,12 @@ class CABlock(nn.Module):
                 m.weight.data.normal_(0, math.sqrt(2. / n))
 
     def forward(self, x):
-        h, w = x.size(2), x.size(3)
+        h, w = int(x.size(2)), int(x.size(3))
 
-        x_h = F.adaptive_avg_pool2d(x, (h, 1)).permute(0, 1, 3, 2)
-        x_w = F.adaptive_avg_pool2d(x, (1, w))
+        # x_h = F.adaptive_avg_pool2d(x, (h, 1)).permute(0, 1, 3, 2)
+        # x_w = F.adaptive_avg_pool2d(x, (1, w))
+        x_h = x.mean(dim=3, keepdim=True).permute(0, 1, 3, 2)
+        x_w = x.mean(dim=2, keepdim=True)
         concat = torch.cat((x_h, x_w), 3)#.permute(0, 2, 3, 1) # (32, 64, 1, 96) -> (32, 1, 96, 64)
 
         x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
