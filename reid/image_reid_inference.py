@@ -182,7 +182,7 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
             # input_ortvalue.update_inplace(to_numpy(img))
         else:
             ort_inputs = {'input': to_numpy(img),
-                          "index": np.repeat(to_numpy(cam + all_cam * seq), int(img.size()))}
+                          "index": np.repeat(to_numpy(cam + all_cam * seq), 2)}
             # input_ortvalue.update_inplace(to_numpy(img))
             # index_ortvalue.update_inplace(to_numpy(cam + all_cam * seq))
         # ort_session.run_with_iobinding(io_binding)

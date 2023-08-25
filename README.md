@@ -94,9 +94,13 @@ For continual image training
 python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --instance 8 --continual
 ```
 
-For image testing
+For image testing (and we are about to support dynamic batching!)
 ```python
-python reid/image_reid_inference.py --backbone cares18 --bs 1 --ckpt checkpoint/reid_model.onnx --eps 0.2
+python reid/image_reid_inference.py --backbone cares18 --bs 1 --ckpt checkpoint/reid_model.onnx --eps 0.5
+```
+Or in a faster way
+```python
+python reid/image_reid_inference.py --backbone cares18 --bs 16 --ckpt checkpoint/reid_model_xxx.onnx --eps 0.5
 ```
 
 For video training
@@ -139,24 +143,20 @@ The speed is acquired with `time` package after the synchronization of CUDA.
 
 * Metric-learning
 
-W/o. or W/. tracklet smoothing
+Market1501
 
-Market1501, inference eps = 0.2
-
-| Metric         | Acc@1  | mAP    |
-|----------------|--------|--------|
-| W/o. smoothing | 0.9329 | 0.8139 |
-| W/. smoothing  | 0.9308 | 0.8240 |
-| Jaccard        | 0.9340 | 0.8646 |
+| Metric        | Acc@1  | mAP    |
+|---------------|--------|--------|
+| Euclidean     | 0.9133 | 0.7828 |
+| Jaccard       | 0.9267 | 0.8852 |
 
 
-DukeMTMC, inference eps = 0.25
+DukeMTMC
 
-| Metric         | Acc@1  | mAP    |
-|----------------|--------|--------|
-| W/o. smoothing | 0.8340 | 0.6949 |
-| W/. smoothing  | 0.8151 | 0.7376 |
-| Jaccard        | 0.8344 | 0.7617 |
+| Metric    | Acc@1  | mAP    |
+|-----------|--------|--------|
+| Euclidean | 0.8151 | 0.7376 |
+| Jaccard   | 0.8344 | 0.7617 |
 
 * Domain Transfer
 
