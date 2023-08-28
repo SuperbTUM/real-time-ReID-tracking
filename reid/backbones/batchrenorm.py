@@ -101,13 +101,13 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
                  r_d_max_inc_step=1e-5,
                  r_max=1.0,
                  d_max=0.0):
-        super(BatchRenormalization2D_Noniid, self).__init__(num_features, dict_state, eps, momentum, r_d_max_inc_step, r_max, d_max)
         self.num_instance = num_instance
-
-        self.register_buffer('running_avg_mean', torch.zeros((num_instance, num_features, 1, 1)))
-        self.register_buffer('running_avg_var', torch.ones((num_instance, num_features, 1, 1)))
+        self.num_features = num_features
+        super(BatchRenormalization2D_Noniid, self).__init__(num_features, dict_state, eps, momentum, r_d_max_inc_step, r_max, d_max)
 
     def _load_params_from_bn(self):
+        self.register_buffer('running_avg_mean', torch.zeros((self.num_instance, self.num_features, 1, 1)))
+        self.register_buffer('running_avg_var', torch.ones((self.num_instance, self.num_features, 1, 1)))
         if self.dict_state is None:
             return
         weight = self.dict_state['weight'].data
@@ -115,9 +115,9 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         bias = self.dict_state['bias'].data
         bias = bias.reshape(1, bias.size(0), 1, 1)
         running_mean = self.dict_state['running_mean'].data
-        running_mean = running_mean.reshape(self.num_instance, running_mean.size(0), 1, 1)
+        running_mean = running_mean.reshape(1, running_mean.size(0), 1, 1).repeat_interleave(self.num_instance, dim=0)
         running_var = self.dict_state['running_var'].data
-        running_var = running_var.reshape(self.num_instance, running_var.size(0), 1, 1)
+        running_var = running_var.reshape(1, running_var.size(0), 1, 1).repeat_interleave(self.num_instance, dim=0)
 
         self.gamma.data = weight.clone()
         self.beta.data = bias.clone()
@@ -147,8 +147,10 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
             batch_mean[i] = batch_ch_mean.squeeze(0)
             batch_var_unbiased[i] = batch_ch_var_unbiased.squeeze(0)
 
-            r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)), 1.0 / self.r_max, self.r_max).data
-            d = torch.clamp((batch_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps), -self.d_max,
+            r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var[i] + self.eps)),
+                            1.0 / self.r_max, self.r_max).data
+            d = torch.clamp((batch_ch_mean - self.running_avg_mean[i]) / torch.sqrt(self.running_avg_var[i] + self.eps),
+                            -self.d_max,
                             self.d_max).data
 
             x_mini = ((x_mini - batch_ch_mean) * r) / torch.sqrt(batch_ch_var_biased + self.eps) + d
@@ -172,7 +174,9 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         return x_normed
 
     def forward_eval(self, x):
-        x = (x - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps)
+        running_avg_mean = self.running_avg_mean.mean(dim=0, keepdim=True)
+        running_avg_var = self.running_avg_var.mean(dim=0, keepdim=True)
+        x = (x - running_avg_mean) / torch.sqrt(running_avg_var + self.eps)
         x = self.gamma * x + self.beta
         return x
 
