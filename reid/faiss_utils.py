@@ -19,6 +19,14 @@ def swig_ptr_from_LongTensor(x):
         x.storage().data_ptr() + x.storage_offset() * 8)
 
 
+def swig_ptr_from_IntTensor(x):
+    """ gets a Faiss SWIG pointer from a pytorch tensor (on CPU or GPU) """
+    assert x.is_contiguous()
+    assert x.dtype == torch.int32, 'dtype=%s' % x.dtype
+    return faiss.cast_integer_to_int_ptr(
+        x.storage().data_ptr() + x.storage_offset() * 4)
+
+
 def search_index_pytorch(index, x, k, D=None, I=None):
     """call the search function of an index with pytorch tensor I/O (CPU
     and GPU supported)"""
@@ -84,7 +92,7 @@ def search_raw_array_pytorch(res, xb, xq, k, D=None, I=None,
         assert I.device == xb.device
 
     D_ptr = swig_ptr_from_FloatTensor(D)
-    I_ptr = swig_ptr_from_LongTensor(I)
+    I_ptr = swig_ptr_from_IntTensor(I)
 
     params = faiss.GpuDistanceParams()
     params.metric = metric
@@ -98,6 +106,7 @@ def search_raw_array_pytorch(res, xb, xq, k, D=None, I=None,
     params.numQueries = nq
     params.outDistances = D_ptr
     params.outIndices = I_ptr
+    params.outIndicesType = faiss.IndicesDataType_I32
     params.device = 0
     faiss.bfKnn(res, params)
 
