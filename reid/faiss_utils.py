@@ -86,7 +86,7 @@ def search_raw_array_pytorch(res, xb, xq, k, D=None, I=None,
         assert D.device == xb.device
 
     if I is None:
-        I = torch.empty(nq, k, device=xb.device, dtype=torch.int64)
+        I = torch.empty(nq, k, device=xb.device, dtype=torch.int32)
     else:
         assert I.shape == (nq, k)
         assert I.device == xb.device
