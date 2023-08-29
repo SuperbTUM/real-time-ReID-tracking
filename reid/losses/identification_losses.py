@@ -66,10 +66,10 @@ class CrossEntropyLabelSmooth(nn.Module):
         targets = torch.zeros(log_probs.size()).scatter_(1, targets.unsqueeze(1).data.cpu(), 1)
         if self.use_gpu: targets = targets.cuda()
         targets = (1 - self.smoothing) * targets + self.smoothing / self.num_classes
-        loss = (- targets * log_probs)
-        one_minus_pt = targets * (1 - probs)
+        loss = (- targets * log_probs).sum(1)
+        one_minus_pt = torch.sum(targets * (1 - probs), dim=1)
         loss += one_minus_pt * self.epsilon
-        return loss.mean(0).sum()
+        return loss.mean()
 
 
 class LabelSmoothing(nn.Module):
