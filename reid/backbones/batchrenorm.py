@@ -106,8 +106,8 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         super(BatchRenormalization2D_Noniid, self).__init__(num_features, dict_state, eps, momentum, r_d_max_inc_step, r_max, d_max)
 
     def _load_params_from_bn(self):
-        self.register_buffer('running_avg_mean', torch.zeros((self.num_instance, self.num_features, 1, 1)))
-        self.register_buffer('running_avg_var', torch.ones((self.num_instance, self.num_features, 1, 1)))
+        self.register_buffer('running_avg_mean', torch.zeros((self.num_instance, 1, self.num_features, 1, 1)))
+        self.register_buffer('running_avg_var', torch.ones((self.num_instance, 1, self.num_features, 1, 1)))
         if self.dict_state is None:
             return
         weight = self.dict_state['weight'].data
@@ -115,9 +115,9 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         bias = self.dict_state['bias'].data
         bias = bias.reshape(1, bias.size(0), 1, 1)
         running_mean = self.dict_state['running_mean'].data
-        running_mean = running_mean.reshape(1, running_mean.size(0), 1, 1).repeat_interleave(self.num_instance, dim=0)
+        running_mean = running_mean.reshape(1, 1, running_mean.size(0), 1, 1).repeat_interleave(self.num_instance, dim=0)
         running_var = self.dict_state['running_var'].data
-        running_var = running_var.reshape(1, running_var.size(0), 1, 1).repeat_interleave(self.num_instance, dim=0)
+        running_var = running_var.reshape(1, 1, running_var.size(0), 1, 1).repeat_interleave(self.num_instance, dim=0)
 
         self.gamma.data = weight.clone()
         self.beta.data = bias.clone()
@@ -126,56 +126,49 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
 
     def forward_train(self, x):
         """Looks like group normalization"""
+        minibatch_num = x.size(0) // self.num_instance
         x_splits = []
         for i in range(self.num_instance):
-            x_split = []
-            for j in range(x.size(0) // self.num_instance):
-                x_split.append(x[i + self.num_instance * j])
-            x_splits.append(torch.stack(x_split))
-        x_normed = [torch.tensor(0.) for _ in range(x.size(0))]
+            x_split = x[i:len(x):self.num_instance]
+            x_splits.append(x_split)
+        x_splits = torch.stack(x_splits)
 
-        batch_mean = torch.zeros_like(self.running_avg_mean)
-        batch_var_unbiased = torch.zeros_like(self.running_avg_var)
+        x_normed = torch.zeros_like(x)
 
-        for i, x_mini in enumerate(x_splits):
+        batch_ch_mean = torch.mean(x_splits, dim=(1, 3, 4), keepdim=True)
+        # in version 2.0: correction, otherwise: unbiased=False
+        batch_ch_var_unbiased = torch.var(x_splits, dim=(1, 3, 4), unbiased=True, keepdim=True)
+        batch_ch_var_biased = torch.var(x_splits, dim=(1, 3, 4), unbiased=False, keepdim=True)
 
-            batch_ch_mean = torch.mean(x_mini, dim=(0, 2, 3), keepdim=True)
-            # in version 2.0: correction, otherwise: unbiased=False
-            batch_ch_var_unbiased = torch.var(x_mini, dim=(0, 2, 3), unbiased=True, keepdim=True)
-            batch_ch_var_biased = torch.var(x, dim=(0, 2, 3), unbiased=False, keepdim=True)
+        r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)),
+                        1.0 / self.r_max, self.r_max).data
+        d = torch.clamp((batch_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps),
+                        -self.d_max,
+                        self.d_max).data
 
-            batch_mean[i] = batch_ch_mean.squeeze(0)
-            batch_var_unbiased[i] = batch_ch_var_unbiased.squeeze(0)
+        x_splits = ((x_splits - batch_ch_mean) * r) / torch.sqrt(batch_ch_var_biased + self.eps) + d
+        x_splits = self.gamma * x_splits + self.beta
 
-            r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var[i] + self.eps)),
-                            1.0 / self.r_max, self.r_max).data
-            d = torch.clamp((batch_ch_mean - self.running_avg_mean[i]) / torch.sqrt(self.running_avg_var[i] + self.eps),
-                            -self.d_max,
-                            self.d_max).data
+        self.num_tracked_batch += 1
+        if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
+            self.r_max += 1.2 * self.r_max_inc_step * x.shape[0]
 
-            x_mini = ((x_mini - batch_ch_mean) * r) / torch.sqrt(batch_ch_var_biased + self.eps) + d
-            x_mini = self.gamma * x_mini + self.beta
+        if self.num_tracked_batch > 500 and self.d_max < self.max_d_max:
+            self.d_max += 4.8 * self.d_max_inc_step * x.shape[0]
 
-            self.num_tracked_batch += 1
-            if self.num_tracked_batch > 500 and self.r_max < self.max_r_max:
-                self.r_max += 1.2 * self.r_max_inc_step * x.shape[0]
+        x_splits = x_splits.view(x_splits.size(0) * x_splits.size(1), x_splits.size(2), x_splits.size(3), x_splits.size(4))
 
-            if self.num_tracked_batch > 500 and self.d_max < self.max_d_max:
-                self.d_max += 4.8 * self.d_max_inc_step * x.shape[0]
+        for j in range(len(x_splits)):
+            x_normed[self.num_instance * (j % minibatch_num) + j // minibatch_num] = x_splits[j]
 
-            for j in range(x_mini.size(0)):
-                x_normed[self.num_instance * j + i % self.num_instance] = x_mini[j]
-
-        x_normed = torch.stack(x_normed, dim=0)
-
-        self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_mean.data - self.running_avg_mean)
-        self.running_avg_var = self.running_avg_var + self.momentum * (batch_var_unbiased.data - self.running_avg_var)
+        self.running_avg_mean = self.running_avg_mean + self.momentum * (batch_ch_mean.data - self.running_avg_mean)
+        self.running_avg_var = self.running_avg_var + self.momentum * (batch_ch_var_unbiased.data - self.running_avg_var)
 
         return x_normed
 
     def forward_eval(self, x):
-        running_avg_mean = self.running_avg_mean.mean(dim=0, keepdim=True)
-        running_avg_var = self.running_avg_var.mean(dim=0, keepdim=True)
+        running_avg_mean = self.running_avg_mean.mean(dim=0)
+        running_avg_var = self.running_avg_var.mean(dim=0)
         x = (x - running_avg_mean) / torch.sqrt(running_avg_var + self.eps)
         x = self.gamma * x + self.beta
         return x

@@ -138,7 +138,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[40, 70],
                                      gamma=0.1)  # WarmupMultiStepLR(optimizer, [10, 30])
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
-                             pin_memory=True, sampler=custom_sampler)
+                             pin_memory=True, sampler=custom_sampler, drop_last=True)
     if accelerate:
         accelerator = Accelerator()
         model = model.to(accelerator.device)
