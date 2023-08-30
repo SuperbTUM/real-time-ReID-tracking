@@ -17,8 +17,9 @@ class CABlock(nn.Module):
         self.conv_1x1 = nn.Conv2d(in_channels=channel, out_channels=mip, kernel_size=1, stride=1, bias=False)
         # self.conv_1x1 = nn.Linear(channel, mip, bias=False)  # bias=False
 
-        self.relu = nn.ReLU(inplace=True)
-        # self.relu = nn.SiLU(inplace=True)
+        # self.relu = nn.ReLU(inplace=True)
+        # experimental
+        self.relu = nn.SiLU(inplace=True)
         if renorm:
             if non_iid:
                 self.bn = BatchRenormalization2D_Noniid(mip, non_iid)

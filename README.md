@@ -155,8 +155,8 @@ DukeMTMC
 
 | Continual | Metric    | Acc@1  | mAP    |
 |-----------|-----------|--------|--------|
-| []        | Euclidean | 0.7841 | 0.6572 |
-| []        | Jaccard   | 0.7913 | 0.7110 |
+| []        | Euclidean | 0.8232 | 0.6779 |
+| []        | Jaccard   | 0.8326 | 0.7744 |
 
 * Domain Transfer
 
