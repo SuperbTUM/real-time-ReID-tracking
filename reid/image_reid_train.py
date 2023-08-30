@@ -369,36 +369,37 @@ def produce_pseudo_data(model,
                     img, _, cam, seq = sample
                 img = img.cuda(non_blocking=True)
                 if use_side:
-                    embedding, _ = model(img, cam + all_cam * seq)
+                    embedding, output = model(img, cam + all_cam * seq)
                 else:
-                    embedding, _ = model(img)
-                embeddings.append(embedding)
+                    embedding, output = model(img)
+                embeddings.append(torch.from_numpy(embedding))
                 cams.append(cam)
                 seqs.append(seq)
     else:
         # experiment
         dataloader = DataLoaderX(dataset_test, batch_size=2, shuffle=False, num_workers=4, pin_memory=True, drop_last=True)
-        for iteration, sample in enumerate(dataloader, 0):
-            if len(sample) == 2:
-                img, _ = sample
-                cam = seq = None
-            elif len(sample) == 3:
-                img, _, cam = sample
-                seq = torch.zeros(2, dtype=torch.int32)
-            else:
-                img, _, cam, seq = sample
-            if use_side:
-                ort_inputs = {'input': to_numpy(img),
-                              "index": to_numpy(cam + all_cam * seq)}
-            else:
-                ort_inputs = {'input': to_numpy(img)}
-            embedding = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
-            embeddings.append(torch.from_numpy(embedding))
-            cams.append(cam)
-            seqs.append(seq)
+        with torch.no_grad():
+            for iteration, sample in enumerate(dataloader, 0):
+                if len(sample) == 2:
+                    img, _ = sample
+                    cam = seq = None
+                elif len(sample) == 3:
+                    img, _, cam = sample
+                    seq = torch.zeros(2, dtype=torch.int32)
+                else:
+                    img, _, cam, seq = sample
+                if use_side:
+                    ort_inputs = {'input': to_numpy(img),
+                                  "index": to_numpy(cam + all_cam * seq)}
+                else:
+                    ort_inputs = {'input': to_numpy(img)}
+                embedding, output = ort_session.run(["embeddings", "outputs"], ort_inputs)
+                embeddings.append(torch.from_numpy(embedding))
+                cams.append(cam)
+                seqs.append(seq)
     embeddings = F.normalize(torch.cat(embeddings, dim=0), dim=1, p=2)
     dists = euclidean_dist(embeddings, embeddings)
-    cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_train_cams+1, metric="precomputed", n_jobs=-1)
+    cluster_method = DBSCAN(eps=params.eps, min_samples=all_cam+1, metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
     cams = torch.cat(cams, dim=0)
     seqs = torch.cat(seqs, dim=0)
@@ -465,7 +466,7 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
             label = Variable(label).cuda(non_blocking=True)
             embeddings, normed_embeddings, outputs = model(images)
             # embeddings_augment, _ = model(images_augment)
-            loss = loss_func(embeddings, normed_embeddings, outputs, label, weights=sample_weights / batch_size)
+            loss = loss_func(embeddings, outputs, label, weights=sample_weights / batch_size)
             # loss = loss_func(embeddings, outputs, label, embeddings_augment, sample_weights / batch_size)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
@@ -484,11 +485,11 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
     try:
         to_onnx(model.module,
                 torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),
-                params.dataset,
+                params.dataset + "_continual",
                 output_names=["embeddings", "outputs"])
     except RuntimeError:
         pass
-    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint_{}.pt".format(params.dataset))
+    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint_{}_continual.pt".format(params.dataset))
     return model, loss_stats
 
 

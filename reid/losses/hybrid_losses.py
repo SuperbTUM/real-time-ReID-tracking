@@ -72,7 +72,7 @@ class HybridLossWeighted(nn.Module):
         if mixup:
             self.smooth = LabelSmoothingMixup(smoothing, epsilon)
         else:
-            self.smooth = LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
+            self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon)#LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
         self.circle = CircleLoss()
         self.lamda = lamda
         self.mixup = mixup
