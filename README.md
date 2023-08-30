@@ -162,17 +162,15 @@ DukeMTMC
 
 Market1501 -> DukeMTMC
 
-| Metric         | Acc@1  | mAP    |
-|----------------|--------|--------|
-| W/o. smoothing | 0.5516 | 0.3433 |
-| W/. smoothing  | -      | -      |
+| Metric        | Acc@1  | mAP    |
+|---------------|--------|--------|
+| Cross-domain  | 0.4969 | 0.3334 |
 
 DukeMTMC -> Market1501
 
-| Metric         | Acc@1  | mAP    |
-|----------------|--------|--------|
-| W/o. smoothing | 0.6793 | 0.3754 |
-| W/. smoothing  | -      | -      |
+| Metric        | Acc@1  | mAP    |
+|---------------|--------|--------|
+| Cross-domain  | 0.6256 | 0.3933 |
 
 **Tracking**
 

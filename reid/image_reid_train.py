@@ -1,12 +1,9 @@
 import os
-from PIL import Image
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
-from torch.utils.data import Dataset
 from torchvision import transforms
 
 from backbones.baseline_lite import ft_baseline
@@ -15,12 +12,12 @@ from backbones.SERes18_IBN import seres18_ibn
 from backbones.CARes18 import cares18_ibn
 from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
-from train_utils import redetection, recrop, check_parameters, DataLoaderX, plot_loss, to_numpy
+from train_utils import check_parameters, DataLoaderX, plot_loss, to_numpy
 from data_augment import LGT, Fuse_RGB_Gray_Sketch, Fuse_Gray
 from dataset_market import Market1501
 from dataset_dukemtmc import DukeMTMCreID
 from train_prepare import WarmupMultiStepLR, RandomErasing, to_onnx
-from data_prepare import RandomIdentitySampler
+from data_prepare import reidDataset, RandomIdentitySampler
 from losses.hybrid_losses import HybridLoss, HybridLossWeighted
 from losses.utils import euclidean_dist
 
@@ -35,88 +32,6 @@ cudnn.deterministic = True
 cudnn.benchmark = True
 
 # assert export_yolo()
-
-class reidDataset(Dataset):
-    def __init__(self, images, train_classes, transform=None, get_crop=False):
-        self.images = images
-        self.train_classes = train_classes
-        self.transform = transform
-        self.images_pseudo = []
-        self._continual = False
-        self.cropped = []
-        self.cropped_pseudo = []
-        self.class_stats = [0 for _ in range(train_classes)]
-        for image in images:
-            if image[1] < train_classes:
-                self.class_stats[image[1]] += 1
-        self.get_crop = get_crop
-        if get_crop:
-            pure_images = list(map(lambda x: x[0], images))
-            i = 0
-            while i < len(pure_images):
-                local_batch = []
-                end = min(i+64, len(pure_images))
-                for j in range(i, end):
-                    local_batch.append(Image.open(pure_images[j]).convert("RGB"))
-                cropped_imgs = recrop(local_batch, "pil")
-                self.cropped.extend(cropped_imgs)
-                i = end
-
-    def get_class_stats(self):
-        return self.class_stats
-
-    def set_cross_domain(self):
-        self._continual = True
-
-    def reset_cross_domain(self):
-        self._continual = False
-
-    def __len__(self):
-        if self._continual:
-            return len(self.images_pseudo) + len(self.images)
-        return len(self.images)
-
-    def add_pseudo(self, pseudo_labeled_data, num_class_new):
-        self.images_pseudo.extend(pseudo_labeled_data)
-        self.class_stats = self.class_stats + [0 for _ in range(num_class_new - self.train_classes)]
-        for image in self.images_pseudo:
-            if image[1] >= self.train_classes:
-                self.class_stats[image[1]] += 1
-        if self.get_crop:
-            pure_images = list(map(lambda x: x[0], self.images_pseudo))
-            i = 0
-            while i < len(pure_images):
-                local_batch = []
-                end = min(i + 64, len(pure_images))
-                for j in range(i, end):
-                    local_batch.append(Image.open(pure_images[j]).convert("RGB"))
-                cropped_imgs = recrop(local_batch, "pil")
-                self.cropped_pseudo.extend(cropped_imgs)
-                i = end
-
-    def __getitem__(self, item):
-        if self._continual:
-            if item < len(self.images):
-                detailed_info = list(self.images[item])
-            else:
-                detailed_info = list(self.images_pseudo[item - len(self.images)])
-        else:
-            detailed_info = list(self.images[item])
-        detailed_info[0] = Image.open(detailed_info[0]).convert("RGB")
-        # if self.get_crop and np.random.random() > 0.5:
-        #     if item < len(self.images):
-        #         detailed_info[0] = self.cropped[item]
-        #     else:
-        #         detailed_info[0] = self.cropped_pseudo[item - len(self.images)]
-        if self.transform:
-            detailed_info[0] = self.transform(detailed_info[0])
-        detailed_info[1] = torch.tensor(detailed_info[1])
-        for i in range(2, len(detailed_info)):
-            detailed_info[i] = torch.tensor(detailed_info[i], dtype=torch.long)
-        if self._continual:
-            return detailed_info + [1. if item < len(self.images) else 2.] # tricky
-        return detailed_info
-
 
 def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
     class_stats = dataset.get_class_stats()

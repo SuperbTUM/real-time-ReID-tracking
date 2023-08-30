@@ -18,7 +18,7 @@ from backbones.resnet50 import ft_net
 from dataset_market import Market1501
 from dataset_dukemtmc import DukeMTMCreID
 from train_utils import to_numpy, DataLoaderX
-from image_reid_train import reidDataset
+from data_prepare import reidDataset
 from inference_utils import diminish_camera_bias
 from faiss_utils import compute_jaccard_distance
 
