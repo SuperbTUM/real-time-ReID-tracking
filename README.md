@@ -91,7 +91,7 @@ python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm
 
 For continual image training
 ```python
-python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --instance 8 --continual
+python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --instance 8 --continual --eps 0.5
 ```
 
 For image testing (and we are about to support dynamic batching!)
@@ -149,6 +149,7 @@ Market1501
 |-----------|-----------|--------|--------|
 | []        | Euclidean | 0.9133 | 0.7828 |
 | []        | Jaccard   | 0.9267 | 0.8852 |
+| [x]       | Jaccard   | 0.9463 | 0.9210 |
 
 
 DukeMTMC

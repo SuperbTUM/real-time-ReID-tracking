@@ -1,4 +1,6 @@
 import os
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,8 +20,10 @@ from dataset_market import Market1501
 from dataset_dukemtmc import DukeMTMCreID
 from train_prepare import WarmupMultiStepLR, RandomErasing, to_onnx
 from data_prepare import reidDataset, RandomIdentitySampler
+from inference_utils import diminish_camera_bias
 from losses.hybrid_losses import HybridLoss, HybridLossWeighted
 from losses.utils import euclidean_dist
+from faiss_utils import compute_jaccard_distance
 
 import argparse
 from tqdm import tqdm
@@ -287,7 +291,7 @@ def produce_pseudo_data(model,
                     embedding, output = model(img, cam + all_cam * seq)
                 else:
                     embedding, output = model(img)
-                embeddings.append(torch.from_numpy(embedding))
+                embeddings.append(torch.from_numpy(np.concatenate((embedding, output), axis=1)))
                 cams.append(cam)
                 seqs.append(seq)
     else:
@@ -309,15 +313,17 @@ def produce_pseudo_data(model,
                 else:
                     ort_inputs = {'input': to_numpy(img)}
                 embedding, output = ort_session.run(["embeddings", "outputs"], ort_inputs)
-                embeddings.append(torch.from_numpy(embedding))
+                embeddings.append(torch.from_numpy(np.concatenate((embedding, output), axis=1)))
                 cams.append(cam)
                 seqs.append(seq)
     embeddings = F.normalize(torch.cat(embeddings, dim=0), dim=1, p=2)
-    dists = euclidean_dist(embeddings, embeddings)
-    cluster_method = DBSCAN(eps=params.eps, min_samples=all_cam+1, metric="precomputed", n_jobs=-1)
-    labels = cluster_method.fit_predict(dists)
     cams = torch.cat(cams, dim=0)
     seqs = torch.cat(seqs, dim=0)
+    embeddings = diminish_camera_bias(embeddings, cams)
+    # dists = euclidean_dist(embeddings, embeddings)
+    dists = compute_jaccard_distance(embeddings, use_float16=True)
+    cluster_method = DBSCAN(eps=params.eps, min_samples=all_cam+1, metric="precomputed", n_jobs=-1)
+    labels = cluster_method.fit_predict(dists)
     if params.dataset == 'market1501':
         for i, label in enumerate(labels):
             if label != -1:
@@ -352,7 +358,7 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
     class_stats = dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
     loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda, class_stats=class_stats)#WeightedRegularizedTriplet("none")
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 5)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     dataloader = DataLoaderX(dataset,
                              batch_size=batch_size,
@@ -368,8 +374,8 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
                                                                       scheduler)
     loss_stats = []
 
-    # Additionally train 10 epochs
-    for epoch in range(10):
+    # Additionally train 20 epochs
+    for epoch in range(20):
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label = sample[:2]
