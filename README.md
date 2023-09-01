@@ -140,6 +140,7 @@ The speed is acquired with `time` package after the synchronization of CUDA.
 ## Evaluation
 
 **Re-identification**
+[Checkpoints](https://drive.google.com/drive/folders/1GC8CXXfMbfCR_-hJaMKGTNUx2-XU9Gp4?usp=sharing)
 
 * Metric-learning
 
@@ -158,20 +159,23 @@ DukeMTMC
 |-----------|-----------|--------|--------|
 | []        | Euclidean | 0.8232 | 0.6779 |
 | []        | Jaccard   | 0.8326 | 0.7744 |
+| [x]       | Jaccard   | 0.8636 | 0.8182 |
 
 * Domain Transfer
 
 Market1501 -> DukeMTMC
 
-| Metric        | Acc@1  | mAP    |
-|---------------|--------|--------|
-| Cross-domain  | 0.4969 | 0.3334 |
+| Continual | Metric       | Acc@1  | mAP    |
+|-----------|--------------|--------|--------|
+| []        | Cross-domain | 0.4969 | 0.3334 |
+| [x]       | Cross-domain | 0.5368 | 0.3896 |
 
 DukeMTMC -> Market1501
 
-| Metric        | Acc@1  | mAP    |
-|---------------|--------|--------|
-| Cross-domain  | 0.6256 | 0.3933 |
+| Continual | Metric       | Acc@1  | mAP    |
+|-----------|--------------|--------|--------|
+| []        | Cross-domain | 0.6256 | 0.3933 |
+| [x]       | Cross-domain | 0.6580 | 0.4130 |
 
 **Tracking**
 
