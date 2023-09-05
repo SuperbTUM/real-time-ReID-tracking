@@ -103,21 +103,15 @@ class LabelSmoothing(nn.Module):
 
 
 class LabelSmoothingMixup(LabelSmoothing):
-    def __init__(self, smoothing=0.1, epsilon=0., k_sparse=-1, class_weights=None):
-        super(LabelSmoothingMixup, self).__init__(smoothing, epsilon, k_sparse, class_weights)
+    def __init__(self, smoothing=0.1, epsilon=0., class_weights=None):
+        super(LabelSmoothingMixup, self).__init__(smoothing, epsilon, class_weights)
 
     def forward(self, x, target_a, target_b, lam):
         logprobs = F.log_softmax(x, dim=-1)
         probs = F.softmax(x, dim=-1)
         target_a = target_a.long()
-        if self.k_sparse > 0:
-            topk = x.topk(self.k_sparse, dim=-1)[0]
-            pos_loss = torch.logsumexp(topk, dim=-1)
-            neg_loss = torch.gather(x, 1, target_a[:, None].expand(-1, x.size(1)))[:, 0]
-            nll_loss = (pos_loss - neg_loss).sum()
-        else:
-            nll_loss = -logprobs.gather(dim=-1, index=target_a.unsqueeze(1))
-            nll_loss = nll_loss.squeeze(1)
+        nll_loss = -logprobs.gather(dim=-1, index=target_a.unsqueeze(1))
+        nll_loss = nll_loss.squeeze(1)
         smooth_loss = -logprobs.mean(dim=-1)
         smoothed_labels = F.one_hot(target_a, x.size(-1)) * self.confidence + self.smoothing / x.size(-1)
         one_minus_pt = torch.sum(smoothed_labels * (1 - probs), dim=-1)
@@ -127,14 +121,8 @@ class LabelSmoothingMixup(LabelSmoothing):
             poly_loss_a *= self.class_weights[target_a]
 
         target_b = target_b.long()
-        if self.k_sparse > 0:
-            topk = x.topk(self.k_sparse, dim=-1)[0]
-            pos_loss = torch.logsumexp(topk, dim=-1)
-            neg_loss = torch.gather(x, 1, target_b[:, None].expand(-1, x.size(1)))[:, 0]
-            nll_loss = (pos_loss - neg_loss).sum()
-        else:
-            nll_loss = -logprobs.gather(dim=-1, index=target_b.unsqueeze(1))
-            nll_loss = nll_loss.squeeze(1)
+        nll_loss = -logprobs.gather(dim=-1, index=target_b.unsqueeze(1))
+        nll_loss = nll_loss.squeeze(1)
         smooth_loss = -logprobs.mean(dim=-1)
         smoothed_labels = F.one_hot(target_b, x.size(-1)) * self.confidence + self.smoothing / x.size(-1)
         one_minus_pt = torch.sum(smoothed_labels * (1 - probs), dim=-1)
@@ -143,4 +131,4 @@ class LabelSmoothingMixup(LabelSmoothing):
         if self.class_weights is not None:
             poly_loss_b *= self.class_weights[target_b]
 
-        return poly_loss_a * lam + poly_loss_b * (1-lam)
+        return torch.mean(poly_loss_a * lam + poly_loss_b * (1-lam))

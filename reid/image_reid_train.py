@@ -479,7 +479,7 @@ if __name__ == "__main__":
             if params.backbone == "seres18":
                 model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
             elif params.backbone == "cares18":
-                model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams, non_iid=0).cuda()
+                model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams, non_iid=params.instance).cuda()
             else:
                 model = ft_baseline(dataset.num_train_pids).cuda()
             print("model size: {:.3f} MB".format(check_parameters(model)))

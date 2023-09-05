@@ -186,7 +186,7 @@ def mixup_data(x, y, alpha=.99, intra_only=False):
         lam = alpha
 
     batch_size = x.size(0)
-    index = torch.randperm(batch_size, device=device)
+    index = torch.randperm(batch_size, device=x.device)
     if intra_only:
         mixed_x = []
         for i, (y_a, y_b) in enumerate(zip(y, y[index])):
