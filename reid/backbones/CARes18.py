@@ -133,13 +133,13 @@ class CABasicBlock(nn.Module):
             self.block_post = block.downsample
             if renorm:
                 if non_iid:
-                    self.block_post[1] = BatchRenormalization2D_Noniid(2 * dim, non_iid, self.block_post[1].state_dict())
+                    self.block_post[1] = BatchRenormalization2D_Noniid(dim, non_iid, self.block_post[1].state_dict())
                 else:
-                    self.block_post[1] = BatchRenormalization2D(2 * dim, self.block_post[1].state_dict())
+                    self.block_post[1] = BatchRenormalization2D(dim, self.block_post[1].state_dict())
         else:
             self.block_pre = block
             self.block_post = None
-        self.cablock = CABlock(dim, renorm=renorm, non_iid=non_iid)
+        self.cablock = CABlock(block.bn2.num_features, renorm=renorm, non_iid=non_iid)
 
     def forward(self, x):
         branch = x
