@@ -248,7 +248,7 @@ class CARes18_IBN(nn.Module):
     def forward(self, x, cam=None):
         x = self.conv0(x)
         x = self.bn0(x)
-        x = self.relu0(x)
+        # x = self.relu0(x) # probably you will get fewer dead neurons
         x = self.pooling0(x)
 
         x = self.basicBlock11(x)

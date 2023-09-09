@@ -159,6 +159,13 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
 
         batch_ch_mean = torch.mean(x_splits, dim=(2, 3), keepdim=True)
         batch_ch_var_pre = torch.mean(x_splits ** 2, dim=(2, 3), keepdim=True)
+        batch_ch_var_biased = (batch_ch_var_pre - batch_ch_mean ** 2).mean(dim=0, keepdim=True)
+
+        r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)),
+                        1.0 / self.r_max, self.r_max).data
+        d = torch.clamp((batch_ch_mean.mean(dim=0, keepdim=True) - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps),
+                        -self.d_max,
+                        self.d_max).data
 
         x_splits = x_splits.reshape(self.num_instance, minibatch_size, self.num_features, x.size(2), x.size(3))
 
@@ -168,12 +175,6 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         group_ch_mean = batch_ch_mean.mean(dim=1, keepdim=True)
         group_ch_var_pre = batch_ch_var_pre.mean(dim=1, keepdim=True)
         group_ch_var_biased = group_ch_var_pre - group_ch_mean ** 2
-
-        r = torch.clamp(torch.sqrt((group_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)),
-                        1.0 / self.r_max, self.r_max).data
-        d = torch.clamp((group_ch_mean - self.running_avg_mean) / torch.sqrt(self.running_avg_var + self.eps),
-                        -self.d_max,
-                        self.d_max).data
 
         x_splits = ((x_splits - group_ch_mean) * r) / torch.sqrt(group_ch_var_biased + self.eps) + d
         x_splits = self.gamma * x_splits + self.beta
@@ -191,13 +192,11 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         x_normed[self.num_instance * (indices % minibatch_size) + indices // minibatch_size] = x_splits[:]
 
         batch_ch_mean = batch_ch_mean.view(batch_size, self.num_features, 1, 1)
-        batch_ch_var_pre = batch_ch_var_pre.view(batch_size, self.num_features, 1, 1)
-        batch_ch_var_biased = (batch_ch_var_pre - batch_ch_mean ** 2)
 
         self.running_avg_mean = self.running_avg_mean + self.momentum * (
                     batch_ch_mean.mean(dim=0, keepdim=True).data - self.running_avg_mean)
         self.running_avg_var = self.running_avg_var + self.momentum * (
-                    batch_ch_var_biased.mean(dim=0, keepdim=True).data - self.running_avg_var)
+                    batch_ch_var_biased.data - self.running_avg_var)
 
         return x_normed
 
