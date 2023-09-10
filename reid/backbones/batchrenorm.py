@@ -160,6 +160,7 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         batch_ch_mean = torch.mean(x_splits, dim=(2, 3), keepdim=True)
         batch_ch_var_pre = torch.mean(x_splits ** 2, dim=(2, 3), keepdim=True)
         batch_ch_var_biased = (batch_ch_var_pre - batch_ch_mean ** 2).mean(dim=0, keepdim=True)
+        batch_ch_var_unbiased = torch.var(x_splits, dim=(0, 2, 3), unbiased=True, keepdim=True)
 
         r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)),
                         1.0 / self.r_max, self.r_max).data
@@ -196,7 +197,7 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         self.running_avg_mean = self.running_avg_mean + self.momentum * (
                     batch_ch_mean.mean(dim=0, keepdim=True).data - self.running_avg_mean)
         self.running_avg_var = self.running_avg_var + self.momentum * (
-                    batch_ch_var_biased.data - self.running_avg_var)
+                    batch_ch_var_unbiased.data - self.running_avg_var)
 
         return x_normed
 
