@@ -68,7 +68,7 @@ class HybridLossWeighted(nn.Module):
             # self.triplet = TripletLoss(margin, alpha, triplet_smooth)  # Smooth only works for hard triplet loss now
             self.triplet = TripletBeta(margin, alpha, triplet_smooth, reduction="none")
         else:
-            self.triplet = WeightedRegularizedTriplet()
+            self.triplet = WeightedRegularizedTriplet("none")
         if mixup:
             self.smooth = LabelSmoothingMixup(smoothing, epsilon)
         else:

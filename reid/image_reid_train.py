@@ -347,7 +347,7 @@ def produce_pseudo_data(model,
 
 def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=False, tmp_feat_dim=512):
     model.train()
-    model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False)
+    model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False, device=model.device)
     nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(dataset, params.instance)
@@ -385,7 +385,7 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
             images = images.cuda(non_blocking=True)
             # images_augment = scripted_transforms_augment(images)
             label = Variable(label).cuda(non_blocking=True)
-            embeddings, normed_embeddings, outputs = model(images)
+            embeddings, outputs = model(images)
             # embeddings_augment, _ = model(images_augment)
             loss = loss_func(embeddings, outputs, label, weights=sample_weights / batch_size)
             # loss = loss_func(embeddings, outputs, label, embeddings_augment, sample_weights / batch_size)

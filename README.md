@@ -86,21 +86,17 @@ We train the model on both image-based dataset and video-based dataset(w/. groun
 
 For non-continual image training
 ```python
-python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --instance 8
+python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm --center_lamda 0.0005 --instance 8 --dataset market1501
 ```
 
 For continual image training
 ```python
-python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm --epsilon -1.0 --margin 0.3 --center_lamda 0.0005 --instance 8 --continual --eps 0.5
+python reid/image_reid_train.py --bs 32 --backbone cares18 --accelerate --renorm --center_lamda 0.0005 --instance 8 --continual --eps 0.5 --dataset market1501
 ```
 
-For image testing (and we are about to support dynamic batching!)
+For image testing 
 ```python
-python reid/image_reid_inference.py --backbone cares18 --bs 1 --ckpt checkpoint/reid_model.onnx --eps 0.5
-```
-Or in a faster way
-```python
-python reid/image_reid_inference.py --backbone cares18 --bs 16 --ckpt checkpoint/reid_model_xxx.onnx --eps 0.5
+python reid/image_reid_inference.py --backbone cares18 --bs 16 --ckpt checkpoint/reid_model_xxx.onnx --eps 0.5 --dataset xxx
 ```
 
 For video training
@@ -148,18 +144,21 @@ Market1501
 
 | Continual | Metric    | Acc@1  | mAP    |
 |-----------|-----------|--------|--------|
-| []        | Euclidean | 0.9240 | 0.7915 |
-| []        | Jaccard   | 0.9267 | 0.8852 |
-| [x]       | Jaccard   | 0.9463 | 0.9210 |
+| ❌         | Euclidean | 0.9240 | 0.7915 |
+| ❌         | Jaccard   | 0.9267 | 0.8852 |
+| ✔️        | Jaccard   | 0.9463 | 0.9210 |
 
 
 DukeMTMC
 
-| Continual | Metric    | Acc@1  | mAP    |
-|-----------|-----------|--------|--------|
-| []        | Euclidean | 0.8182 | 0.6967 |
-| []        | Jaccard   | 0.8532 | 0.8041 |
-| [x]       | Jaccard   | 0.8757 | 0.8312 |
+| Continual | Metric    | Triplet Margin | Acc@1  | mAP    |
+|-----------|-----------|----------------|--------|--------|
+| ❌         | Euclidean | 0.3            | 0.8182 | 0.6967 |
+| ❌         | Euclidean | Soft           | 0.8223 | 0.7134 |
+| ❌         | Jaccard   | 0.3            | 0.8532 | 0.8041 |
+| ❌         | Jaccard   | Soft           | 0.8618 | 0.8108 |
+| ✔️        | Jaccard   | 0.3            | 0.8757 | 0.8312 |
+| ✔️        | Jaccard   | Soft           | 0.8811 | 0.8422 |
 
 * Domain Transfer
 
