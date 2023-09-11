@@ -296,7 +296,8 @@ class SERse18_IBN(nn.Module):
         self.classifier.apply(weights_init_classifier)
         self.is_reid = is_reid
         self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
-        self.cam_factor = 1.5
+        trunc_normal_(self.cam_bias, std=0.02)
+        self.cam_factor = 1.
 
     def forward(self, x, cam=None):
         x = self.conv0(x)
@@ -317,7 +318,7 @@ class SERse18_IBN(nn.Module):
         feature = x.view(x.size(0), -1)
         if cam is not None:
             feature = feature + self.cam_factor * self.cam_bias[cam] # This is not good
-            trunc_normal_(feature, std=0.02)
+
         x_normed = self.bnneck(feature)
         x = self.classifier(x_normed)
         if self.is_reid:

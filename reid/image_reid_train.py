@@ -94,8 +94,8 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     try:
         to_onnx(model.module,
                 torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"), # bs=2, experimental
-                params.dataset,
                 # torch.ones(1, dtype=torch.long)),
+                params.dataset,
                 # input_names=["input", "index"],
                 output_names=["embeddings", "outputs"])
     except: # There may be op issue
@@ -251,15 +251,6 @@ def representation_only(model):
     model.module.bn0.requires_grad_ = False
     model.module.relu0.requires_grad_ = False
     model.module.pooling0.requires_grad_ = False
-    model.module.basicBlock11.requires_grad_ = False
-    model.module.basicBlock12.requires_grad_ = False
-    model.module.basicBlock21.requires_grad_ = False
-    model.module.basicBlock22.requires_grad_ = False
-    # model.module.basicBlock31.requires_grad_ = False # tricky
-    # model.module.basicBlock32.requires_grad_ = False # tricky
-
-    # model.module.classifier.requires_grad_ = False
-    # model.module.bnneck.requires_grad_ = False
     return model
 
 

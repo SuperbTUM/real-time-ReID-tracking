@@ -243,7 +243,8 @@ class CARes18_IBN(nn.Module):
         self.classifier.apply(weights_init_classifier)
         self.is_reid = is_reid
         self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
-        self.cam_factor = 1.5
+        trunc_normal_(self.cam_bias, std=0.02)
+        self.cam_factor = 1.
 
     def forward(self, x, cam=None):
         x = self.conv0(x)
@@ -262,10 +263,10 @@ class CARes18_IBN(nn.Module):
 
         x = self.avgpooling(x)
         feature = x.view(x.size(0), -1)
-        if cam is not None: # before or after bn?
-            feature = feature + self.cam_factor * self.cam_bias[cam]
-            trunc_normal_(feature, std=0.02)
+
         x_norm = self.bnneck(feature)
+        if cam is not None: # before or after bn?
+            x_norm = x_norm + self.cam_factor * self.cam_bias[cam]
         x = self.classifier(x_norm)
         if self.is_reid:
             return x

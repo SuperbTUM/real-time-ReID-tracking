@@ -160,21 +160,28 @@ DukeMTMC
 | ✔️        | Jaccard   | 0.3            | 0.8757 | 0.8312 |
 | ✔️        | Jaccard   | Soft           | 0.8811 | 0.8422 |
 
+| Use Side (Co-eff=1.0) | Metric    | Acc@1  | mAP    |
+|-----------------------|-----------|--------|--------|
+| ❌                     | Euclidean | 0.8223 | 0.7134 |
+| ✔️                    | Euclidean | 0.8061 | 0.7273 |
+| ❌                     | Jaccard   | 0.8618 | 0.8108 |
+| ✔️                    | Jaccard   | 0.8694 | 0.8127 |
+
 * Domain Transfer
 
 Market1501 -> DukeMTMC
 
 | Continual | Metric       | Acc@1  | mAP    |
 |-----------|--------------|--------|--------|
-| []        | Cross-domain | 0.4969 | 0.3334 |
-| [x]       | Cross-domain | 0.5368 | 0.3896 |
+| ❌         | Cross-domain | 0.4969 | 0.3334 |
+| ✔️        | Cross-domain | 0.5368 | 0.3896 |
 
 DukeMTMC -> Market1501
 
 | Continual | Metric       | Acc@1  | mAP    |
 |-----------|--------------|--------|--------|
-| []        | Cross-domain | 0.6256 | 0.3933 |
-| [x]       | Cross-domain | 0.6580 | 0.4130 |
+| ❌         | Cross-domain | 0.6256 | 0.3933 |
+| ✔️        | Cross-domain | 0.6580 | 0.4130 |
 
 **Tracking**
 
