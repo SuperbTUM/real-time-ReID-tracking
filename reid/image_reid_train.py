@@ -35,7 +35,6 @@ from accelerate import Accelerator
 cudnn.deterministic = True
 cudnn.benchmark = True
 
-# assert export_yolo()
 
 def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
     class_stats = dataset.get_class_stats()
@@ -101,6 +100,72 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     except: # There may be op issue
         pass
     torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint_{}.pt".format(params.dataset))
+    return model, loss_stats
+
+
+def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
+    class_stats = dataset.get_class_stats()
+    class_stats = F.softmax(torch.stack([torch.tensor(1./stat) for stat in class_stats])).cuda() * num_classes
+    if params.ckpt and os.path.exists(params.ckpt):
+        model.eval()
+        model_state_dict = torch.load(params.ckpt)
+        model.load_state_dict(model_state_dict, strict=False)
+    model.train()
+    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
+    optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
+
+    if params.instance > 0:
+        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        optimizer = torch.optim.Adam(model.parameters(), lr=3.5e-4, weight_decay=5e-4)
+    else:
+        custom_sampler = None
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[40, 70],
+                                     gamma=0.1)  # WarmupMultiStepLR(optimizer, [10, 30])
+    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
+                             pin_memory=True, sampler=custom_sampler, drop_last=True)
+    if accelerate:
+        accelerator = Accelerator()
+        model = model.to(accelerator.device)
+        model, dataloader, optimizer, lr_scheduler, optimizer_center = accelerator.prepare(model, dataloader, optimizer, lr_scheduler, optimizer_center)
+    loss_stats = []
+    for epoch in range(epochs):
+        iterator = tqdm(dataloader)
+        for sample in iterator:
+            images, label, cams, seqs = sample
+            optimizer.zero_grad()
+            optimizer_center.zero_grad()
+            images = images.cuda(non_blocking=True)
+            label = Variable(label).cuda(non_blocking=True)
+            cams = cams.cuda(non_blocking=True)
+            embeddings, outputs = model(images, cams)
+            loss = loss_func(embeddings, outputs, label)
+            # loss = loss_func(embeddings, outputs, label, embeddings_augment)
+            loss_stats.append(loss.cpu().item())
+            # nn.utils.clip_grad_norm_(model.parameters(), 10)
+            if accelerate:
+                accelerator.backward(loss)
+            else:
+                loss.backward()
+            optimizer.step()
+            for param in loss_func.center.parameters():
+                param.grad.data *= (1. / params.center_lamda)
+            optimizer_center.step()
+            description = "epoch: {}, lr: {}, loss: {:.4f}".format(epoch, lr_scheduler.get_last_lr()[0], loss)
+            iterator.set_description(description)
+        lr_scheduler.step()
+    model.eval()
+    loss_func.center.save()
+    try:
+        to_onnx(model.module,
+                (torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"), # bs=2, experimental
+                torch.ones(1, dtype=torch.long)),
+                params.dataset + "_sie",
+                input_names=["input", "index"],
+                output_names=["embeddings", "outputs"])
+    except: # There may be op issue
+        pass
+    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint_{}_sie.pt".format(params.dataset))
     return model, loss_stats
 
 
@@ -434,6 +499,7 @@ def parser():
     args.add_argument("--accelerate", action="store_true")
     args.add_argument("--renorm", action="store_true")
     args.add_argument("--instance", type=int, default=0)
+    args.add_argument("--sie", action="store_true")
     return args.parse_args()
 
 
@@ -475,8 +541,12 @@ if __name__ == "__main__":
                 model = ft_baseline(dataset.num_train_pids).cuda()
             print("model size: {:.3f} MB".format(check_parameters(model)))
             model = nn.DataParallel(model)
-            model, loss_stats = train_cnn(model, source_dataset, params.bs, params.epochs, dataset.num_train_pids,
-                                          params.accelerate)
+            if params.sie:
+                model, loss_stats = train_cnn_sie(model, source_dataset, params.bs, params.epochs, dataset.num_train_pids,
+                                                  params.accelerate)
+            else:
+                model, loss_stats = train_cnn(model, source_dataset, params.bs, params.epochs, dataset.num_train_pids,
+                                              params.accelerate)
 
             if params.continual:
                 transform_test = transforms.Compose([transforms.Resize((256, 128)),
