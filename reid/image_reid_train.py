@@ -403,7 +403,7 @@ def produce_pseudo_data(model,
 
 def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=False, tmp_feat_dim=512):
     model.train()
-    model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False, device=model.device)
+    model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False, device="cuda")
     nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(dataset, params.instance)

@@ -142,11 +142,13 @@ The speed is acquired with `time` package after the synchronization of CUDA.
 
 Market1501
 
-| Continual | Metric    | Acc@1  | mAP    |
-|-----------|-----------|--------|--------|
-| ❌         | Euclidean | 0.9240 | 0.7915 |
-| ❌         | Jaccard   | 0.9267 | 0.8852 |
-| ✔️        | Jaccard   | 0.9463 | 0.9210 |
+| Continual | Metric    | Triplet Margin | Acc@1  | mAP    |
+|-----------|-----------|----------------|--------|--------|
+| ❌         | Euclidean | 0.3            | 0.9240 | 0.7915 |
+| ❌         | Euclidean | Soft           | 0.9243 | 0.8030 |
+| ❌         | Jaccard   | 0.3            | 0.9267 | 0.8852 |
+| ❌         | Jaccard   | Soft           | 0.9279 | 0.8893 |
+| ✔️        | Jaccard   | 0.3            | 0.9463 | 0.9210 |
 
 
 DukeMTMC
