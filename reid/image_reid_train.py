@@ -291,7 +291,7 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
     loss_func.center.save()
     to_onnx(model.module,
             (torch.randn(2, 3, 448, 224, requires_grad=True, device="cuda"),
-             torch.ones(2, dtype=torch.long)),
+             torch.ones(1, dtype=torch.long)),
             params.dataset,
             input_names=["input", "index"],
             output_names=["embeddings", "outputs"])
@@ -558,7 +558,7 @@ if __name__ == "__main__":
                 dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True, use_side=params.sie)
                 del dataset_test
                 source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 source_dataset.set_cross_domain()

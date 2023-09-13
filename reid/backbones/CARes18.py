@@ -6,6 +6,7 @@ from collections import OrderedDict
 from .weight_init import weights_init_classifier, weights_init_kaiming
 from .SERes18_IBN import GeM, IBN, trunc_normal_
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization2D_Noniid, BatchRenormalization1D
+from .attention_pooling import GeM_Custom
 
 
 class CABlock(nn.Module):
@@ -15,7 +16,6 @@ class CABlock(nn.Module):
         mip = channel // reduction
 
         self.conv_1x1 = nn.Conv2d(in_channels=channel, out_channels=mip, kernel_size=1, stride=1, bias=False)
-        # self.conv_1x1 = nn.Linear(channel, mip, bias=False)  # bias=False
 
         # self.relu = nn.ReLU(inplace=True)
         # experimental
@@ -30,10 +30,11 @@ class CABlock(nn.Module):
 
         self.F_h = nn.Conv2d(in_channels=mip, out_channels=channel, kernel_size=1, stride=1, bias=False)
         self.F_w = nn.Conv2d(in_channels=mip, out_channels=channel, kernel_size=1, stride=1, bias=False)
-        # self.F_h = nn.Linear(mip, channel, bias=False)  # bias=False
-        # self.F_w = nn.Linear(mip, channel, bias=False)  # bias=False
 
         self.sigmoid = nn.Sigmoid()
+
+        # self.gem_h = GeM_Custom(3)
+        # self.gem_w = GeM_Custom(2)
 
         # torch.nn.init.kaiming_normal_(self.conv_1x1.weight.data, a=0, mode='fan_out')
         # torch.nn.init.kaiming_normal_(self.F_h.weight.data, a=0, mode='fan_out')
@@ -49,23 +50,21 @@ class CABlock(nn.Module):
     def forward(self, x):
         h, w = int(x.size(2)), int(x.size(3))
 
-        # x_h = F.adaptive_avg_pool2d(x, (h, 1)).permute(0, 1, 3, 2)
-        # x_w = F.adaptive_avg_pool2d(x, (1, w))
         x_h = x.mean(dim=3, keepdim=True).permute(0, 1, 3, 2)
         x_w = x.mean(dim=2, keepdim=True)
+
+        # x_h = self.gem_h(x).permute(0, 1, 3, 2)
+        # x_w = self.gem_w(x)
+
         concat = torch.cat((x_h, x_w), 3)#.permute(0, 2, 3, 1) # (32, 64, 1, 96) -> (32, 1, 96, 64)
 
         x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
-        #x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat).permute(0, 3, 1, 2))) # (32, 4, 1, 96)
 
         x_cat_conv_split_h, x_cat_conv_split_w = x_cat_conv_relu.split([h, w], 3)
         x_cat_conv_split_h = x_cat_conv_split_h.permute(0, 1, 3, 2)
 
         s_h = self.sigmoid(self.F_h(x_cat_conv_split_h))
         s_w = self.sigmoid(self.F_w(x_cat_conv_split_w))
-
-        #s_h = self.sigmoid(self.F_h(x_cat_conv_split_h.permute(0, 3, 2, 1)).permute(0, 3, 1, 2)) # (32, 64, 1, 64) -> (32, 64, 64, 1)
-        #s_w = self.sigmoid(self.F_w(x_cat_conv_split_w.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)) # (32, 32, 4, 1) -> (32, 64, 1, 32)
 
         out = x * s_h.expand_as(x) * s_w.expand_as(x)
 

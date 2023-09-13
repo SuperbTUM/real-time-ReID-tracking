@@ -150,6 +150,10 @@ Market1501
 | ❌         | Jaccard   | Soft           | 0.9279 | 0.8893 |
 | ✔️        | Jaccard   | 0.3            | 0.9463 | 0.9210 |
 
+| Attention Pooling | Metric    | Acc@1  | mAP    |
+|-------------------|-----------|--------|--------|
+| ❌                 | Euclidean | 0.9243 | 0.8030 |
+| ✔️                | Euclidean | 0.9154 | 0.8118 |
 
 DukeMTMC
 
