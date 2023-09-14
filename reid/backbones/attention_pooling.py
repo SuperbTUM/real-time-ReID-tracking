@@ -14,6 +14,10 @@ class FeedForward(nn.Module):
             nn.Dropout(dropout)
         )
 
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(self.fc1.weight.data, a=0, mode='fan_out')
+
     def forward(self, x):
         return self.net(x)
 

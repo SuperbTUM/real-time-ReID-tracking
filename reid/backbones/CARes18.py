@@ -3,8 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
-from .weight_init import weights_init_classifier, weights_init_kaiming
-from .SERes18_IBN import GeM, IBN, trunc_normal_
+from .weight_init import weights_init_classifier, weights_init_kaiming, trunc_normal_
+from .SERes18_IBN import GeM, IBN
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization2D_Noniid, BatchRenormalization1D
 from .attention_pooling import GeM_Custom
 
