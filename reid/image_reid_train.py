@@ -380,23 +380,14 @@ def produce_pseudo_data(model,
     dists = compute_jaccard_distance(embeddings, use_float16=True)
     cluster_method = DBSCAN(eps=params.eps, min_samples=all_cam+1, metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
-    if params.dataset == 'market1501':
-        for i, label in enumerate(labels):
-            if label != -1:
-                pseudo_data.append((
-                    merged_datasets[i][0],
-                    label + dataset.num_train_pids,
-                    cams[i].item(),
-                    seqs[i].item()
-                ))
-    else:
-        for i, label in enumerate(labels):
-            if label != -1:
-                pseudo_data.append((
-                    merged_datasets[i][0],
-                    label + dataset.num_train_pids,
-                    cams[i].item()
-                ))
+    for i, label in enumerate(labels):
+        if label != -1:
+            pseudo_data.append((
+                merged_datasets[i][0],
+                label + dataset.num_train_pids,
+                cams[i].item(),
+                seqs[i].item()
+            ))
     print("Inference completed! {} more pseudo-labels obtained!".format(len(pseudo_data)))
     return pseudo_data, max(labels) + 1 + dataset.num_train_pids
 
