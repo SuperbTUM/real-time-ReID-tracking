@@ -14,11 +14,10 @@ class SEBlock(nn.Module):
     def __init__(self, c_in, ibn=False):
         super().__init__()
         self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
-        mip = c_in // 16
+        mip = max(8, c_in // 16)
         self.fc1 = nn.Conv2d(c_in, mip, kernel_size=1, padding=0, bias=False)
         if ibn:
-            self.bn = nn.BatchNorm1d(mip >> 1)
-            self.in_ = nn.InstanceNorm1d(mip >> 1)
+            self.bn = IBN_1D(mip)
         else:
             self.bn = nn.BatchNorm1d(mip)
         self.relu = nn.ReLU(inplace=True)
@@ -34,18 +33,35 @@ class SEBlock(nn.Module):
         x = self.globalavgpooling(x)
         x = self.fc1(x)
         x = x.squeeze()
-        if self.ibn:
-            split = torch.split(x, x.size(1) >> 1, 1)
-            out1 = self.in_(split[0].contiguous())
-            out2 = self.bn(split[1].contiguous())
-            x = torch.cat((out1, out2), 1)
-        else:
-            x = self.bn(x)
+        x = self.bn(x)
         x = self.relu(x)
         x = self.fc2(x)
         x = x.unsqueeze(-1).unsqueeze(-1)
         x = self.sigmoid(x)
         return x
+
+
+class IBN_1D(nn.Module):
+    def __init__(self, in_channels, ratio=0.5, renorm=False, dict_state=None):
+        """
+        Half do instance norm, half do batch norm
+        """
+        super().__init__()
+        self.in_channels = in_channels
+        self.ratio = ratio
+        self.half = int(self.in_channels * ratio)
+        self.IN = nn.LayerNorm(self.half)
+        if renorm:
+            self.BN = BatchRenormalization1D(self.in_channels - self.half, dict_state) # experimental
+        else:
+            self.BN = nn.BatchNorm1d(self.in_channels - self.half)
+
+    def forward(self, x):
+        split = torch.split(x, self.half, 1)
+        out1 = self.IN(split[0].contiguous())
+        out2 = self.BN(split[1].contiguous())
+        out = torch.cat((out1, out2), 1)
+        return out
 
 
 class IBN(nn.Module):
