@@ -6,34 +6,41 @@ from collections import OrderedDict
 
 from .weight_init import weights_init_kaiming, weights_init_classifier, trunc_normal_
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization1D, BatchRenormalization2D_Noniid
-from .attention_pooling import GeM, AttentionPooling
+from .attention_pooling import GeM
 
 
 # This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):
-    def __init__(self, c_in, se_attn=False):
+    def __init__(self, c_in, ibn=False):
         super().__init__()
-        if se_attn:
-            self.globalavgpooling = GeM()
-        else:
-            self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
+        self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
         mip = c_in // 16
         self.fc1 = nn.Conv2d(c_in, mip, kernel_size=1, padding=0, bias=False)
-        self.bn = nn.BatchNorm1d(mip)
+        if ibn:
+            self.bn = nn.BatchNorm1d(mip >> 1)
+            self.in_ = nn.InstanceNorm1d(mip >> 1)
+        else:
+            self.bn = nn.BatchNorm1d(mip)
         self.relu = nn.ReLU(inplace=True)
         self.fc2 = nn.Linear(mip, c_in, bias=False)  # bias=False
         self.sigmoid = nn.Sigmoid()
         self.c_in = c_in
+        self.ibn = ibn
 
         torch.nn.init.kaiming_normal_(self.fc1.weight.data, a=0, mode='fan_out')
-        # torch.nn.init.constant_(self.fc1.bias.data, 0.0)
         torch.nn.init.kaiming_normal_(self.fc2.weight.data, a=0, mode='fan_out')
-        # torch.nn.init.constant_(self.fc2.bias.data, 0.0)
 
     def forward(self, x):
         x = self.globalavgpooling(x)
         x = self.fc1(x)
-        x = self.bn(x.squeeze())
+        x = x.squeeze()
+        if self.ibn:
+            split = torch.split(x, x.size(1) >> 1, 1)
+            out1 = self.in_(split[0].contiguous())
+            out2 = self.bn(split[1].contiguous())
+            x = torch.cat((out1, out2), 1)
+        else:
+            x = self.bn(x)
         x = self.relu(x)
         x = self.fc2(x)
         x = x.unsqueeze(-1).unsqueeze(-1)
@@ -71,7 +78,7 @@ class IBN(nn.Module):
 
 
 class SEBasicBlock(nn.Module):
-    def __init__(self, block, dim, renorm, ibn, se_attn, restride=False):
+    def __init__(self, block, dim, renorm, ibn, se_ibn, restride=False):
         super(SEBasicBlock, self).__init__()
         if restride:
             block.conv1.stride = (1, 1)
@@ -96,7 +103,7 @@ class SEBasicBlock(nn.Module):
         else:
             self.block_pre = block
             self.block_post = None
-        self.seblock = SEBlock(dim, se_attn)
+        self.seblock = SEBlock(dim, se_ibn)
 
     def forward(self, x):
         branch = x
@@ -112,8 +119,8 @@ class SEBasicBlock(nn.Module):
 class SEPreActBasicBlock(SEBasicBlock):
     """I did not think of a proper pretrained weight to load
     """
-    def __init__(self, block, dim, renorm, ibn, se_attn, restride=False):
-        super(SEPreActBasicBlock, self).__init__(block, dim, renorm, ibn, se_attn, restride)
+    def __init__(self, block, dim, renorm, ibn, se_ibn, restride=False):
+        super(SEPreActBasicBlock, self).__init__(block, dim, renorm, ibn, se_ibn, restride)
         in_planes = block.conv1.in_channels
         if renorm:
             block.bn1 = BatchRenormalization2D(in_planes)
@@ -174,7 +181,7 @@ class SERse18_IBN(nn.Module):
                  num_cams=6,
                  pooling="gem",
                  renorm=False,
-                 se_attn=False,
+                 se_ibn=False,
                  is_reid=False):
         super().__init__()
         # model = models.resnet18(weights=resnet18_pretrained, progress=False)
@@ -187,22 +194,22 @@ class SERse18_IBN(nn.Module):
         self.relu0 = model.relu
         self.pooling0 = model.maxpool
 
-        self.basicBlock11 = SEBasicBlock(model.layer1[0], 64, renorm, True, se_attn)
+        self.basicBlock11 = SEBasicBlock(model.layer1[0], 64, renorm, True, se_ibn)
 
-        self.basicBlock12 = SEBasicBlock(model.layer1[1], 64, renorm, True, se_attn)
+        self.basicBlock12 = SEBasicBlock(model.layer1[1], 64, renorm, True, se_ibn)
 
-        self.basicBlock21 = SEBasicBlock(model.layer2[0], 128, renorm, True, se_attn)
+        self.basicBlock21 = SEBasicBlock(model.layer2[0], 128, renorm, True, se_ibn)
 
-        self.basicBlock22 = SEBasicBlock(model.layer2[1], 128, renorm, True, se_attn)
+        self.basicBlock22 = SEBasicBlock(model.layer2[1], 128, renorm, True, se_ibn)
 
-        self.basicBlock31 = SEBasicBlock(model.layer3[0], 256, renorm, True, se_attn)
+        self.basicBlock31 = SEBasicBlock(model.layer3[0], 256, renorm, True, se_ibn)
 
-        self.basicBlock32 = SEBasicBlock(model.layer3[1], 256, renorm, True, se_attn)
+        self.basicBlock32 = SEBasicBlock(model.layer3[1], 256, renorm, True, se_ibn)
 
         # last stride = 1
-        self.basicBlock41 = SEBasicBlock(model.layer4[0], 512, renorm, False, se_attn, True)
+        self.basicBlock41 = SEBasicBlock(model.layer4[0], 512, renorm, False, se_ibn, True)
 
-        self.basicBlock42 = SEBasicBlock(model.layer4[1], 512, renorm, False, se_attn)
+        self.basicBlock42 = SEBasicBlock(model.layer4[1], 512, renorm, False, se_ibn)
 
         if pooling == "gem":
             self.avgpooling = GeM()
