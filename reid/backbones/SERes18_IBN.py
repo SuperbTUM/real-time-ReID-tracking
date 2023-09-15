@@ -14,12 +14,14 @@ class SEBlock(nn.Module):
     def __init__(self, c_in, se_attn=False):
         super().__init__()
         if se_attn:
-            self.globalavgpooling = AttentionPooling(c_in)
+            self.globalavgpooling = GeM()
         else:
             self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
-        self.fc1 = nn.Linear(c_in, max(1, c_in // 16), bias=False)  # bias=False
+        mip = c_in // 16
+        self.fc1 = nn.Conv2d(c_in, mip, kernel_size=1, padding=0, bias=False)
+        self.bn = nn.BatchNorm1d(mip)
         self.relu = nn.ReLU(inplace=True)
-        self.fc2 = nn.Linear(max(1, c_in // 16), c_in, bias=False)  # bias=False
+        self.fc2 = nn.Linear(mip, c_in, bias=False)  # bias=False
         self.sigmoid = nn.Sigmoid()
         self.c_in = c_in
 
@@ -30,8 +32,8 @@ class SEBlock(nn.Module):
 
     def forward(self, x):
         x = self.globalavgpooling(x)
-        x = x.squeeze()
         x = self.fc1(x)
+        x = self.bn(x.squeeze())
         x = self.relu(x)
         x = self.fc2(x)
         x = x.unsqueeze(-1).unsqueeze(-1)
@@ -228,7 +230,7 @@ class SERse18_IBN(nn.Module):
     def forward(self, x, cam=None):
         x = self.conv0(x)
         x = self.bn0(x)
-        x = self.relu0(x)
+        # x = self.relu0(x)
         x = self.pooling0(x)
 
         x = self.basicBlock11(x)

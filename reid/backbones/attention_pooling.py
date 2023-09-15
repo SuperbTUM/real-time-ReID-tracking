@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .weight_init import trunc_normal_
 
 
 class FeedForward(nn.Module):
@@ -16,7 +17,7 @@ class FeedForward(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(self.fc1.weight.data, a=0, mode='fan_out')
+                nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_out')
 
     def forward(self, x):
         return self.net(x)
@@ -26,6 +27,7 @@ class AttentionPooling(nn.Module):
     def __init__(self, in_dim):
         super().__init__()
         self.cls_vec = nn.Parameter(torch.randn(in_dim), requires_grad=True)
+        trunc_normal_(self.cls_vec, 0.02)
         self.fc = FeedForward(in_dim, 256)
         self.softmax = nn.Softmax(-1)
 
