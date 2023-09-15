@@ -197,7 +197,7 @@ class SERse18_IBN(nn.Module):
                  num_cams=6,
                  pooling="gem",
                  renorm=False,
-                 se_ibn=False,
+                 se_ibn=True,
                  is_reid=False):
         super().__init__()
         # model = models.resnet18(weights=resnet18_pretrained, progress=False)
