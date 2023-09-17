@@ -461,6 +461,75 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
     return model, loss_stats
 
 
+def train_cnn_continual_sie(model, dataset, num_class_new, batch_size=8, accelerate=False, tmp_feat_dim=512):
+    model.train()
+    model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False, device="cuda")
+    nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
+    if params.instance > 0:
+        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=5e-4)
+    else:
+        custom_sampler = None
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    class_stats = dataset.get_class_stats()
+    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
+    loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda, class_stats=class_stats)#WeightedRegularizedTriplet("none")
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10)
+    optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
+    dataloader = DataLoaderX(dataset,
+                             batch_size=batch_size,
+                             num_workers=4,
+                             shuffle=not params.instance,
+                             pin_memory=True,
+                             sampler=custom_sampler,
+                             drop_last=True)
+    if accelerate:
+        accelerator = Accelerator()
+        model = model.to(accelerator.device)
+        model, dataloader, optimizer, scheduler = accelerator.prepare(model, dataloader, optimizer,
+                                                                      scheduler)
+    loss_stats = []
+
+    # Additionally train 20 epochs
+    for epoch in range(20):
+        iterator = tqdm(dataloader)
+        for sample in iterator:
+            images, label, cams = sample[:3]
+            sample_weights = sample[-1].cuda(non_blocking=True)
+            optimizer.zero_grad()
+            optimizer_center.zero_grad()
+            images = images.cuda(non_blocking=True)
+            label = Variable(label).cuda(non_blocking=True)
+            embeddings, outputs = model(images, cams)
+            loss = loss_func(embeddings, outputs, label, weights=sample_weights / batch_size)
+            # loss = loss_func(embeddings, outputs, label, embeddings_augment, sample_weights / batch_size)
+            loss_stats.append(loss.cpu().item())
+            nn.utils.clip_grad_norm_(model.parameters(), 10)
+            if accelerate:
+                accelerator.backward(loss)
+            else:
+                loss.backward()
+            optimizer.step()
+            for param in loss_func.center.parameters():
+                param.grad.data *= (1. / params.center_lamda)
+            optimizer_center.step()
+            description = "epoch: {}, Triplet loss: {:.4f}".format(epoch, loss)
+            iterator.set_description(description)
+        scheduler.step()
+    model.eval()
+    try:
+        to_onnx(model.module,
+                (torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),
+                 torch.ones(1, dtype=torch.long)),
+                params.dataset + "_sie_continual",
+                input_names=["input", "index"],
+                output_names=["embeddings", "outputs"])
+    except RuntimeError:
+        pass
+    torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint_{}_sie_continual.pt".format(params.dataset))
+    return model, loss_stats
+
+
 def parser():
     def range_type(astr, min=-1., max=6.):
         value = float(astr)
@@ -555,7 +624,10 @@ if __name__ == "__main__":
                 source_dataset.set_cross_domain()
                 model = representation_only(model)
                 torch.cuda.empty_cache()
-                model, loss_stats = train_cnn_continual(model, source_dataset, num_class_new, params.bs, params.accelerate, 512)
+                if params.sie:
+                    model, loss_stats = train_cnn_continual_sie(model, source_dataset, num_class_new, params.bs, params.accelerate, 512)
+                else:
+                    model, loss_stats = train_cnn_continual(model, source_dataset, num_class_new, params.bs, params.accelerate, 512)
                 source_dataset.reset_cross_domain()
 
     else:

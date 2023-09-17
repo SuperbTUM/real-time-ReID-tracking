@@ -218,7 +218,7 @@ def parser():
                                                                             "swin_v2",
                                                                             "resnet50",
                                                                             "baseline"])
-    args.add_argument("--use_side", action="store_true")
+    args.add_argument("--sie", action="store_true")
     args.add_argument("--renorm", action="store_true")
     args.add_argument("--eps", type=float, default=0.25)
     return args.parse_args()
