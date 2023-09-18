@@ -97,14 +97,14 @@ Market1501: default cares18; `()` means seres18
 
 DukeMTMC
 
-| Continual | Metric    | Triplet Margin | Acc@1  | mAP    |
-|-----------|-----------|----------------|--------|--------|
-| ❌         | Euclidean | 0.3            | 0.8182 | 0.6967 |
-| ❌         | Euclidean | Soft           | 0.8223 | 0.7134 |
-| ❌         | Jaccard   | 0.3            | 0.8532 | 0.8041 |
-| ❌         | Jaccard   | Soft           | 0.8618 | 0.8108 |
-| ✔️        | Jaccard   | 0.3            | 0.8757 | 0.8312 |
-| ✔️        | Jaccard   | Soft           | 0.8811 | 0.8422 |
+| Continual | Metric    | Triplet Margin | Acc@1           | mAP             |
+|-----------|-----------|----------------|-----------------|-----------------|
+| ❌         | Euclidean | 0.3            | 0.8182          | 0.6967          |
+| ❌         | Euclidean | Soft           | 0.8223 (0.8110) | 0.7134 (0.7315) |
+| ❌         | Jaccard   | 0.3            | 0.8532          | 0.8041          |
+| ❌         | Jaccard   | Soft           | 0.8618 (0.8703) | 0.8108 (0.8273) |
+| ✔️        | Jaccard   | 0.3            | 0.8757          | 0.8312          |
+| ✔️        | Jaccard   | Soft           | 0.8811          | 0.8422          |
 
 | Use Side (Co-eff=1.0) | Metric    | Acc@1  | mAP    |
 |-----------------------|-----------|--------|--------|
