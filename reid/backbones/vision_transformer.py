@@ -1,12 +1,15 @@
 from __future__ import division, absolute_import
 
+import math
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from einops import rearrange, repeat
 from timm.models.layers import trunc_normal_
 
 from .attention_pooling import FeedForward
+from .weight_init import weights_init_kaiming, weights_init_classifier
 
 import warnings
 # helpers
@@ -135,7 +138,7 @@ class Transformer(nn.Module):
 
 class ViT(nn.Module):
     def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, loss="softmax", pool='cls', channels=3,
-                 dim_head=64, dropout=0., emb_dropout=0., camera=0, sequence=0, side_info=False):
+                 dim_head=64, dropout=0., emb_dropout=0., camera=0, sequence=0, side_info=True):
         super().__init__()
         image_height, image_width = pair(image_size)
         patch_height, patch_width = pair(patch_size)
@@ -155,6 +158,7 @@ class ViT(nn.Module):
         self.to_patch_embedding = Convolution_Stem(in_chans=channels, stem_stride=2, embed_dim=dim, patch_size=patch_size)
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
+        trunc_normal_(self.pos_embedding, std=0.02)
         if camera * sequence > 0:
             self.side_info_embedding = nn.Parameter(torch.randn(camera * sequence, 1, dim))
             trunc_normal_(self.side_info_embedding, std=0.02)
@@ -165,20 +169,38 @@ class ViT(nn.Module):
             self.side_info_embedding = nn.Parameter(torch.randn(sequence, 1, dim))
             trunc_normal_(self.side_info_embedding, std=0.02)
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
+        trunc_normal_(self.cls_token, std=0.02)
         self.dropout = nn.Dropout(emb_dropout)
 
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
 
         self.pool = pool
-        self.to_latent = nn.Identity()
+        self.to_latent = nn.LayerNorm(dim, eps=1e-6)
 
-        self.mlp_head = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(dim, num_classes)
-        )
+        self.bottleneck = nn.BatchNorm1d(dim)
+        self.bottleneck.bias.requires_grad_(False)
+        self.bottleneck.apply(weights_init_kaiming)
+
+        self.mlp_head = nn.Linear(dim, num_classes, bias=False)
+        self.mlp_head.apply(weights_init_classifier)
 
         self.side_info = side_info
         self.loss = loss
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {"pos_embedding", "cls_token"}
 
     def forward(self, img, view_index=None):
         x = self.to_patch_embedding(img)
@@ -192,15 +214,36 @@ class ViT(nn.Module):
         x = self.dropout(x)
 
         x = self.transformer(x)
+        x = self.to_latent(x)
 
         x = x.mean(dim=1) if self.pool == 'mean' else x[:, 0]
 
-        x = self.to_latent(x)
-        y = self.mlp_head(x)
+        x_normed = self.bottleneck(x)
+
+        y = self.mlp_head(x_normed)
+        if not self.training:
+            return y, x_normed
         if self.loss == "softmax":
             return y
         elif self.loss == "triplet":
             return y, x
+
+
+def resize_pos_embed(posemb, posemb_new, hight, width):
+    # Rescale the grid of position embeddings when loading from state_dict. Adapted from
+    # https://github.com/google-research/vision_transformer/blob/00883dd691c63a6830751563748663526e811cee/vit_jax/checkpoint.py#L224
+    ntok_new = posemb_new.shape[1]
+
+    posemb_token, posemb_grid = posemb[:, :1], posemb[0, 1:]
+    ntok_new -= 1
+
+    gs_old = int(math.sqrt(len(posemb_grid)))
+    print('Resized position embedding from size:{} to size: {} with height:{} width: {}'.format(posemb.shape, posemb_new.shape, hight, width))
+    posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
+    posemb_grid = F.interpolate(posemb_grid, size=(hight, width), mode='bilinear')
+    posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, hight * width, -1)
+    posemb = torch.cat([posemb_token, posemb_grid], dim=1)
+    return posemb
 
 
 def init_pretrained_weights(model, key=''):
@@ -288,3 +331,12 @@ def vit_t(img_size=(224, 224), patch_size=32,
     if pretrained:
         init_pretrained_weights(model, "vit_t")
     return model
+
+
+if __name__ == "__main__":
+    model = vit_t(loss="triplet").cuda()
+    from torchsummary import summary
+    try:
+        print(summary(model, (3, 224, 224)))
+    except:
+        raise Warning("Model not ready yet!")

@@ -70,3 +70,22 @@ class GeM_Custom(GeM):
 
     def gem(self, x, p=3, eps=1e-6):
         return x.clamp(min=eps).pow(p).mean(self.dim, keepdim=True).pow(1. / p)
+
+
+class GeM3d(GeM):
+    def __init__(self, kernel_size, stride=1, p=3, eps=1e-6):
+        super(GeM3d, self).__init__(p, eps)
+        self.kernel_size = kernel_size
+        self.stride = stride
+
+    def gem(self, x, p=3, eps=1e-6):
+        return F.avg_pool3d(x.clamp(min=eps).pow(p), self.kernel_size, self.stride).pow(1. / p)
+
+
+class GeM_1D(GeM):
+    def __init__(self, p=3, eps=1e-6):
+        super(GeM_1D, self).__init__(p, eps)
+
+    def gem(self, x, p=3, eps=1e-6):
+        # return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1. / p)
+        return F.adaptive_avg_pool1d(x.clamp(min=eps).pow(p), 1).pow(1. / p)

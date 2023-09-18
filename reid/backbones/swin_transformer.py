@@ -12,8 +12,8 @@ import warnings
 from timm.models.layers import trunc_normal_
 from timm.models.layers import Mlp
 
-from .SERes18_IBN import GeM
-from .attention_pooling import FeedForward
+from .attention_pooling import FeedForward, GeM_1D
+from .weight_init import weights_init_classifier, weights_init_kaiming
 
 
 __all__ = ["swin_t"]
@@ -318,8 +318,23 @@ class StageModule(nn.Module):
 
 
 class SwinTransformer(nn.Module):
-    def __init__(self, *, hidden_dim, layers, heads, loss="softmax", channels=3, num_classes=1000, head_dim=32, window_size=7,
-                 downscaling_factors=(4, 2, 2, 2), relative_pos_embedding=True, camera=0, sequence=0, side_info=False, version="v1"):
+    def __init__(self,
+                 *,
+                 hidden_dim,
+                 layers,
+                 heads,
+                 loss="softmax",
+                 channels=3,
+                 num_classes=1000,
+                 head_dim=32,
+                 window_size=7,
+                 downscaling_factors=(4, 2, 2, 2),
+                 relative_pos_embedding=True,
+                 camera=0,
+                 sequence=0,
+                 side_info=True,
+                 version="v1",
+                 gem=True):
         super().__init__()
 
         self.sfe = ShadowFeatureExtraction(channels, hidden_dim, camera=camera, sequence=sequence, side_info=side_info)
@@ -338,17 +353,26 @@ class SwinTransformer(nn.Module):
                                   downscaling_factor=downscaling_factors[3], num_heads=heads[3], head_dim=head_dim,
                                   window_size=window_size, relative_pos_embedding=relative_pos_embedding, version=version)
 
+        self.norm = nn.LayerNorm(hidden_dim, eps=1e-6)
+
+        self.bottleneck = nn.BatchNorm1d(hidden_dim)
+        self.bottleneck.bias.requires_grad_(False)
+        self.bottleneck.apply(weights_init_kaiming)
+
         self.mlp_head = nn.Sequential(
-            nn.LayerNorm(hidden_dim),
-            nn.Linear(hidden_dim, num_classes)
+            nn.Linear(hidden_dim, num_classes, bias=False)
         )
+        self.mlp_head.apply(weights_init_classifier)
 
         self.img_channel_align = nn.Conv2d(hidden_dim, hidden_dim * 8, 8, stride=8)
         self.stage4_channel_align = nn.ConvTranspose2d(hidden_dim * 8, hidden_dim * 4, 4, 2, 1)
         self.stage3_channel_align = nn.ConvTranspose2d(hidden_dim * 4, hidden_dim * 2, 4, 2, 1)
         self.stage2_channel_align = nn.ConvTranspose2d(hidden_dim * 2, hidden_dim, 4, 2, 1)
 
-        self.avgpool = GeM()
+        if gem:
+            self.avgpool = GeM_1D()
+        else:
+            self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.loss = loss
 
     def forward(self, img, view_index=None):
@@ -368,9 +392,16 @@ class SwinTransformer(nn.Module):
         stage1_align = self.stage2_channel_align(fused_output)
         fused_output = stage1_align + stage1_output
 
-        # x = fused_output.mean(dim=[2, 3])
-        x = self.avgpool(fused_output).squeeze()
-        y = self.mlp_head(x)
+        fused_output = fused_output.view(fused_output.size(0), fused_output.size(1), -1).permute(0, 2, 1)  # (B, L, C)
+
+        x = self.norm(fused_output)
+
+        x = self.avgpool(x.permute(0, 2, 1)).squeeze()  # (B, C, 1)
+
+        x_norm = self.bottleneck(x)
+        y = self.mlp_head(x_norm)
+        if not self.training:
+            return y, x_norm
         if self.loss == "softmax":
             return y
         elif self.loss == "triplet":
@@ -461,3 +492,12 @@ def swin_t(hidden_dim=96, layers=(2, 2, 6, 2), heads=(3, 6, 12, 24),
     if pretrained:
         init_pretrained_weights(model, "swin_t")
     return model
+
+
+if __name__ == "__main__":
+    model = swin_t(loss="triplet").cuda()
+    from torchsummary import summary
+    try:
+        print(summary(model, (3, 224, 224)))
+    except:
+        raise Warning("Model not ready yet!")

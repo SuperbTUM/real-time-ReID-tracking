@@ -10,3 +10,4 @@ prefetch_generator
 gdown
 scikit-learn
 onnx-simplifier
+torchsummary

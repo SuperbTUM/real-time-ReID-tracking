@@ -5,7 +5,7 @@ from torch.autograd import Variable
 import math
 from functools import partial
 
-from .attention_pooling import AttentionPooling
+from .attention_pooling import AttentionPooling, GeM3d
 
 __all__ = [
     'ResNet', 'resnet10', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
@@ -50,25 +50,6 @@ class MixedNorm3d(nn.Module):
         out2 = self.batchnorm3d(split[1].contiguous())
         out = torch.cat((out1, out2), 1)
         return out
-
-
-class GeM3d(nn.Module):
-    def __init__(self, kernel_size, stride=1, p=3, eps=1e-6):
-        super(GeM3d, self).__init__()
-        self.p = nn.Parameter(torch.ones(1) * p)
-        self.eps = eps
-        self.kernel_size = kernel_size
-        self.stride = stride
-
-    def forward(self, x):
-        return self.gem(x, p=self.p, eps=self.eps)
-
-    def gem(self, x, p=3, eps=1e-6):
-        return F.avg_pool3d(x.clamp(min=eps).pow(p), self.kernel_size, self.stride).pow(1. / p)
-
-    def __repr__(self):
-        return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(
-            self.eps) + ')'
 
 
 class BasicBlock(nn.Module):
