@@ -38,13 +38,14 @@ cudnn.benchmark = True
 
 def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
     class_stats = dataset.get_class_stats()
-    class_stats = F.softmax(torch.stack([torch.tensor(1./stat) for stat in class_stats])).cuda() * num_classes
+    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_classes
     if params.ckpt and os.path.exists(params.ckpt):
         model.eval()
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
+    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
+                           class_stats=class_stats)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
     if params.instance > 0:
@@ -60,7 +61,9 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     if accelerate:
         accelerator = Accelerator()
         model = model.to(accelerator.device)
-        model, dataloader, optimizer, lr_scheduler, optimizer_center = accelerator.prepare(model, dataloader, optimizer, lr_scheduler, optimizer_center)
+        model, dataloader, optimizer, lr_scheduler, optimizer_center = accelerator.prepare(model, dataloader, optimizer,
+                                                                                           lr_scheduler,
+                                                                                           optimizer_center)
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
@@ -72,11 +75,11 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             # images_flip = scripted_transforms_augment(images)
             label = Variable(label).cuda(non_blocking=True)
             # cams = cams.cuda(non_blocking=True)
-            embeddings, outputs = model(images)#, cams)
+            embeddings, outputs = model(images)  # , cams)
             loss = loss_func(embeddings, outputs, label)
             # loss = loss_func(embeddings, outputs, label, embeddings_augment)
             loss_stats.append(loss.cpu().item())
-            # nn.utils.clip_grad_norm_(model.parameters(), 10)
+            nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:
                 accelerator.backward(loss)
             else:
@@ -92,12 +95,12 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     loss_func.center.save()
     try:
         to_onnx(model.module,
-                torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"), # bs=2, experimental
+                torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),  # bs=2, experimental
                 # torch.ones(1, dtype=torch.long)),
                 params.dataset,
                 # input_names=["input", "index"],
                 output_names=["embeddings", "outputs"])
-    except: # There may be op issue
+    except:  # There may be op issue
         pass
     torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint_{}.pt".format(params.dataset))
     return model, loss_stats
@@ -105,13 +108,14 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
 
 def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
     class_stats = dataset.get_class_stats()
-    class_stats = F.softmax(torch.stack([torch.tensor(1./stat) for stat in class_stats])).cuda() * num_classes
+    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_classes
     if params.ckpt and os.path.exists(params.ckpt):
         model.eval()
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda, class_stats=class_stats)
+    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
+                           class_stats=class_stats)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
     if params.instance > 0:
@@ -127,7 +131,9 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
     if accelerate:
         accelerator = Accelerator()
         model = model.to(accelerator.device)
-        model, dataloader, optimizer, lr_scheduler, optimizer_center = accelerator.prepare(model, dataloader, optimizer, lr_scheduler, optimizer_center)
+        model, dataloader, optimizer, lr_scheduler, optimizer_center = accelerator.prepare(model, dataloader, optimizer,
+                                                                                           lr_scheduler,
+                                                                                           optimizer_center)
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
@@ -142,7 +148,7 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
             loss = loss_func(embeddings, outputs, label)
             # loss = loss_func(embeddings, outputs, label, embeddings_augment)
             loss_stats.append(loss.cpu().item())
-            # nn.utils.clip_grad_norm_(model.parameters(), 10)
+            nn.utils.clip_grad_norm_(model.parameters(), 10)
             if accelerate:
                 accelerator.backward(loss)
             else:
@@ -158,12 +164,12 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
     loss_func.center.save()
     try:
         to_onnx(model.module,
-                (torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"), # bs=2, experimental
-                torch.ones(1, dtype=torch.long)),
+                (torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),  # bs=2, experimental
+                 torch.ones(1, dtype=torch.long)),
                 params.dataset + "_sie",
                 input_names=["input", "index"],
                 output_names=["embeddings", "outputs"])
-    except: # There may be op issue
+    except:  # There may be op issue
         pass
     torch.save(model.state_dict(), "checkpoint/cnn_net_checkpoint_{}_sie.pt".format(params.dataset))
     return model, loss_stats
@@ -175,11 +181,17 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    optimizer = madgrad.MADGRAD(model.parameters(), lr=0.001, weight_decay=5e-4)
+    if params.instance > 0:
+        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        optimizer = torch.optim.Adam(model.parameters(), lr=3.5e-4, weight_decay=5e-4)
+    else:
+        custom_sampler = None
+        optimizer = madgrad.MADGRAD(model.parameters(), lr=0.01, weight_decay=5e-4)
     lr_scheduler = WarmupMultiStepLR(optimizer, [30, 55])
     loss_func1 = HybridLoss(num_classes, 2048, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     loss_func2 = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
-    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
+                             pin_memory=True, sampler=custom_sampler)
     optimizer_center1 = torch.optim.SGD(loss_func1.center.parameters(), lr=0.5)
     optimizer_center2 = torch.optim.SGD(loss_func2.center.parameters(), lr=0.5)
 
@@ -232,18 +244,24 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
     return model, loss_stats
 
 
-def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=25, num_classes=517,
-                             all_cams=6, all_seq=6, accelerate=False):
+def train_transformer_model(model, dataset, feat_dim=384, batch_size=8, epochs=25, num_classes=517,
+                            all_cams=6, all_seqs=6, accelerate=False):
     if params.ckpt and os.path.exists(params.ckpt):
         model.eval()
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
 
     model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
+    if params.instance > 0:
+        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.008, weight_decay=1e-4)
+    else:
+        custom_sampler = None
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-4)
     lr_scheduler = WarmupMultiStepLR(optimizer, [30, 55])
     loss_func = HybridLoss(num_classes, feat_dim, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
-    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=True, pin_memory=True)
+    dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
+                             pin_memory=True, sampler=custom_sampler)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     if accelerate:
         accelerator = Accelerator()
@@ -257,20 +275,12 @@ def train_vision_transformer(model, dataset, feat_dim=384, batch_size=8, epochs=
         for sample in iterator:
             optimizer.zero_grad()
             optimizer_center.zero_grad()
-            if len(sample) == 2:
-                images, label = sample
-                view_index = None
-            elif len(sample) == 3:
-                images, label, cam = sample
-                assert all(cam) < all_cams
-                view_index = cam
+            images, label, cam, seqid = sample
+            assert all(seqid) < all_seqs and all(cam) < all_cams
+            if cam is not None and any(cam) >= 0 and seqid is not None and any(seqid) >= 0:
+                view_index = cam + all_cams * seqid
             else:
-                images, label, cam, seqid = sample
-                assert all(seqid) < all_seq and all(cam) < all_cams
-                if cam is not None and any(cam) >= 0 and seqid is not None and any(seqid) >= 0:
-                    view_index = cam * all_cams + seqid
-                else:
-                    view_index = None
+                view_index = None
             images = images.cuda(non_blocking=True)
             label = label.cuda(non_blocking=True)
             logits, embeddings = model(images, view_index)
@@ -331,20 +341,13 @@ def produce_pseudo_data(model,
     cams = []
     seqs = []
     if not use_onnx:
-        dataloader = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True, drop_last=True)
+        dataloader = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True)
         with torch.no_grad():
             for iteration, sample in enumerate(dataloader, 0):
-                if len(sample) == 2:
-                    img, _ = sample
-                    cam = seq = None
-                elif len(sample) == 3:
-                    img, _, cam = sample
-                    seq = torch.zeros(params.bs, dtype=torch.int32)
-                else:
-                    img, _, cam, seq = sample
+                img, _, cam, seq = sample
                 img = img.cuda(non_blocking=True)
                 if use_side:
-                    embedding, output = model(img, cam + all_cam * seq)
+                    embedding, output = model(img, cam)  # cam + all_cam * seq
                 else:
                     embedding, output = model(img)
                 embeddings.append(torch.from_numpy(np.concatenate((embedding, output), axis=1)))
@@ -352,20 +355,13 @@ def produce_pseudo_data(model,
                 seqs.append(seq)
     else:
         # experiment
-        dataloader = DataLoaderX(dataset_test, batch_size=2, shuffle=False, num_workers=4, pin_memory=True, drop_last=True)
+        dataloader = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4, pin_memory=True)
         with torch.no_grad():
             for iteration, sample in enumerate(dataloader, 0):
-                if len(sample) == 2:
-                    img, _ = sample
-                    cam = seq = None
-                elif len(sample) == 3:
-                    img, _, cam = sample
-                    seq = torch.zeros(2, dtype=torch.int32)
-                else:
-                    img, _, cam, seq = sample
+                img, _, cam, seq = sample
                 if use_side:
                     ort_inputs = {'input': to_numpy(img),
-                                  "index": to_numpy(cam + all_cam * seq)}
+                                  "index": to_numpy(cam)}  # cam + all_cam * seq
                 else:
                     ort_inputs = {'input': to_numpy(img)}
                 embedding, output = ort_session.run(["embeddings", "outputs"], ort_inputs)
@@ -378,7 +374,7 @@ def produce_pseudo_data(model,
     embeddings = diminish_camera_bias(embeddings, cams)
     # dists = euclidean_dist(embeddings, embeddings)
     dists = compute_jaccard_distance(embeddings, use_float16=True)
-    cluster_method = DBSCAN(eps=params.eps, min_samples=all_cam+1, metric="precomputed", n_jobs=-1)
+    cluster_method = DBSCAN(eps=params.eps, min_samples=all_cam + 1, metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
     for i, label in enumerate(labels):
         if label != -1:
@@ -404,7 +400,8 @@ def train_cnn_continual(model, dataset, num_class_new, batch_size=8, accelerate=
         optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
-    loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda, class_stats=class_stats)#WeightedRegularizedTriplet("none")
+    loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
+                                   class_stats=class_stats)  # WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     dataloader = DataLoaderX(dataset,
@@ -473,7 +470,8 @@ def train_cnn_continual_sie(model, dataset, num_class_new, batch_size=8, acceler
         optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
-    loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda, class_stats=class_stats)#WeightedRegularizedTriplet("none")
+    loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
+                                   class_stats=class_stats)  # WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     dataloader = DataLoaderX(dataset,
@@ -537,29 +535,30 @@ def parser():
             return value
         else:
             raise argparse.ArgumentTypeError('value not in range %s-%s' % (min, max))
+
     args = argparse.ArgumentParser()
     args.add_argument("--dataset", type=str, choices=["market1501", "dukemtmc"], default="market1501")
     args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
     args.add_argument("--ckpt", help="where the checkpoint of vit is, can either be a onnx or pt", type=str,
                       default="vision_transformer_checkpoint.pt")
     args.add_argument("--bs", type=int, default=64)
-    args.add_argument("--backbone", type=str, default="plr_osnet", choices=["seres18",
-                                                                            "cares18",
-                                                                            "plr_osnet",
-                                                                            "vit",
-                                                                            "swin_v1",
-                                                                            "swin_v2",
-                                                                            "baseline"])
+    args.add_argument("--backbone", type=str, default="seres18", choices=["seres18",
+                                                                          "cares18",
+                                                                          "plr_osnet",
+                                                                          "vit",
+                                                                          "swin_v1",
+                                                                          "swin_v2",
+                                                                          "baseline"])
     args.add_argument("--epochs", type=int, default=160)
     args.add_argument("--epsilon", help="for polyloss, 0 by default", type=range_type, default=0.0, metavar="[-1, 6]")
     args.add_argument("--margin", help="for triplet loss", default=0.0, type=float)
-    args.add_argument("--center_lamda", help="for center loss", default=0.0, type=float)
-    args.add_argument("--eps", default=0.25, type=float, help="clustering eps for continual training")
-    args.add_argument("--continual", action="store_true")
+    args.add_argument("--center_lamda", help="for center loss", default=0.0005, type=float)
+    args.add_argument("--eps", default=0.5, type=float, help="clustering eps for continual training")
+    args.add_argument("--continual", action="store_true", hep="continual training")
     args.add_argument("--accelerate", action="store_true")
     args.add_argument("--renorm", action="store_true")
     args.add_argument("--instance", type=int, default=0)
-    args.add_argument("--sie", action="store_true")
+    args.add_argument("--sie", action="store_true", help="side information embedding")
     return args.parse_args()
 
 
@@ -576,7 +575,7 @@ if __name__ == "__main__":
     if params.backbone in ("plr_osnet", "seres18", "baseline", "cares18"):
         # No need for cross-domain retrain
         transform_train = transforms.Compose([
-            transforms.Resize((256, 128)), # interpolation=3
+            transforms.Resize((256, 128)),  # interpolation=3
             transforms.RandomHorizontalFlip(),
             transforms.Pad(10),
             transforms.RandomCrop((256, 128)),
@@ -594,15 +593,18 @@ if __name__ == "__main__":
                                                 params.accelerate)
         else:
             if params.backbone == "seres18":
-                model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
+                model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm,
+                                    num_cams=dataset.num_train_cams).cuda()
             elif params.backbone == "cares18":
-                model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams, non_iid=params.instance).cuda()
+                model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams,
+                                    non_iid=params.instance).cuda()
             else:
                 model = ft_baseline(dataset.num_train_pids).cuda()
             print("model size: {:.3f} MB".format(check_parameters(model)))
             model = nn.DataParallel(model)
             if params.sie:
-                model, loss_stats = train_cnn_sie(model, source_dataset, params.bs, params.epochs, dataset.num_train_pids,
+                model, loss_stats = train_cnn_sie(model, source_dataset, params.bs, params.epochs,
+                                                  dataset.num_train_pids,
                                                   params.accelerate)
             else:
                 model, loss_stats = train_cnn(model, source_dataset, params.bs, params.epochs, dataset.num_train_pids,
@@ -611,23 +613,29 @@ if __name__ == "__main__":
             if params.continual:
                 transform_test = transforms.Compose([transforms.Resize((256, 128)),
                                                      transforms.ToTensor(),
-                                                     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                                                     transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                                                          std=(0.229, 0.224, 0.225)),
                                                      ]
                                                     )
                 merged_datasets = dataset.gallery + dataset.query
                 dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
 
-                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True, use_side=params.sie)
+                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}_sie.onnx".format(params.dataset) if params.sie else "checkpoint/reid_model_{}.onnx".format(params.dataset),
+                                                           providers=providers)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets,
+                                                                         dataset.num_gallery_cams, use_onnx=True,
+                                                                         use_side=params.sie)
                 del dataset_test
                 source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 source_dataset.set_cross_domain()
                 model = representation_only(model)
                 torch.cuda.empty_cache()
                 if params.sie:
-                    model, loss_stats = train_cnn_continual_sie(model, source_dataset, num_class_new, params.bs, params.accelerate, 512)
+                    model, loss_stats = train_cnn_continual_sie(model, source_dataset, num_class_new, params.bs,
+                                                                params.accelerate, 512)
                 else:
-                    model, loss_stats = train_cnn_continual(model, source_dataset, num_class_new, params.bs, params.accelerate, 512)
+                    model, loss_stats = train_cnn_continual(model, source_dataset, num_class_new, params.bs,
+                                                            params.accelerate, 512)
                 source_dataset.reset_cross_domain()
 
     else:
@@ -654,28 +662,31 @@ if __name__ == "__main__":
                           camera=dataset.num_train_cams,
                           sequence=dataset.num_train_seqs, side_info=True).cuda()
             model = nn.DataParallel(model)
-            model, loss_stats = train_vision_transformer(model, source_dataset, 384,
-                                                         params.bs, params.epochs,
-                                                         dataset.num_train_pids,
-                                                         dataset.num_train_cams,
-                                                         dataset.num_train_seqs,
-                                                         params.accelerate)
+            model, loss_stats = train_transformer_model(model, source_dataset, 384,
+                                                        params.bs, params.epochs,
+                                                        dataset.num_train_pids,
+                                                        dataset.num_train_cams,
+                                                        dataset.num_train_seqs,
+                                                        params.accelerate)
             if params.continual:
                 merged_datasets = dataset.gallery + dataset.query
                 dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
 
-                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
+                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset),
+                                                           providers=providers)
 
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True, use_side=True)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets,
+                                                                         dataset.num_gallery_cams, use_onnx=True,
+                                                                         use_side=True)
                 del dataset_test
                 source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 source_dataset.set_cross_domain()
                 model = side_info_only(model)
-                model, loss_stats = train_vision_transformer(model, source_dataset, 384,
-                                                             params.bs, params.epochs,
-                                                             dataset.num_train_pids,
-                                                             dataset.num_train_cams,
-                                                             dataset.num_train_seqs)
+                model, loss_stats = train_transformer_model(model, source_dataset, 384,
+                                                            params.bs, params.epochs,
+                                                            dataset.num_train_pids,
+                                                            dataset.num_train_cams,
+                                                            dataset.num_train_seqs)
                 source_dataset.reset_cross_domain()
         elif params.backbone.startswith("swin"):
             model = swin_t(num_classes=dataset.num_train_pids, loss="triplet",
@@ -683,12 +694,12 @@ if __name__ == "__main__":
                            side_info=True,
                            version=params.backbone[-2:]).cuda()
             model = nn.DataParallel(model)
-            model, loss_stats = train_vision_transformer(model, source_dataset, 96,
-                                                         params.bs, params.epochs,
-                                                         dataset.num_train_pids,
-                                                         dataset.num_train_cams,
-                                                         dataset.num_train_seqs,
-                                                         params.accelerate)
+            model, loss_stats = train_transformer_model(model, source_dataset, 96,
+                                                        params.bs, params.epochs,
+                                                        dataset.num_train_pids,
+                                                        dataset.num_train_cams,
+                                                        dataset.num_train_seqs,
+                                                        params.accelerate)
 
             if params.continual:
                 merged_datasets = dataset.gallery + dataset.query
@@ -696,17 +707,20 @@ if __name__ == "__main__":
                 # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
                 #                               pin_memory=True)
 
-                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset), providers=providers)
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets, dataset.num_gallery_cams, use_onnx=True, use_side=True)
+                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset),
+                                                           providers=providers)
+                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets,
+                                                                         dataset.num_gallery_cams, use_onnx=True,
+                                                                         use_side=True)
                 del dataset_test
                 source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 source_dataset.set_cross_domain()
                 model = side_info_only(model)
-                model, loss_stats = train_vision_transformer(model, source_dataset, 96,
-                                                             params.bs, params.epochs,
-                                                             dataset.num_train_pids,
-                                                             dataset.num_train_cams,
-                                                             dataset.num_train_seqs)
+                model, loss_stats = train_transformer_model(model, source_dataset, 96,
+                                                            params.bs, params.epochs,
+                                                            dataset.num_train_pids,
+                                                            dataset.num_train_cams,
+                                                            dataset.num_train_seqs)
                 source_dataset.reset_cross_domain()
         else:
             raise NotImplementedError
