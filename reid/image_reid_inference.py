@@ -387,11 +387,11 @@ if __name__ == "__main__":
     try:
         from cuml import DBSCAN
         print("CUML Imported!")
-        cluster_method = DBSCAN(eps=params.eps, min_samples=min(12, dataset.num_gallery_cams+1), metric="precomputed")
+        cluster_method = DBSCAN(eps=params.eps, min_samples=min(10, dataset.num_gallery_cams+1), metric="precomputed")
         dists = dists.cpu().numpy()
     except ImportError:
         from sklearn.cluster import DBSCAN
-        cluster_method = DBSCAN(eps=params.eps, min_samples=min(12, dataset.num_gallery_cams+1), metric="precomputed", n_jobs=-1)
+        cluster_method = DBSCAN(eps=params.eps, min_samples=min(10, dataset.num_gallery_cams+1), metric="precomputed", n_jobs=-1)
     pseudo_labels = cluster_method.fit_predict(dists)
     indices_pseudo = (pseudo_labels != -1)
     num_labels = max(pseudo_labels) + 1

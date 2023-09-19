@@ -118,7 +118,7 @@ Veri776
 
 | Continual | Metric  | Triplet Margin | Acc@1  | mAP    |
 |-----------|---------|----------------|--------|--------|
-| ❌         | Jaccard | Soft           | 0.9046 | 0.7098 |
+| ❌         | Jaccard | Soft           | 0.9046 | 0.7111 |
 
 * Domain Transfer
 
