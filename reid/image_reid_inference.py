@@ -17,6 +17,7 @@ from backbones.resnet50 import ft_net
 
 from dataset_market import Market1501
 from dataset_dukemtmc import DukeMTMCreID
+from dataset_veri776 import VeRi
 from train_utils import to_numpy, DataLoaderX
 from data_prepare import reidDataset
 from inference_utils import diminish_camera_bias
@@ -205,7 +206,7 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
 
 def parser():
     args = argparse.ArgumentParser()
-    args.add_argument("--dataset", type=str, choices=["market1501", "dukemtmc"], default="market1501")
+    args.add_argument("--dataset", type=str, choices=["market1501", "dukemtmc", "veri"], default="market1501")
     args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
     args.add_argument("--ckpt", help="where the checkpoint of vit is, can either be a onnx or pt", type=str,
                       default="checkpoint/vision_transformer_checkpoint.pt")
@@ -230,8 +231,10 @@ if __name__ == "__main__":
         dataset = Market1501(root="/".join((params.root, "Market1501")))
     elif params.dataset == "dukemtmc":
         dataset = DukeMTMCreID(root=params.root)
+    elif params.dataset == "veri":
+        dataset = VeRi(root=params.root)
     else:
-        raise NotImplementedError("Only market and dukemtmc datasets are supported!\n")
+        raise NotImplementedError("Only market, dukemtmc and veri datasets are supported!\n")
 
     if params.backbone == "plr_osnet":
         transform_test = transforms.Compose([transforms.Resize((256, 128)),
@@ -384,11 +387,11 @@ if __name__ == "__main__":
     try:
         from cuml import DBSCAN
         print("CUML Imported!")
-        cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_gallery_cams+1, metric="precomputed")
+        cluster_method = DBSCAN(eps=params.eps, min_samples=min(12, dataset.num_gallery_cams+1), metric="precomputed")
         dists = dists.cpu().numpy()
     except ImportError:
         from sklearn.cluster import DBSCAN
-        cluster_method = DBSCAN(eps=params.eps, min_samples=dataset.num_gallery_cams+1, metric="precomputed", n_jobs=-1)
+        cluster_method = DBSCAN(eps=params.eps, min_samples=min(12, dataset.num_gallery_cams+1), metric="precomputed", n_jobs=-1)
     pseudo_labels = cluster_method.fit_predict(dists)
     indices_pseudo = (pseudo_labels != -1)
     num_labels = max(pseudo_labels) + 1

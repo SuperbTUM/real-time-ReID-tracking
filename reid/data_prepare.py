@@ -30,7 +30,7 @@ class reidDataset(Dataset):
                 end = min(i+64, len(pure_images))
                 for j in range(i, end):
                     local_batch.append(Image.open(pure_images[j]).convert("RGB"))
-                cropped_imgs = recrop(local_batch, "pil")
+                cropped_imgs = redetection(local_batch, "pil")
                 self.cropped.extend(cropped_imgs)
                 i = end
 
@@ -62,7 +62,7 @@ class reidDataset(Dataset):
                 end = min(i + 64, len(pure_images))
                 for j in range(i, end):
                     local_batch.append(Image.open(pure_images[j]).convert("RGB"))
-                cropped_imgs = recrop(local_batch, "pil")
+                cropped_imgs = redetection(local_batch, "pil")
                 self.cropped_pseudo.extend(cropped_imgs)
                 i = end
 

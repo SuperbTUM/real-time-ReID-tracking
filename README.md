@@ -51,7 +51,8 @@ Now we primarily use MOT16 evaluation as benchmark and Market1501/DukeMTMC to pr
 
 Videos: [MOT16](https://motchallenge.net/data/MOT16/)
 
-Person gallery: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eEozWG9COHM/view?resourcekey=0-8nyl7K9_x37HlQm34MmrYQ), [DukeMTMC-reID](https://drive.google.com/file/d/1jjE85dRCMOgRtvJ5RQV9-Afs-2_5dY3O/view)
+Person gallery: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eEozWG9COHM/view?resourcekey=0-8nyl7K9_x37HlQm34MmrYQ), [DukeMTMC-reID](https://drive.google.com/file/d/1jjE85dRCMOgRtvJ5RQV9-Afs-2_5dY3O/view),
+VeRi-776
 
 
 
@@ -112,6 +113,12 @@ DukeMTMC
 | ✔️                    | Euclidean | 0.8061 | 0.7273 |
 | ❌                     | Jaccard   | 0.8618 | 0.8108 |
 | ✔️                    | Jaccard   | 0.8694 | 0.8127 |
+
+Veri776
+
+| Continual | Metric  | Triplet Margin | Acc@1  | mAP    |
+|-----------|---------|----------------|--------|--------|
+| ❌         | Jaccard | Soft           | 0.9046 | 0.7098 |
 
 * Domain Transfer
 

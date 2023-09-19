@@ -18,6 +18,7 @@ from train_utils import check_parameters, DataLoaderX, plot_loss, to_numpy
 from data_augment import LGT, Fuse_RGB_Gray_Sketch, Fuse_Gray
 from dataset_market import Market1501
 from dataset_dukemtmc import DukeMTMCreID
+from dataset_veri776 import VeRi
 from train_prepare import WarmupMultiStepLR, RandomErasing, to_onnx
 from data_prepare import reidDataset, RandomIdentitySampler
 from inference_utils import diminish_camera_bias
@@ -537,7 +538,7 @@ def parser():
             raise argparse.ArgumentTypeError('value not in range %s-%s' % (min, max))
 
     args = argparse.ArgumentParser()
-    args.add_argument("--dataset", type=str, choices=["market1501", "dukemtmc"], default="market1501")
+    args.add_argument("--dataset", type=str, choices=["market1501", "dukemtmc", "veri"], default="market1501")
     args.add_argument("--root", type=str, default="~/real-time-ReID-tracking")
     args.add_argument("--ckpt", help="where the checkpoint of vit is, can either be a onnx or pt", type=str,
                       default="vision_transformer_checkpoint.pt")
@@ -568,8 +569,10 @@ if __name__ == "__main__":
         dataset = Market1501(root="/".join((params.root, "Market1501")))
     elif params.dataset == "dukemtmc":
         dataset = DukeMTMCreID(root=params.root)
+    elif params.dataset == "veri":
+        dataset = VeRi(root=params.root)
     else:
-        raise NotImplementedError("Only market and dukemtmc datasets are supported!\n")
+        raise NotImplementedError("Only market, dukemtmc and veri datasets are supported!\n")
     providers = ["CUDAExecutionProvider"]
 
     if params.backbone in ("plr_osnet", "seres18", "baseline", "cares18"):
