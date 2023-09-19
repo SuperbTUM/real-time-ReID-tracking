@@ -114,11 +114,12 @@ DukeMTMC
 | ❌                     | Jaccard   | 0.8618 | 0.8108 |
 | ✔️                    | Jaccard   | 0.8694 | 0.8127 |
 
-Veri776
+Veri776 on SeRes18
 
-| Continual | Metric  | Triplet Margin | Acc@1  | mAP    |
-|-----------|---------|----------------|--------|--------|
-| ❌         | Jaccard | Soft           | 0.9046 | 0.7111 |
+| Use Side (Co-eff=-1.0) | Metric  | Triplet Margin | Acc@1  | mAP    |
+|------------------------|---------|----------------|--------|--------|
+| ❌                      | Jaccard | Soft           | 0.9046 | 0.7111 |
+| ✔️                     | Jaccard | Soft           | 0.9184 | 0.7221 |
 
 * Domain Transfer
 
