@@ -47,12 +47,12 @@ conda install faiss-gpu=1.7.4
 ## Datasets
 
 The current datasets are a bit outdated. You are advised to use MOT17, MOT20 instead.
-Now we primarily use MOT16 evaluation as benchmark and Market1501/DukeMTMC to pre-train our re-id network.
+Now we primarily use MOT16 evaluation as benchmark and Market1501/DukeMTMC/VeRi-776 to pre-train our re-id network.
 
-Videos: [MOT16](https://motchallenge.net/data/MOT16/)
+Video Dataset: [MOT16](https://motchallenge.net/data/MOT16/)
 
-Person gallery: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eEozWG9COHM/view?resourcekey=0-8nyl7K9_x37HlQm34MmrYQ), [DukeMTMC-reID](https://drive.google.com/file/d/1jjE85dRCMOgRtvJ5RQV9-Afs-2_5dY3O/view),
-VeRi-776
+Image Datasets: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eEozWG9COHM/view?resourcekey=0-8nyl7K9_x37HlQm34MmrYQ), [DukeMTMC-reID](https://drive.google.com/file/d/1jjE85dRCMOgRtvJ5RQV9-Afs-2_5dY3O/view),
+[VeRi-776](https://vehiclereid.github.io/VeRi/)
 
 
 
@@ -118,8 +118,8 @@ Veri776 on SeRes18
 
 | Use Side (Co-eff=-1.0) | Metric  | Triplet Margin | Acc@1  | mAP    |
 |------------------------|---------|----------------|--------|--------|
-| ❌                      | Jaccard | Soft           | 0.9046 | 0.7111 |
-| ✔️                     | Jaccard | Soft           | 0.9184 | 0.7221 |
+| ❌                      | Jaccard | Soft           | -      | -      |
+| ✔️                     | Jaccard | Soft           | 0.9249 | 0.7420 |
 
 * Domain Transfer
 

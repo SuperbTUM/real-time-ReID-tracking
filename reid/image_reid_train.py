@@ -21,6 +21,7 @@ from dataset_dukemtmc import DukeMTMCreID
 from dataset_veri776 import VeRi
 from train_prepare import WarmupMultiStepLR, RandomErasing, to_onnx
 from data_prepare import reidDataset, RandomIdentitySampler
+from data_transforms import get_train_transforms, get_inference_transforms
 from inference_utils import diminish_camera_bias
 from losses.hybrid_losses import HybridLoss, HybridLossWeighted
 from losses.utils import euclidean_dist
@@ -94,9 +95,10 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         lr_scheduler.step()
     model.eval()
     loss_func.center.save()
+    dummy_input = torch.randn(2, 3, 224, 224, requires_grad=True, device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda")
     try:
         to_onnx(model.module,
-                torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),  # bs=2, experimental
+                dummy_input,
                 # torch.ones(1, dtype=torch.long)),
                 params.dataset,
                 # input_names=["input", "index"],
@@ -163,9 +165,10 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
         lr_scheduler.step()
     model.eval()
     loss_func.center.save()
+    dummy_input = torch.randn(2, 3, 224, 224, requires_grad=True, device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda")
     try:
         to_onnx(model.module,
-                (torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),  # bs=2, experimental
+                (dummy_input,
                  torch.ones(1, dtype=torch.long)),
                 params.dataset + "_sie",
                 input_names=["input", "index"],
@@ -237,8 +240,12 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
     model.eval()
     loss_func1.center.save()
     loss_func2.center.save()
+    dummy_input = torch.randn(2, 3, 224, 224, requires_grad=True,
+                              device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128,
+                                                                                          requires_grad=True,
+                                                                                          device="cuda")
     to_onnx(model.module,
-            torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda"),
+            dummy_input,
             params.dataset,
             output_names=["y1", "y2", "fea"])
     torch.save(model.state_dict(), "checkpoint/plr_osnet_checkpoint_{}.pt".format(params.dataset))
@@ -300,8 +307,12 @@ def train_transformer_model(model, dataset, feat_dim=384, batch_size=8, epochs=2
         lr_scheduler.step()
     model.eval()
     loss_func.center.save()
+    dummy_input = torch.randn(2, 3, 224, 224, requires_grad=True,
+                              device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 448, 224,
+                                                                                          requires_grad=True,
+                                                                                          device="cuda")
     to_onnx(model.module,
-            (torch.randn(2, 3, 448, 224, requires_grad=True, device="cuda"),
+            (dummy_input,
              torch.ones(1, dtype=torch.long)),
             params.dataset,
             input_names=["input", "index"],
@@ -577,16 +588,17 @@ if __name__ == "__main__":
 
     if params.backbone in ("plr_osnet", "seres18", "baseline", "cares18"):
         # No need for cross-domain retrain
-        transform_train = transforms.Compose([
-            transforms.Resize((256, 128)),  # interpolation=3
-            transforms.RandomHorizontalFlip(),
-            transforms.Pad(10),
-            transforms.RandomCrop((256, 128)),
-            Fuse_Gray(0.35, 0.05),
-            # transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            transforms.RandomErasing(),
-        ])
+        # transform_train = transforms.Compose([
+        #     transforms.Resize((256, 128)),  # interpolation=3
+        #     transforms.RandomHorizontalFlip(),
+        #     transforms.Pad(10),
+        #     transforms.RandomCrop((256, 128)),
+        #     Fuse_Gray(0.35, 0.05),
+        #     # transforms.ToTensor(),
+        #     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        #     transforms.RandomErasing(),
+        # ])
+        transform_train = get_train_transforms(params.dataset)
         source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
         torch.cuda.empty_cache()
         if params.backbone == "plr_osnet":
@@ -614,12 +626,13 @@ if __name__ == "__main__":
                                               params.accelerate)
 
             if params.continual:
-                transform_test = transforms.Compose([transforms.Resize((256, 128)),
-                                                     transforms.ToTensor(),
-                                                     transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                                                          std=(0.229, 0.224, 0.225)),
-                                                     ]
-                                                    )
+                # transform_test = transforms.Compose([transforms.Resize((256, 128)),
+                #                                      transforms.ToTensor(),
+                #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                #                                                           std=(0.229, 0.224, 0.225)),
+                #                                      ]
+                #                                     )
+                transform_test = get_inference_transforms(params.dataset)
                 merged_datasets = dataset.gallery + dataset.query
                 dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
 
@@ -642,16 +655,17 @@ if __name__ == "__main__":
                 source_dataset.reset_cross_domain()
 
     else:
-        transform_train = transforms.Compose([
-            transforms.Resize((448, 224)),
-            transforms.RandomHorizontalFlip(),
-            transforms.Pad(10),
-            transforms.RandomCrop((448, 224)),
-            LGT(),
-            # transforms.ToTensor(),
-            transforms.RandomErasing(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ])
+        # transform_train = transforms.Compose([
+        #     transforms.Resize((448, 224)),
+        #     transforms.RandomHorizontalFlip(),
+        #     transforms.Pad(10),
+        #     transforms.RandomCrop((448, 224)),
+        #     LGT(),
+        #     # transforms.ToTensor(),
+        #     transforms.RandomErasing(),
+        #     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        # ])
+        transform_train = get_train_transforms(params.dataset, transformer_model=True)
         transform_test = transforms.Compose([transforms.Resize((448, 224)),
                                              transforms.ToTensor(),
                                              transforms.Normalize(mean=(0.485, 0.456, 0.406),

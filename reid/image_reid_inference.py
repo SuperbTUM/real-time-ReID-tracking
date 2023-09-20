@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import onnxruntime
 import numpy as np
-from torchvision import transforms
 from tqdm import tqdm
 
 from backbones.baseline_lite import ft_baseline
@@ -20,6 +19,7 @@ from dataset_dukemtmc import DukeMTMCreID
 from dataset_veri776 import VeRi
 from train_utils import to_numpy, DataLoaderX
 from data_prepare import reidDataset
+from data_transforms import get_inference_transforms, get_inference_transforms_flipped
 from inference_utils import diminish_camera_bias
 from faiss_utils import compute_jaccard_distance
 
@@ -237,101 +237,113 @@ if __name__ == "__main__":
         raise NotImplementedError("Only market, dukemtmc and veri datasets are supported!\n")
 
     if params.backbone == "plr_osnet":
-        transform_test = transforms.Compose([transforms.Resize((256, 128)),
-                                             transforms.ToTensor(),
-                                             transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                                                  std=(0.229, 0.224, 0.225)),
-                                             ]
-                                            )
-        transform_test_flip = transforms.Compose([
-            transforms.Resize((256, 128)),
-            transforms.RandomHorizontalFlip(p=1.0),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                 std=(0.229, 0.224, 0.225)),
-        ])
+        # transform_test = transforms.Compose([transforms.Resize((256, 128)),
+        #                                      transforms.ToTensor(),
+        #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                                                           std=(0.229, 0.224, 0.225)),
+        #                                      ]
+        #                                     )
+        transform_test = get_inference_transforms(params.dataset)
+        # transform_test_flip = transforms.Compose([
+        #     transforms.Resize((256, 128)),
+        #     transforms.RandomHorizontalFlip(p=1.0),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                          std=(0.229, 0.224, 0.225)),
+        # ])
+        transform_test_flip = get_inference_transforms_flipped(params.dataset)
         model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
     elif params.backbone in ("seres18", "cares18"):
-        transform_test = transforms.Compose([transforms.Resize((256, 128)), # interpolation=3
-                                             transforms.ToTensor(),
-                                             transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                                                  std=(0.229, 0.224, 0.225)),
-                                             ]
-                                            )
-        transform_test_flip = transforms.Compose([
-            transforms.Resize((256, 128)),
-            transforms.RandomHorizontalFlip(p=1.0),
-            transforms.Pad(10),
-            transforms.RandomCrop((256, 128)), # experimental
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                 std=(0.229, 0.224, 0.225)),
-        ])
+        # transform_test = transforms.Compose([transforms.Resize((256, 128)), # interpolation=3
+        #                                      transforms.ToTensor(),
+        #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                                                           std=(0.229, 0.224, 0.225)),
+        #                                      ]
+        #                                     )
+        transform_test = get_inference_transforms(params.dataset)
+        # transform_test_flip = transforms.Compose([
+        #     transforms.Resize((256, 128)),
+        #     transforms.RandomHorizontalFlip(p=1.0),
+        #     transforms.Pad(10),
+        #     transforms.RandomCrop((256, 128)), # experimental
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                          std=(0.229, 0.224, 0.225)),
+        # ])
+        transform_test_flip = get_inference_transforms_flipped(params.dataset, strong_inference=True)
         if params.backbone == "seres18":
             model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm).cuda()
         else:
             model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm).cuda()
     elif params.backbone == "resnet50":
-        transform_test = transforms.Compose([transforms.Resize((256, 128)),
-                                             transforms.ToTensor(),
-                                             transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                                                  std=(0.229, 0.224, 0.225)),
-                                             ]
-                                            )
-        transform_test_flip = transforms.Compose([
-            transforms.Resize((256, 128)),
-            transforms.RandomHorizontalFlip(p=1.0),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                 std=(0.229, 0.224, 0.225)),
-        ])
+        # transform_test = transforms.Compose([transforms.Resize((256, 128)),
+        #                                      transforms.ToTensor(),
+        #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                                                           std=(0.229, 0.224, 0.225)),
+        #                                      ]
+        #                                     )
+        transform_test = get_inference_transforms(params.dataset)
+        # transform_test_flip = transforms.Compose([
+        #     transforms.Resize((256, 128)),
+        #     transforms.RandomHorizontalFlip(p=1.0),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                          std=(0.229, 0.224, 0.225)),
+        # ])
+        transform_test_flip = get_inference_transforms_flipped(params.dataset)
         model = ft_net(dataset.num_train_pids).cuda()
     elif params.backbone == "baseline":
-        transform_test = transforms.Compose([transforms.Resize((256, 128)),
-                                             transforms.ToTensor(),
-                                             transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                                                  std=(0.229, 0.224, 0.225)),
-                                             ]
-                                            )
-        transform_test_flip = transforms.Compose([
-            transforms.Resize((256, 128)),
-            transforms.RandomHorizontalFlip(p=1.0),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                 std=(0.229, 0.224, 0.225)),
-        ])
+        # transform_test = transforms.Compose([transforms.Resize((256, 128)),
+        #                                      transforms.ToTensor(),
+        #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                                                           std=(0.229, 0.224, 0.225)),
+        #                                      ]
+        #                                     )
+        transform_test = get_inference_transforms(params.dataset)
+        # transform_test_flip = transforms.Compose([
+        #     transforms.Resize((256, 128)),
+        #     transforms.RandomHorizontalFlip(p=1.0),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                          std=(0.229, 0.224, 0.225)),
+        # ])
+        transform_test_flip = get_inference_transforms_flipped(params.dataset)
         model = ft_baseline(dataset.num_train_pids).cuda()
     elif params.backbone == "vit":
-        transform_test = transforms.Compose([transforms.Resize((448, 224)),
-                                             transforms.ToTensor(),
-                                             transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                                                  std=(0.229, 0.224, 0.225)),
-                                             ]
-                                            )
-        transform_test_flip = transforms.Compose([
-            transforms.Resize((448, 224)),
-            transforms.RandomHorizontalFlip(p=1.0),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                 std=(0.229, 0.224, 0.225)),
-        ])
-        model = vit_t(img_size=(448, 224), num_classes=dataset.num_train_pids, loss="triplet",
+        # transform_test = transforms.Compose([transforms.Resize((448, 224)),
+        #                                      transforms.ToTensor(),
+        #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                                                           std=(0.229, 0.224, 0.225)),
+        #                                      ]
+        #                                     )
+        transform_test = get_inference_transforms(params.dataset, transformer_model=True)
+        # transform_test_flip = transforms.Compose([
+        #     transforms.Resize((448, 224)),
+        #     transforms.RandomHorizontalFlip(p=1.0),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                          std=(0.229, 0.224, 0.225)),
+        # ])
+        transform_test_flip = get_inference_transforms_flipped(params.dataset, transformer_model=True)
+        model = vit_t(img_size=(448, 224) if params.dataset in ("market1501", "dukemtmc") else (224, 224), num_classes=dataset.num_train_pids, loss="triplet",
                       camera=dataset.num_train_cams,
                       sequence=dataset.num_train_seqs, side_info=True).cuda()
     elif params.backbone.startswith("swin"):
-        transform_test = transforms.Compose([transforms.Resize((448, 224)),
-                                             transforms.ToTensor(),
-                                             transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                                                  std=(0.229, 0.224, 0.225)),
-                                             ]
-                                            )
-        transform_test_flip = transforms.Compose([
-            transforms.Resize((448, 224)),
-            transforms.RandomHorizontalFlip(p=1.0),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                 std=(0.229, 0.224, 0.225)),
-        ])
+        # transform_test = transforms.Compose([transforms.Resize((448, 224)),
+        #                                      transforms.ToTensor(),
+        #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                                                           std=(0.229, 0.224, 0.225)),
+        #                                      ]
+        #                                     )
+        transform_test = get_inference_transforms(params.dataset, transformer_model=True)
+        # transform_test_flip = transforms.Compose([
+        #     transforms.Resize((448, 224)),
+        #     transforms.RandomHorizontalFlip(p=1.0),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                          std=(0.229, 0.224, 0.225)),
+        # ])
+        transform_test_flip = get_inference_transforms_flipped(params.dataset, transformer_model=True)
         model = swin_t(num_classes=dataset.num_train_pids, loss="triplet",
                        camera=dataset.num_train_cams, sequence=dataset.num_train_seqs,
                        side_info=True,
