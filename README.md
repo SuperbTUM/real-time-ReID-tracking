@@ -118,7 +118,7 @@ Veri776 on SeRes18
 
 | Use Side (Co-eff=-1.0) | Metric  | Triplet Margin | Acc@1  | mAP    |
 |------------------------|---------|----------------|--------|--------|
-| ❌                      | Jaccard | Soft           | -      | -      |
+| ❌                      | Jaccard | Soft           | 0.9255 | 0.7394 |
 | ✔️                     | Jaccard | Soft           | 0.9249 | 0.7420 |
 
 * Domain Transfer
