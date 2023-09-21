@@ -116,10 +116,12 @@ DukeMTMC
 
 Veri776 on SeRes18
 
-| Use Side (Co-eff=-1.0) | Metric  | Triplet Margin | Acc@1  | mAP    |
-|------------------------|---------|----------------|--------|--------|
-| ❌                      | Jaccard | Soft           | 0.9255 | 0.7394 |
-| ✔️                     | Jaccard | Soft           | 0.9249 | 0.7420 |
+| Use Side (Co-eff=-1.0) | Metric    | Acc@1  | mAP    |
+|------------------------|-----------|--------|--------|
+| ✔️                     | Euclidean | 0.8737 | 0.6923 |
+| ❌                      | Jaccard   | 0.9255 | 0.7394 |
+| ✔️                     | Jaccard   | 0.9249 | 0.7420 |
+| ✔️w/. continual        | Jaccard   | 0.9344 | 0.7436 |
 
 * Domain Transfer
 

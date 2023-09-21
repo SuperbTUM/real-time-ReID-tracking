@@ -377,7 +377,8 @@ def produce_pseudo_data(model,
                 else:
                     ort_inputs = {'input': to_numpy(img)}
                 embedding, output = ort_session.run(["embeddings", "outputs"], ort_inputs)
-                embeddings.append(torch.from_numpy(np.concatenate((embedding, output), axis=1)))
+                # embeddings.append(torch.from_numpy(np.concatenate((embedding, output), axis=1)))
+                embeddings.append(torch.from_numpy(embedding))
                 cams.append(cam)
                 seqs.append(seq)
     embeddings = F.normalize(torch.cat(embeddings, dim=0), dim=1, p=2)
@@ -388,6 +389,7 @@ def produce_pseudo_data(model,
     dists = compute_jaccard_distance(embeddings, use_float16=True)
     cluster_method = DBSCAN(eps=params.eps, min_samples=min(15, all_cam + 1), metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
+    centroids = torch.zeros((max(labels)+1, embeddings.size(1)))
     for i, label in enumerate(labels):
         if label != -1:
             pseudo_data.append((
@@ -396,14 +398,19 @@ def produce_pseudo_data(model,
                 cams[i].item(),
                 seqs[i].item()
             ))
+    for i in range(max(labels)+1):
+        centroids[i] = embeddings[labels == i].mean(dim=0)
     print("Inference completed! {} more pseudo-labels obtained!".format(len(pseudo_data)))
-    return pseudo_data, max(labels) + 1 + dataset.num_train_pids
+    return pseudo_data, max(labels) + 1 + dataset.num_train_pids, centroids
 
 
-def train_cnn_continual(model, merged_dataset, num_class_new, batch_size=8, accelerate=False, tmp_feat_dim=512):
+def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_size=8, accelerate=False, tmp_feat_dim=512):
     model.train()
+    prev_weights = model.module.classifier[-1].weight.data
     model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False, device="cuda")
-    nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
+    # nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
+    model.module.classifier[-1].weight.data[:dataset.num_train_pids] = prev_weights
+    model.module.classifier[-1].weight.data[dataset.num_train_pids:] = centroids
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(merged_dataset, params.instance)
         optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=5e-4)
@@ -474,10 +481,13 @@ def train_cnn_continual(model, merged_dataset, num_class_new, batch_size=8, acce
     return model, loss_stats
 
 
-def train_cnn_continual_sie(model, merged_dataset, num_class_new, batch_size=8, accelerate=False, tmp_feat_dim=512):
+def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, batch_size=8, accelerate=False, tmp_feat_dim=512):
     model.train()
+    prev_weights = model.module.classifier[-1].weight.data
     model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False, device="cuda")
-    nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
+    # nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
+    model.module.classifier[-1].weight.data[:dataset.num_train_pids] = prev_weights
+    model.module.classifier[-1].weight.data[dataset.num_train_pids:] = centroids
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(merged_dataset, params.instance)
         optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=5e-4)
@@ -646,7 +656,7 @@ if __name__ == "__main__":
 
                 ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}_sie.onnx".format(params.dataset) if params.sie else "checkpoint/reid_model_{}.onnx".format(params.dataset),
                                                            providers=providers)
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets,
+                pseudo_labeled_data, num_class_new, centroids = produce_pseudo_data(model, dataset_test, merged_datasets,
                                                                          dataset.num_gallery_cams, use_onnx=True,
                                                                          use_side=params.sie)
                 del dataset_test
@@ -655,10 +665,10 @@ if __name__ == "__main__":
                 model = representation_only(model)
                 torch.cuda.empty_cache()
                 if params.sie:
-                    model, loss_stats = train_cnn_continual_sie(model, source_dataset, num_class_new, params.bs,
+                    model, loss_stats = train_cnn_continual_sie(model, source_dataset, num_class_new, centroids, params.bs,
                                                                 params.accelerate, 512)
                 else:
-                    model, loss_stats = train_cnn_continual(model, source_dataset, num_class_new, params.bs,
+                    model, loss_stats = train_cnn_continual(model, source_dataset, num_class_new, centroids, params.bs,
                                                             params.accelerate, 512)
                 source_dataset.reset_cross_domain()
 
@@ -674,12 +684,13 @@ if __name__ == "__main__":
         #     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         # ])
         transform_train = get_train_transforms(params.dataset, transformer_model=True)
-        transform_test = transforms.Compose([transforms.Resize((448, 224)),
-                                             transforms.ToTensor(),
-                                             transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                                                                  std=(0.229, 0.224, 0.225)),
-                                             ]
-                                            )
+        # transform_test = transforms.Compose([transforms.Resize((448, 224)),
+        #                                      transforms.ToTensor(),
+        #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
+        #                                                           std=(0.229, 0.224, 0.225)),
+        #                                      ]
+        #                                     )
+        transform_test = get_inference_transforms(params.dataset, transformer_model=True)
         source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
 
         if params.backbone.startswith("vit"):
@@ -693,26 +704,26 @@ if __name__ == "__main__":
                                                         dataset.num_train_cams,
                                                         dataset.num_train_seqs,
                                                         params.accelerate)
-            if params.continual:
-                merged_datasets = dataset.gallery + dataset.query
-                dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
-
-                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset),
-                                                           providers=providers)
-
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets,
-                                                                         dataset.num_gallery_cams, use_onnx=True,
-                                                                         use_side=True)
-                del dataset_test
-                source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
-                source_dataset.set_cross_domain()
-                model = side_info_only(model)
-                model, loss_stats = train_transformer_model(model, source_dataset, 384,
-                                                            params.bs, params.epochs,
-                                                            dataset.num_train_pids,
-                                                            dataset.num_train_cams,
-                                                            dataset.num_train_seqs)
-                source_dataset.reset_cross_domain()
+            # if params.continual:
+            #     merged_datasets = dataset.gallery + dataset.query
+            #     dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
+            #
+            #     ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset),
+            #                                                providers=providers)
+            #
+            #     pseudo_labeled_data, num_class_new, _ = produce_pseudo_data(model, dataset_test, merged_datasets,
+            #                                                              dataset.num_gallery_cams, use_onnx=True,
+            #                                                              use_side=True)
+            #     del dataset_test
+            #     source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
+            #     source_dataset.set_cross_domain()
+            #     model = side_info_only(model)
+            #     model, loss_stats = train_transformer_model(model, source_dataset, 384,
+            #                                                 params.bs, params.epochs,
+            #                                                 dataset.num_train_pids,
+            #                                                 dataset.num_train_cams,
+            #                                                 dataset.num_train_seqs)
+            #     source_dataset.reset_cross_domain()
         elif params.backbone.startswith("swin"):
             model = swin_t(num_classes=dataset.num_train_pids, loss="triplet",
                            camera=dataset.num_train_cams, sequence=dataset.num_train_seqs,
@@ -726,27 +737,27 @@ if __name__ == "__main__":
                                                         dataset.num_train_seqs,
                                                         params.accelerate)
 
-            if params.continual:
-                merged_datasets = dataset.gallery + dataset.query
-                dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
-                # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
-                #                               pin_memory=True)
-
-                ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset),
-                                                           providers=providers)
-                pseudo_labeled_data, num_class_new = produce_pseudo_data(model, dataset_test, merged_datasets,
-                                                                         dataset.num_gallery_cams, use_onnx=True,
-                                                                         use_side=True)
-                del dataset_test
-                source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
-                source_dataset.set_cross_domain()
-                model = side_info_only(model)
-                model, loss_stats = train_transformer_model(model, source_dataset, 96,
-                                                            params.bs, params.epochs,
-                                                            dataset.num_train_pids,
-                                                            dataset.num_train_cams,
-                                                            dataset.num_train_seqs)
-                source_dataset.reset_cross_domain()
+            # if params.continual:
+            #     merged_datasets = dataset.gallery + dataset.query
+            #     dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
+            #     # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
+            #     #                               pin_memory=True)
+            #
+            #     ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset),
+            #                                                providers=providers)
+            #     pseudo_labeled_data, num_class_new, _ = produce_pseudo_data(model, dataset_test, merged_datasets,
+            #                                                              dataset.num_gallery_cams, use_onnx=True,
+            #                                                              use_side=True)
+            #     del dataset_test
+            #     source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
+            #     source_dataset.set_cross_domain()
+            #     model = side_info_only(model)
+            #     model, loss_stats = train_transformer_model(model, source_dataset, 96,
+            #                                                 params.bs, params.epochs,
+            #                                                 dataset.num_train_pids,
+            #                                                 dataset.num_train_cams,
+            #                                                 dataset.num_train_seqs)
+            #     source_dataset.reset_cross_domain()
         else:
             raise NotImplementedError
 
