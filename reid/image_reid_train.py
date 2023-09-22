@@ -413,15 +413,15 @@ def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_s
     model.module.classifier[-1].weight.data[dataset.num_train_pids:] = centroids
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(merged_dataset, params.instance)
-        optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=5e-4)
+        optimizer = torch.optim.Adam(model.parameters(), lr=7e-5, weight_decay=5e-4)
     else:
         custom_sampler = None
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.002, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = merged_dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
     loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
                                    class_stats=class_stats)  # WeightedRegularizedTriplet("none")
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 20)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     dataloader = DataLoaderX(merged_dataset,
                              batch_size=batch_size,
@@ -437,8 +437,8 @@ def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_s
                                                                       scheduler)
     loss_stats = []
 
-    # Additionally train 20 epochs
-    for epoch in range(20):
+    # Additionally train 40 epochs
+    for epoch in range(40):
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label = sample[:2]
@@ -490,15 +490,15 @@ def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, bat
     model.module.classifier[-1].weight.data[dataset.num_train_pids:] = centroids
     if params.instance > 0:
         custom_sampler = RandomIdentitySampler(merged_dataset, params.instance)
-        optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=5e-4)
+        optimizer = torch.optim.Adam(model.parameters(), lr=7e-5, weight_decay=5e-4)
     else:
         custom_sampler = None
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.005, weight_decay=5e-4, momentum=0.9, nesterov=True)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.002, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = merged_dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
     loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
                                    class_stats=class_stats)  # WeightedRegularizedTriplet("none")
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 10)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 20)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     dataloader = DataLoaderX(merged_dataset,
                              batch_size=batch_size,
@@ -514,8 +514,8 @@ def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, bat
                                                                       scheduler)
     loss_stats = []
 
-    # Additionally train 20 epochs
-    for epoch in range(20):
+    # Additionally train 40 epochs
+    for epoch in range(40):
         iterator = tqdm(dataloader)
         for sample in iterator:
             images, label, cams = sample[:3]

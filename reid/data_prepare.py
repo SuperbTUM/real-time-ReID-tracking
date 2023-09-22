@@ -86,7 +86,7 @@ class reidDataset(Dataset):
         for i in range(2, len(detailed_info)):
             detailed_info[i] = torch.tensor(detailed_info[i], dtype=torch.long)
         if self._continual:
-            return detailed_info + [1. if item < len(self.images) else 2.] # tricky
+            return detailed_info + [torch.tensor(0.) if item < len(self.images) else torch.tensor(1.)] # tricky
         return detailed_info
 
 

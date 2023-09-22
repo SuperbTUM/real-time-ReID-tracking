@@ -90,11 +90,7 @@ Market1501: default cares18; `()` means seres18
 | ❌         | Jaccard   | 0.3            | 0.9267          | 0.8852          |
 | ❌         | Jaccard   | Soft           | 0.9279 (0.9311) | 0.8893 (0.8923) |
 | ✔️        | Jaccard   | 0.3            | 0.9463          | 0.9210          |
-
-| Attention Pooling | Metric    | Acc@1  | mAP    |
-|-------------------|-----------|--------|--------|
-| ❌                 | Euclidean | 0.9243 | 0.8030 |
-| ✔️                | Euclidean | 0.9154 | 0.8118 |
+| ✔️        | Jaccard   | Soft           | (0.9525)        | (0.9235)        |
 
 DukeMTMC
 
