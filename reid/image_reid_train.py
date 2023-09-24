@@ -15,7 +15,6 @@ from backbones.CARes18 import cares18_ibn
 from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
 from train_utils import check_parameters, DataLoaderX, plot_loss, to_numpy
-from data_augment import LGT, Fuse_RGB_Gray_Sketch, Fuse_Gray
 from dataset_market import Market1501
 from dataset_dukemtmc import DukeMTMCreID
 from dataset_veri776 import VeRi

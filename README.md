@@ -110,7 +110,7 @@ DukeMTMC
 | ❌                     | Jaccard   | 0.8618 | 0.8108 |
 | ✔️                    | Jaccard   | 0.8694 | 0.8127 |
 
-Veri776 on SeRes18
+Veri776 on SeRes18, [Cropped Detector](https://drive.google.com/file/d/1SYwGRfH9fSAt_keZahbDFMVhjscD5kZ9/view?usp=drive_link)
 
 | Use Side (Co-eff=-1.0) | Metric    | Acc@1  | mAP    |
 |------------------------|-----------|--------|--------|
