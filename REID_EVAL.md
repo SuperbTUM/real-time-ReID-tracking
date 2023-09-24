@@ -1,4 +1,6 @@
-Market1501: default cares18; `()` means seres18
+*default cares18; `()` means seres18*
+
+Market1501 
 
 Baseline -- @Acc1: 91.7%; @mAP: 77.8%
 
@@ -22,7 +24,7 @@ Baseline -- DukeMTMC @Acc1: 82.5%; @mAP: 68.8%
 | ❌         | Jaccard   | 0.3            | 0.8532          | 0.8041          |
 | ❌         | Jaccard   | Soft           | 0.8618 (0.8703) | 0.8108 (0.8273) |
 | ✔️        | Jaccard   | 0.3            | 0.8757          | 0.8312          |
-| ✔️        | Jaccard   | Soft           | 0.8811          | 0.8422          |
+| ✔️        | Jaccard   | Soft           | 0.8811 (0.8905) | 0.8422 (0.8502) |
 
 | Use Side (Co-eff=1.0) | Metric    | Acc@1  | mAP    |
 |-----------------------|-----------|--------|--------|
@@ -35,12 +37,12 @@ Veri776 on SeRes18, optionally apply re-detection [Cropped Detector](https://dri
 
 Baseline -- Veri776 @Acc1: 87.6%; @mAP: 59.0%
 
-| Use Side (Co-eff=-1.0) | Metric    | Acc@1  | mAP    |
-|------------------------|-----------|--------|--------|
-| ✔️                     | Euclidean | 0.8737 | 0.6923 |
-| ❌                      | Jaccard   | 0.9255 | 0.7394 |
-| ✔️                     | Jaccard   | 0.9249 | 0.7420 |
-| ✔️w/. continual        | Jaccard   | 0.9344 | 0.7436 |
+| Use Side (Co-eff=-1.0) | Metric    | Acc@1    | mAP      |
+|------------------------|-----------|----------|----------|
+| ✔️                     | Euclidean | (0.8737) | (0.6923) |
+| ❌                      | Jaccard   | (0.9255) | (0.7394) |
+| ✔️                     | Jaccard   | (0.9249) | (0.7420) |
+| ✔️w/. continual        | Jaccard   | (0.9344) | (0.7436) |
 
 * Domain Transfer
 
