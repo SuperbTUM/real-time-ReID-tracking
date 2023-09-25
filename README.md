@@ -1,4 +1,4 @@
-# Real-time ReID Tracking w/. Strong Feature Extractor & GAN
+# Real-time ReID Tracking w/. Lite but Strong Feature Extractor & GAN
 [Slides](https://docs.google.com/presentation/d/1cs5wEIcJWV5H6F5xnWDV0ikYf-uWuFvZj3byTBs4sMQ/edit#slide=id.p), Manuscript(Coming Soon...)
 
 ## Introduction
@@ -8,7 +8,7 @@ The project integrates Yolo detection, GAN, deep feature extractor for re-identi
 The baseline is a Yolov5(now is YoloV8!) based DeepSort(now is DeepOCSort & StrongSort) algorithm.
 Everything can be found [here](https://github.com/mikel-brostrom/yolo_tracking). 
 The author has updated the repository with import of fast-reid package.  
-The baseline backbone for re-identification is simply ResNet-18.
+**We yield even better results than ResNet50 with ResNet18-based model!!!**
 
 
 
