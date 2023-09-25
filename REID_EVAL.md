@@ -1,3 +1,6 @@
+[Checkpoints](https://drive.google.com/drive/folders/1GC8CXXfMbfCR_-hJaMKGTNUx2-XU9Gp4?usp=sharing)
+* Metric-learning
+
 *default cares18; `()` means seres18*
 
 Market1501 

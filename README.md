@@ -64,9 +64,6 @@ Image Datasets: [Market1501](https://drive.google.com/file/d/0B8-rUzbwVRk0c054eE
 ## Evaluation
 
 **Re-identification**
-[Checkpoints](https://drive.google.com/drive/folders/1GC8CXXfMbfCR_-hJaMKGTNUx2-XU9Gp4?usp=sharing)
-
-* Metric-learning
 
 [External ReID Doc](./REID_EVAL.md)
 
