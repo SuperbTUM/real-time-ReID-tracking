@@ -10,7 +10,12 @@ from .attention_pooling import GeM_Custom
 
 
 class CABlock(nn.Module):
-    def __init__(self, channel, reduction=8, renorm=False, non_iid=0):
+    def __init__(self,
+                 channel,
+                 reduction=8,
+                 renorm=False,
+                 non_iid=0,
+                 ca_ibn=False):
         super(CABlock, self).__init__()
 
         mip = channel // reduction
@@ -26,7 +31,10 @@ class CABlock(nn.Module):
             else:
                 self.bn = BatchRenormalization2D(mip)
         else:
-            self.bn = nn.BatchNorm2d(mip)
+            if ca_ibn:
+                self.bn = IBN(mip)
+            else:
+                self.bn = nn.BatchNorm2d(mip)
 
         self.F_h = nn.Conv2d(in_channels=mip, out_channels=channel, kernel_size=1, stride=1, bias=False)
         self.F_w = nn.Conv2d(in_channels=mip, out_channels=channel, kernel_size=1, stride=1, bias=False)
@@ -43,9 +51,9 @@ class CABlock(nn.Module):
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
-            # elif isinstance(m, nn.BatchNorm2d):
-            #     m.weight.data.fill_(1.)
-            #     m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1.)
+                m.bias.data.zero_()
 
     def forward(self, x):
         h, w = int(x.size(2)), int(x.size(3))
@@ -105,7 +113,7 @@ class CABlock(nn.Module):
 
 
 class CABasicBlock(nn.Module):
-    def __init__(self, block, dim, renorm, ibn, restride=False, non_iid=0):
+    def __init__(self, block, dim, renorm, ibn, restride=False, non_iid=0, ca_ibn=False):
         super(CABasicBlock, self).__init__()
         if restride:
             block.conv1.stride = (1, 1)
@@ -141,7 +149,7 @@ class CABasicBlock(nn.Module):
         else:
             self.block_pre = block
             self.block_post = None
-        self.cablock = CABlock(dim, renorm=renorm, non_iid=non_iid)
+        self.cablock = CABlock(dim, renorm=renorm, non_iid=non_iid, ca_ibn=ca_ibn)
 
     def forward(self, x):
         branch = x
@@ -208,17 +216,17 @@ class CARes18_IBN(nn.Module):
         self.relu0 = model.relu
         self.pooling0 = model.maxpool
 
-        self.basicBlock11 = CABasicBlock(model.layer1[0], 64, renorm, True, non_iid=non_iid)
+        self.basicBlock11 = CABasicBlock(model.layer1[0], 64, renorm, True, non_iid=non_iid, ca_ibn=True)
 
-        self.basicBlock12 = CABasicBlock(model.layer1[1], 64, renorm, True, non_iid=non_iid)
+        self.basicBlock12 = CABasicBlock(model.layer1[1], 64, renorm, True, non_iid=non_iid, ca_ibn=True)
 
-        self.basicBlock21 = CABasicBlock(model.layer2[0], 128, renorm, True, non_iid=non_iid)
+        self.basicBlock21 = CABasicBlock(model.layer2[0], 128, renorm, True, non_iid=non_iid, ca_ibn=True)
 
-        self.basicBlock22 = CABasicBlock(model.layer2[1], 128, renorm, True, non_iid=non_iid)
+        self.basicBlock22 = CABasicBlock(model.layer2[1], 128, renorm, True, non_iid=non_iid, ca_ibn=True)
 
-        self.basicBlock31 = CABasicBlock(model.layer3[0], 256, renorm, True, non_iid=non_iid)
+        self.basicBlock31 = CABasicBlock(model.layer3[0], 256, renorm, True, non_iid=non_iid, ca_ibn=True)
 
-        self.basicBlock32 = CABasicBlock(model.layer3[1], 256, renorm, True, non_iid=non_iid)
+        self.basicBlock32 = CABasicBlock(model.layer3[1], 256, renorm, True, non_iid=non_iid, ca_ibn=True)
 
         # last stride = 1
         self.basicBlock41 = CABasicBlock(model.layer4[0], 512, renorm, False, True, non_iid=non_iid)

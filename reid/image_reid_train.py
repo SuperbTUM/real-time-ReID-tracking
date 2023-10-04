@@ -616,7 +616,7 @@ if __name__ == "__main__":
         #     transforms.RandomErasing(),
         # ])
         transform_train = get_train_transforms(params.dataset)
-        source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
+        source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train, True if params.dataset == "veri" else False)
         torch.cuda.empty_cache()
         if params.backbone == "plr_osnet":
             model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()

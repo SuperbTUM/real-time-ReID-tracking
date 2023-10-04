@@ -183,7 +183,10 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
         # experimental
         embeddings, outputs = ort_session.run(["embeddings", "outputs"], ort_inputs)  # embeddings_ortvalue.numpy()#ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
         # embeddings = torch.from_numpy(np.concatenate((embeddings, outputs), axis=1))
-        embeddings = torch.cat((F.normalize(torch.from_numpy(embeddings), dim=1), F.normalize(torch.from_numpy(outputs), dim=1)), dim=1)
+        if params.cross_domain:
+            embeddings = torch.from_numpy(embeddings) # pending???
+        else:
+            embeddings = torch.cat((F.normalize(torch.from_numpy(embeddings), dim=1), F.normalize(torch.from_numpy(outputs), dim=1)), dim=1)
         embeddings_total1.append(embeddings[:(len(embeddings) >> 1)])
         embeddings_total2.append(embeddings[(len(embeddings) >> 1):])
         true_labels.append(true_label)
@@ -217,7 +220,6 @@ def parser():
     args.add_argument("--renorm", action="store_true")
     args.add_argument("--eps", type=float, default=0.5)
     args.add_argument("--cross_domain", action="store_true")
-    args.add_argument("--ckpt_backup", type=str, required=False, help="used when cross domain")
     return args.parse_args()
 
 
