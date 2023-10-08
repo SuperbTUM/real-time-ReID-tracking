@@ -39,7 +39,7 @@ cudnn.benchmark = True
 
 def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
     class_stats = dataset.get_class_stats()
-    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_classes
+    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_classes
     if params.ckpt and os.path.exists(params.ckpt):
         model.eval()
         model_state_dict = torch.load(params.ckpt)
@@ -110,7 +110,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
 
 def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
     class_stats = dataset.get_class_stats()
-    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_classes
+    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_classes
     if params.ckpt and os.path.exists(params.ckpt):
         model.eval()
         model_state_dict = torch.load(params.ckpt)
@@ -417,7 +417,7 @@ def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_s
         custom_sampler = None
         optimizer = torch.optim.SGD(model.parameters(), lr=0.002, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = merged_dataset.get_class_stats()
-    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
+    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_class_new
     loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
                                    class_stats=class_stats)  # WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 20)
@@ -494,7 +494,7 @@ def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, bat
         custom_sampler = None
         optimizer = torch.optim.SGD(model.parameters(), lr=0.002, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = merged_dataset.get_class_stats()
-    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats])).cuda() * num_class_new
+    class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_class_new
     loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
                                    class_stats=class_stats)  # WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 20)
@@ -616,7 +616,7 @@ if __name__ == "__main__":
         #     transforms.RandomErasing(),
         # ])
         transform_train = get_train_transforms(params.dataset)
-        source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train, True if params.dataset == "veri" else False)
+        source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
         torch.cuda.empty_cache()
         if params.backbone == "plr_osnet":
             model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
