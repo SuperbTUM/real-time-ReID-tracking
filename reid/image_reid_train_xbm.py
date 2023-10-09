@@ -13,6 +13,7 @@ from backbones.SERes18_IBN import seres18_ibn
 from backbones.CARes18 import cares18_ibn
 from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
+from tricks.XBM import XBM
 from train_utils import check_parameters, DataLoaderX, plot_loss, to_numpy
 from reid.datasets.dataset_market import Market1501
 from reid.datasets.dataset_dukemtmc import DukeMTMCreID
@@ -21,8 +22,8 @@ from train_prepare import WarmupMultiStepLR, to_onnx
 from data_prepare import reidDataset, RandomIdentitySampler
 from data_transforms import get_train_transforms, get_inference_transforms
 from inference_utils import diminish_camera_bias
+from losses.triplet_losses_xbm import WeightedRegularizedTripletXBM
 from losses.hybrid_losses import HybridLoss, HybridLossWeighted
-from losses.utils import euclidean_dist
 from faiss_utils import compute_jaccard_distance
 
 import argparse
@@ -37,6 +38,8 @@ cudnn.benchmark = True
 
 
 def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
+    xbm = XBM(4 * batch_size, 512)
+
     class_stats = dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_classes
     if params.ckpt and os.path.exists(params.ckpt):
@@ -46,6 +49,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     model.train()
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
                            class_stats=class_stats)
+    loss_func_xbm = WeightedRegularizedTripletXBM()
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
     if params.instance > 0:
@@ -65,6 +69,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
                                                                                            lr_scheduler,
                                                                                            optimizer_center)
     loss_stats = []
+
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
         for sample in iterator:
@@ -80,6 +85,13 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
             # loss = loss_func(embeddings, outputs, label, embeddings_augment)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
+
+            if epoch > 10:
+                xbm.enqueue_dequeue(embeddings.detach(), label.detach())
+                xbm_feats, xbm_targets = xbm.get()
+                xbm_loss = loss_func_xbm(embeddings, label, xbm_feats, xbm_targets)
+                loss = loss + xbm_loss
+
             if accelerate:
                 accelerator.backward(loss)
             else:

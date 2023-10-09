@@ -11,7 +11,7 @@ from .attention_pooling import GeM
 
 # This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):
-    def __init__(self, c_in, lbn=False):
+    def __init__(self, c_in: int, lbn: bool = False):
         super().__init__()
         self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
         mip = max(8, c_in // 16)
@@ -44,13 +44,13 @@ class SEBlock(nn.Module):
 class LBN_1D(nn.Module):
     def __init__(self, in_channels, ratio=0.5, renorm=False, dict_state=None):
         """
-        Half do instance norm, half do batch norm
+        Half do layer norm, half do batch norm
         """
         super().__init__()
         self.in_channels = in_channels
         self.ratio = ratio
         self.half = int(self.in_channels * ratio)
-        self.IN = nn.LayerNorm(self.half)
+        self.LN = nn.LayerNorm(self.half)
         if renorm:
             self.BN = BatchRenormalization1D(self.in_channels - self.half, dict_state) # experimental
         else:
@@ -58,7 +58,7 @@ class LBN_1D(nn.Module):
 
     def forward(self, x):
         split = torch.split(x, self.half, 1)
-        out1 = self.IN(split[0].contiguous())
+        out1 = self.LN(split[0].contiguous())
         out2 = self.BN(split[1].contiguous())
         out = torch.cat((out1, out2), 1)
         return out

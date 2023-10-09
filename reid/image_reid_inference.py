@@ -14,9 +14,9 @@ from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
 from backbones.resnet50 import ft_net
 
-from dataset_market import Market1501
-from dataset_dukemtmc import DukeMTMCreID
-from dataset_veri776 import VeRi
+from reid.datasets.dataset_market import Market1501
+from reid.datasets.dataset_dukemtmc import DukeMTMCreID
+from reid.datasets.dataset_veri776 import VeRi
 from train_utils import to_numpy, DataLoaderX
 from data_prepare import reidDataset
 from data_transforms import get_inference_transforms, get_inference_transforms_flipped
