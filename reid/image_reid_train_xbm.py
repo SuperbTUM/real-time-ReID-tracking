@@ -120,6 +120,8 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
 
 
 def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, accelerate=False):
+    xbm = XBM(4 * batch_size, 512)
+
     class_stats = dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_classes
     if params.ckpt and os.path.exists(params.ckpt):
@@ -129,6 +131,7 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
     model.train()
     loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
                            class_stats=class_stats)
+    loss_func_xbm = WeightedRegularizedTripletXBM()
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
     if params.instance > 0:
@@ -162,6 +165,13 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
             # loss = loss_func(embeddings, outputs, label, embeddings_augment)
             loss_stats.append(loss.cpu().item())
             nn.utils.clip_grad_norm_(model.parameters(), 10)
+
+            if epoch > 10:
+                xbm.enqueue_dequeue(embeddings.detach(), label.detach())
+                xbm_feats, xbm_targets = xbm.get()
+                xbm_loss = loss_func_xbm(embeddings, label, xbm_feats, xbm_targets)
+                loss = loss + xbm_loss
+
             if accelerate:
                 accelerator.backward(loss)
             else:
