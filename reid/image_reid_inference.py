@@ -227,31 +227,34 @@ if __name__ == "__main__":
     params = parser()
     if params.dataset == "market1501":
         dataset = Market1501(root="/".join((params.root, "Market1501")))
+        ratio = 0.5
     elif params.dataset == "dukemtmc":
         dataset = DukeMTMCreID(root=params.root)
+        ratio = 0.5
     elif params.dataset == "veri":
         dataset = VeRi(root=params.root)
+        ratio = dataset.get_ratio()
     else:
         raise NotImplementedError("Only market, dukemtmc and veri datasets are supported!\n")
 
     if params.backbone == "plr_osnet":
-        transform_test = get_inference_transforms(params.dataset)
-        transform_test_flip = get_inference_transforms_flipped(params.dataset)
+        transform_test = get_inference_transforms(params.dataset, ratio)
+        transform_test_flip = get_inference_transforms_flipped(params.dataset, ratio)
         model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()
     elif params.backbone in ("seres18", "cares18"):
-        transform_test = get_inference_transforms(params.dataset)
-        transform_test_flip = get_inference_transforms_flipped(params.dataset, strong_inference=True)
+        transform_test = get_inference_transforms(params.dataset, ratio)
+        transform_test_flip = get_inference_transforms_flipped(params.dataset, ratio, strong_inference=True)
         if params.backbone == "seres18":
             model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
         else:
             model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
     elif params.backbone == "resnet50":
-        transform_test = get_inference_transforms(params.dataset)
-        transform_test_flip = get_inference_transforms_flipped(params.dataset)
+        transform_test = get_inference_transforms(params.dataset, ratio)
+        transform_test_flip = get_inference_transforms_flipped(params.dataset, ratio)
         model = ft_net(dataset.num_train_pids).cuda()
     elif params.backbone == "baseline":
-        transform_test = get_inference_transforms(params.dataset)
-        transform_test_flip = get_inference_transforms_flipped(params.dataset)
+        transform_test = get_inference_transforms(params.dataset, ratio)
+        transform_test_flip = get_inference_transforms_flipped(params.dataset, ratio)
         model = ft_baseline(dataset.num_train_pids).cuda()
     elif params.backbone == "vit":
         transform_test = get_inference_transforms(params.dataset, transformer_model=True)

@@ -93,7 +93,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         lr_scheduler.step()
     model.eval()
     loss_func.center.save()
-    dummy_input = torch.randn(2, 3, 224, 224, requires_grad=True, device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda")
+    dummy_input = torch.randn(2, 3, 224, int(ratio * 224), requires_grad=True, device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda")
     try:
         to_onnx(model.module,
                 dummy_input,
@@ -163,7 +163,7 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
         lr_scheduler.step()
     model.eval()
     loss_func.center.save()
-    dummy_input = torch.randn(2, 3, 224, 224, requires_grad=True, device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda")
+    dummy_input = torch.randn(2, 3, 224, int(ratio * 224), requires_grad=True, device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128, requires_grad=True, device="cuda")
     try:
         to_onnx(model.module,
                 (dummy_input,
@@ -238,7 +238,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
     model.eval()
     loss_func1.center.save()
     loss_func2.center.save()
-    dummy_input = torch.randn(2, 3, 224, 224, requires_grad=True,
+    dummy_input = torch.randn(2, 3, 224, int(ratio * 224), requires_grad=True,
                               device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128,
                                                                                           requires_grad=True,
                                                                                           device="cuda")
@@ -464,7 +464,7 @@ def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_s
             iterator.set_description(description)
         scheduler.step()
     model.eval()
-    dummy_input = torch.randn(2, 3, 224, 224, requires_grad=True,
+    dummy_input = torch.randn(2, 3, 224, int(ratio * 224), requires_grad=True,
                               device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128,
                                                                                           requires_grad=True,
                                                                                           device="cuda")
@@ -539,7 +539,7 @@ def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, bat
             iterator.set_description(description)
         scheduler.step()
     model.eval()
-    dummy_input = torch.randn(2, 3, 224, 224, requires_grad=True,
+    dummy_input = torch.randn(2, 3, 224, int(ratio * 224), requires_grad=True,
                               device="cuda") if params.dataset == "veri" else torch.randn(2, 3, 256, 128,
                                                                                           requires_grad=True,
                                                                                           device="cuda")
@@ -594,10 +594,13 @@ if __name__ == "__main__":
     params = parser()
     if params.dataset == "market1501":
         dataset = Market1501(root="/".join((params.root, "Market1501")))
+        ratio = 0.5
     elif params.dataset == "dukemtmc":
         dataset = DukeMTMCreID(root=params.root)
+        ratio = 0.5
     elif params.dataset == "veri":
         dataset = VeRi(root=params.root)
+        ratio = dataset.get_ratio()
     else:
         raise NotImplementedError("Only market, dukemtmc and veri datasets are supported!\n")
     providers = ["CUDAExecutionProvider"]
@@ -614,7 +617,7 @@ if __name__ == "__main__":
         #     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         #     transforms.RandomErasing(),
         # ])
-        transform_train = get_train_transforms(params.dataset)
+        transform_train = get_train_transforms(params.dataset, ratio)
         source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
         torch.cuda.empty_cache()
         if params.backbone == "plr_osnet":
@@ -692,7 +695,7 @@ if __name__ == "__main__":
         source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
 
         if params.backbone.startswith("vit"):
-            model = vit_t(img_size=(448, 224), num_classes=dataset.num_train_pids, loss="triplet",
+            model = vit_t(img_size=(448, 224) if params.dataset != "veri" else (224, 224), num_classes=dataset.num_train_pids, loss="triplet",
                           camera=dataset.num_train_cams,
                           sequence=dataset.num_train_seqs, side_info=True).cuda()
             model = nn.DataParallel(model)

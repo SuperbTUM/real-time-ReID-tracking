@@ -5,6 +5,7 @@ from __future__ import print_function
 import glob
 import re
 import os.path as osp
+from PIL import Image
 
 from .base_dataset import BaseImageDataset
 
@@ -23,6 +24,7 @@ class VeRi(BaseImageDataset):
 
     def __init__(self, root, verbose=True, **kwargs):
         super(VeRi, self).__init__()
+        self.ratios = []
         self.dataset_dir = osp.join(root, self.dataset_dir)
         self.train_dir = osp.join(self.dataset_dir, 'image_train')
         self.query_dir = osp.join(self.dataset_dir, 'image_query')
@@ -45,6 +47,9 @@ class VeRi(BaseImageDataset):
         self.num_train_pids, self.num_train_imgs, self.num_train_cams, self.num_train_seqs = self.get_imagedata_info(self.train)
         self.num_query_pids, self.num_query_imgs, self.num_query_cams, self.num_query_seqs = self.get_imagedata_info(self.query)
         self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams, self.num_gallery_seqs = self.get_imagedata_info(self.gallery)
+
+    def get_ratio(self):
+        return sum(self.ratios) / len(self.ratios)
 
     def check_before_run(self):
         """Check if all files are available before going deeper"""
@@ -79,6 +84,8 @@ class VeRi(BaseImageDataset):
             camid -= 1  # index starts from 0
             if relabel:
                 pid = pid2label[pid]
+            size = Image.open(img_path).size
+            self.ratios.append(size[0] / size[1])
             dataset.append((img_path, pid, camid, 0))
 
         return dataset
