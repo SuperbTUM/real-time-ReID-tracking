@@ -52,7 +52,7 @@ Baseline -- Veri776 @Acc1: 87.6%; @mAP: 59.0%
 | ✔️                     | Euclidean | (0.8737) | (0.6923) |
 | ❌                      | Jaccard   | (0.9255) | (0.7394) |
 | ✔️                     | Jaccard   | (0.9249) | (0.7420) |
-| ✔️w/. continual        | Jaccard   | (0.9344) | (0.7436) |
+| ✔️w/. continual        | Jaccard   | (0.9421) | (0.7683) |
 
 | Use XBM | Metric    | Acc@1    | mAP      |
 |---------|-----------|----------|----------|

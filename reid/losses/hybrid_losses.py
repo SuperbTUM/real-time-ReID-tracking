@@ -61,9 +61,10 @@ class HybridLossWeighted(nn.Module):
                  triplet_smooth=False,
                  mixup=False,
                  class_stats=None,
-                 circle_factor=0.):
+                 circle_factor=0.,
+                 centroids=None):
         super().__init__()
-        self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, ckpt="center_ckpt.pt")
+        self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, ckpt="center_ckpt.pt", centroids=centroids)
         if margin > 0.:
             # self.triplet = TripletLoss(margin, alpha, triplet_smooth)  # Smooth only works for hard triplet loss now
             self.triplet = TripletBeta(margin, alpha, triplet_smooth, reduction="none")

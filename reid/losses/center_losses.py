@@ -13,7 +13,7 @@ class CenterLoss(nn.Module):
         feat_dim (int): feature dimension.
     """
 
-    def __init__(self, num_classes=751, feat_dim=2048, use_gpu=True, ckpt=None):
+    def __init__(self, num_classes=751, feat_dim=2048, use_gpu=True, ckpt=None, centroids=None):
         super(CenterLoss, self).__init__()
         self.num_classes = num_classes
         self.feat_dim = feat_dim
@@ -25,14 +25,14 @@ class CenterLoss(nn.Module):
         else:
             self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim))
         if ckpt:
-            self.load()
+            self.load(centroids)
 
-    def load(self):
+    def load(self, centroids=None):
         ckpt_centers = torch.load(self.ckpt)
         ckpt_classes = ckpt_centers.size(0)
         self.centers = nn.Parameter(torch.cat((ckpt_centers,
                                                torch.randn(self.num_classes - ckpt_classes, self.feat_dim,
-                                                           device="cuda")),
+                                                           device="cuda") if centroids is None else centroids.cuda()),
                                               dim=0))
 
     def save(self):
