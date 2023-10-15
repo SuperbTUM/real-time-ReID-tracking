@@ -440,7 +440,7 @@ def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_s
     class_stats = merged_dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_class_new
     loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
-                                   class_stats=class_stats, centroids=centroids)  # WeightedRegularizedTriplet("none")
+                                   class_stats=class_stats, centroids=centroids, tao=2.)  # WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 20)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     dataloader = DataLoaderX(merged_dataset,
@@ -517,7 +517,7 @@ def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, bat
     class_stats = merged_dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_class_new
     loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
-                                   class_stats=class_stats, centroids=centroids)  # WeightedRegularizedTriplet("none")
+                                   class_stats=class_stats, centroids=centroids, tao=2.)  # WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 20)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
     dataloader = DataLoaderX(merged_dataset,

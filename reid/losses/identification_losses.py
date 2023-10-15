@@ -47,12 +47,13 @@ class CrossEntropyLabelSmooth(nn.Module):
         num_classes (int): number of classes.
         smoothing (float): weight.
     """
-    def __init__(self, num_classes, smoothing=0.1, epsilon=0.0, use_gpu=True):
+    def __init__(self, num_classes, smoothing=0.1, epsilon=0.0, use_gpu=True, tao=1.):
         super(CrossEntropyLabelSmooth, self).__init__()
         self.num_classes = num_classes
         self.smoothing = smoothing
         self.epsilon = epsilon
         self.use_gpu = use_gpu
+        self.tao = tao
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
     def forward(self, inputs, targets):
@@ -62,7 +63,7 @@ class CrossEntropyLabelSmooth(nn.Module):
             targets: ground truth labels with shape (num_classes)
         """
         probs = F.softmax(inputs, dim=1)
-        log_probs = self.logsoftmax(inputs)
+        log_probs = self.logsoftmax(inputs/self.tao)
         targets = torch.zeros(log_probs.size()).scatter_(1, targets.unsqueeze(1).data.cpu(), 1)
         if self.use_gpu: targets = targets.cuda()
         targets = (1 - self.smoothing) * targets + self.smoothing / self.num_classes

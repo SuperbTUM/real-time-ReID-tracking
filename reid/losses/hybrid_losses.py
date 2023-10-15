@@ -62,7 +62,8 @@ class HybridLossWeighted(nn.Module):
                  mixup=False,
                  class_stats=None,
                  circle_factor=0.,
-                 centroids=None):
+                 centroids=None,
+                 tao=1.):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, ckpt="center_ckpt.pt", centroids=centroids)
         if margin > 0.:
@@ -73,7 +74,7 @@ class HybridLossWeighted(nn.Module):
         if mixup:
             self.smooth = LabelSmoothingMixup(smoothing, epsilon)
         else:
-            self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon)#LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
+            self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon, tao=tao)#LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
         self.circle = CircleLoss()
         self.lamda = lamda
         self.mixup = mixup
