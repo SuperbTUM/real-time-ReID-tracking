@@ -21,7 +21,7 @@ Baseline -- @Acc1: 91.7%; @mAP: 77.8%
 | ❌       | Euclidean | (0.9231) | (0.8203) |
 | ✔️      | Euclidean | (0.9216) | (0.8265) |
 | ❌       | Jaccard   | (0.9311) | (0.8923) |
-| ✔️      | Jaccard   | (0.9317) | (0.8985) |
+| ✔️      | Jaccard   | (0.9323) | (0.8991) |
 
 DukeMTMC
 
@@ -52,7 +52,7 @@ Baseline -- Veri776 @Acc1: 87.6%; @mAP: 59.0%
 | ✔️                     | Euclidean | (0.8737) | (0.6923) |
 | ❌                      | Jaccard   | (0.9255) | (0.7394) |
 | ✔️                     | Jaccard   | (0.9249) | (0.7420) |
-| ✔️w/. continual        | Jaccard   | (0.9476) | (0.7964) |
+| ✔️w/. continual        | Jaccard   | (0.9523) | (0.7968) |
 
 | Use XBM | Metric    | Acc@1    | mAP      |
 |---------|-----------|----------|----------|

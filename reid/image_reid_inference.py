@@ -314,7 +314,7 @@ if __name__ == "__main__":
     merged_seqs = torch.cat((gallery_seqs, query_seqs), dim=0)
 
     # from losses.utils import euclidean_dist
-    dists = compute_jaccard_distance(merged_embeddings, search_option=0, use_float16=True)# euclidean_dist(merged_embeddings, merged_embeddings) #
+    dists = compute_jaccard_distance(merged_embeddings, search_option=0)# euclidean_dist(merged_embeddings, merged_embeddings) #
     dists[dists < 0] = 0.
     dists[dists > 1] = 1.
     try:
