@@ -673,7 +673,7 @@ if __name__ == "__main__":
                 #                                                           std=(0.229, 0.224, 0.225)),
                 #                                      ]
                 #                                     )
-                transform_test = get_inference_transforms(params.dataset)
+                transform_test = get_inference_transforms(params.dataset, ratio)
                 merged_datasets = dataset.gallery + dataset.query
                 dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
 

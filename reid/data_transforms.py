@@ -17,10 +17,10 @@ def get_train_transforms(dataset, ratio=1, transformer_model=False):
             ])
         else:
             transform_train = transforms.Compose([
-                transforms.Resize((256, 128)),  # interpolation=3
+                transforms.Resize((256, int(256 * ratio))),  # interpolation=3
                 transforms.RandomHorizontalFlip(),
                 transforms.Pad(10),
-                transforms.RandomCrop((256, 128)),
+                transforms.RandomCrop((256, int(256 * ratio))),
                 Fuse_Gray(0.35, 0.05),
                 # transforms.ToTensor(),
                 transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
@@ -65,9 +65,9 @@ def get_inference_transforms(dataset, ratio=1, transformer_model=False, strong_i
                                                      ]
                                                     )
             else:
-                transform_test = transforms.Compose([transforms.Resize((256, 128)),
+                transform_test = transforms.Compose([transforms.Resize((256, int(256 * ratio))),
                                                      transforms.Pad(10),
-                                                     transforms.RandomCrop((256, 128)),  # experimental
+                                                     transforms.RandomCrop((256, int(256 * ratio))),  # experimental
                                                      transforms.ToTensor(),
                                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                                                           std=(0.229, 0.224, 0.225)),
@@ -82,7 +82,7 @@ def get_inference_transforms(dataset, ratio=1, transformer_model=False, strong_i
                                                      ]
                                                     )
             else:
-                transform_test = transforms.Compose([transforms.Resize((256, 128)),
+                transform_test = transforms.Compose([transforms.Resize((256, int(256 * ratio))),
                                                      transforms.ToTensor(),
                                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                                                           std=(0.229, 0.224, 0.225)),
@@ -140,10 +140,10 @@ def get_inference_transforms_flipped(dataset, ratio=1, transformer_model=False, 
                                                      ]
                                                     )
             else:
-                transform_test = transforms.Compose([transforms.Resize((256, 128)),
+                transform_test = transforms.Compose([transforms.Resize((256, int(256 * ratio))),
                                                      transforms.RandomHorizontalFlip(p=1.0),
                                                      transforms.Pad(10),
-                                                     transforms.RandomCrop((256, 128)),  # experimental
+                                                     transforms.RandomCrop((256, int(256 * ratio))),  # experimental
                                                      transforms.ToTensor(),
                                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
                                                                           std=(0.229, 0.224, 0.225)),
@@ -159,7 +159,7 @@ def get_inference_transforms_flipped(dataset, ratio=1, transformer_model=False, 
                                                      ]
                                                     )
             else:
-                transform_test = transforms.Compose([transforms.Resize((256, 128)),
+                transform_test = transforms.Compose([transforms.Resize((256, int(256 * ratio))),
                                                      transforms.RandomHorizontalFlip(p=1.0),
                                                      transforms.ToTensor(),
                                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
