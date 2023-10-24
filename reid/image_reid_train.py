@@ -44,7 +44,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
+    loss_func = HybridLoss(num_classes, model.module.classifier[-1].in_features, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
                            class_stats=class_stats)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
@@ -115,7 +115,7 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
         model_state_dict = torch.load(params.ckpt)
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
-    loss_func = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
+    loss_func = HybridLoss(num_classes, model.module.classifier[-1].in_features, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
                            class_stats=class_stats)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
@@ -190,8 +190,8 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
         custom_sampler = None
         optimizer = madgrad.MADGRAD(model.parameters(), lr=0.01, weight_decay=5e-4)
     lr_scheduler = WarmupMultiStepLR(optimizer, [30, 55])
-    loss_func1 = HybridLoss(num_classes, 2048, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
-    loss_func2 = HybridLoss(num_classes, 512, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
+    loss_func1 = HybridLoss(num_classes, model.module.classifier1.in_features, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
+    loss_func2 = HybridLoss(num_classes, model.module.classifier2.in_features, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
                              pin_memory=True, sampler=custom_sampler)
     optimizer_center1 = torch.optim.SGD(loss_func1.center.parameters(), lr=0.5)
@@ -402,9 +402,10 @@ def produce_pseudo_data(model,
     return pseudo_data, max(labels) + 1 + dataset.num_train_pids, centroids
 
 
-def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_size=8, accelerate=False, tmp_feat_dim=512):
+def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_size=8, accelerate=False):
     model.train()
     prev_weights = model.module.classifier[-1].weight.data
+    tmp_feat_dim = model.module.classifier[-1].in_features
     model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False, device="cuda")
     # nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
     model.module.classifier[-1].weight.data[:dataset.num_train_pids] = prev_weights
@@ -417,7 +418,7 @@ def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_s
         optimizer = torch.optim.SGD(model.parameters(), lr=0.002, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = merged_dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_class_new
-    loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
+    loss_func = HybridLossWeighted(num_class_new, tmp_feat_dim, params.margin, lamda=params.center_lamda,
                                    class_stats=class_stats, centroids=centroids, tao=2.)  # WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 20)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
@@ -479,9 +480,10 @@ def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_s
     return model, loss_stats
 
 
-def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, batch_size=8, accelerate=False, tmp_feat_dim=512):
+def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, batch_size=8, accelerate=False):
     model.train()
     prev_weights = model.module.classifier[-1].weight.data
+    tmp_feat_dim = model.module.classifier[-1].in_features
     model.module.classifier[-1] = nn.Linear(tmp_feat_dim, num_class_new, bias=False, device="cuda")
     # nn.init.normal_(model.module.classifier[-1].weight, std=0.001)
     model.module.classifier[-1].weight.data[:dataset.num_train_pids] = prev_weights
@@ -494,7 +496,7 @@ def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, bat
         optimizer = torch.optim.SGD(model.parameters(), lr=0.002, weight_decay=5e-4, momentum=0.9, nesterov=True)
     class_stats = merged_dataset.get_class_stats()
     class_stats = F.softmax(torch.stack([torch.tensor(1. / stat) for stat in class_stats]), dim=-1).cuda() * num_class_new
-    loss_func = HybridLossWeighted(num_class_new, 512, params.margin, lamda=params.center_lamda,
+    loss_func = HybridLossWeighted(num_class_new, tmp_feat_dim, params.margin, lamda=params.center_lamda,
                                    class_stats=class_stats, centroids=centroids, tao=2.)  # WeightedRegularizedTriplet("none")
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 20)
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
@@ -667,10 +669,10 @@ if __name__ == "__main__":
                 torch.cuda.empty_cache()
                 if params.sie:
                     model, loss_stats = train_cnn_continual_sie(model, source_dataset, num_class_new, centroids, params.bs,
-                                                                params.accelerate, 512)
+                                                                params.accelerate)
                 else:
                     model, loss_stats = train_cnn_continual(model, source_dataset, num_class_new, centroids, params.bs,
-                                                            params.accelerate, 512)
+                                                            params.accelerate)
                 source_dataset.reset_cross_domain()
 
     else:
