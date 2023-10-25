@@ -59,13 +59,20 @@ class BatchRenormalization2D(nn.Module):
         self.running_avg_mean.data = running_mean.clone()
         self.running_avg_var.data = running_var.clone()
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
 
         if self.training:
-            batch_ch_mean = torch.mean(x, dim=(0, 2, 3), keepdim=True)
-            # in version 2.0: correction, otherwise: unbiased=False
-            batch_ch_var_unbiased = torch.var(x, dim=(0, 2, 3), unbiased=True, keepdim=True)
-            batch_ch_var_biased = torch.var(x, dim=(0, 2, 3), unbiased=False, keepdim=True)
+            if mask is not None:
+                n = mask.sum()
+                mask /= n
+                mask = mask.reshape(1, mask.size(0), 1, 1)
+                batch_ch_mean = (mask * x).sum(dim=(0, 2, 3), keepdim=True)
+                batch_ch_var_unbiased = batch_ch_var_biased = (mask * x ** 2).sum(dim=(0, 2, 3), keepdim=True) - batch_ch_mean ** 2
+            else:
+                batch_ch_mean = torch.mean(x, dim=(0, 2, 3), keepdim=True)
+                # in version 2.0: correction, otherwise: unbiased=False
+                batch_ch_var_unbiased = torch.var(x, dim=(0, 2, 3), unbiased=True, keepdim=True)
+                batch_ch_var_biased = torch.var(x, dim=(0, 2, 3), unbiased=False, keepdim=True)
 
             self.num_tracked_batch += 1
             r = torch.clamp(torch.sqrt((batch_ch_var_biased + self.eps) / (self.running_avg_var + self.eps)), 1.0 / self.r_max, self.r_max).data
@@ -145,7 +152,7 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
     #
     #     return x_normed
 
-    def forward_train(self, x):
+    def forward_train(self, x, mask):
         """Looks like group normalization"""
         batch_size = x.size(0)
         minibatch_size = batch_size // self.num_instance
@@ -217,9 +224,9 @@ class BatchRenormalization2D_Noniid(BatchRenormalization2D):
         x = self.gamma * x + self.beta
         return x
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         if self.training:
-            return self.forward_train(x)
+            return self.forward_train(x, mask)
         else:
             return self.forward_eval(x)
 
@@ -275,12 +282,19 @@ class BatchRenormalization1D(nn.Module):
         self.running_avg_mean.data = running_mean.clone()
         self.running_avg_var.data = running_var.clone()
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
 
-        batch_ch_mean = torch.mean(x, dim=0, keepdim=True)
-        # in version 2.0: correction, otherwise: unbiased=False
-        batch_ch_var_unbiased = torch.var(x, dim=0, unbiased=True, keepdim=True)
-        batch_ch_var_biased = torch.var(x, dim=0, unbiased=False, keepdim=True)
+        if mask is not None:
+            n = mask.sum()
+            mask /= n
+            mask = mask.reshape(1, mask.size(0), 1, 1)
+            batch_ch_mean = (mask * x).sum(dim=0, keepdim=True)
+            batch_ch_var_unbiased = batch_ch_var_biased = (mask * x ** 2).sum(dim=0, keepdim=True) - batch_ch_mean ** 2
+        else:
+            batch_ch_mean = torch.mean(x, dim=0, keepdim=True)
+            # in version 2.0: correction, otherwise: unbiased=False
+            batch_ch_var_unbiased = torch.var(x, dim=0, unbiased=True, keepdim=True)
+            batch_ch_var_biased = torch.var(x, dim=0, unbiased=False, keepdim=True)
 
         if self.training:
             self.num_tracked_batch += 1

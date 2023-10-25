@@ -665,7 +665,7 @@ if __name__ == "__main__":
                 del dataset_test
                 source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 source_dataset.set_cross_domain()
-                model = representation_only(model)
+                # model = representation_only(model)
                 torch.cuda.empty_cache()
                 if params.sie:
                     model, loss_stats = train_cnn_continual_sie(model, source_dataset, num_class_new, centroids, params.bs,
