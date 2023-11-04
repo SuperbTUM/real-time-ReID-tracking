@@ -48,7 +48,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     loss_func = HybridLoss(num_classes, model.module.classifier[-1].in_features, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
-                           class_stats=class_stats)
+                           class_stats=class_stats, tao=params.temperature)
     loss_func_xbm = WeightedRegularizedTripletXBM()
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
@@ -130,7 +130,7 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     loss_func = HybridLoss(num_classes, model.module.classifier[-1].in_features, params.margin, epsilon=params.epsilon, lamda=params.center_lamda,
-                           class_stats=class_stats)
+                           class_stats=class_stats, tao=params.temperature)
     loss_func_xbm = WeightedRegularizedTripletXBM()
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
@@ -611,6 +611,7 @@ def parser():
     args.add_argument("--renorm", action="store_true")
     args.add_argument("--instance", type=int, default=0)
     args.add_argument("--sie", action="store_true", help="side information embedding")
+    args.add_argument("--temperature", default=1, type=int)
     return args.parse_args()
 
 

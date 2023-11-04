@@ -16,12 +16,12 @@ Baseline -- @Acc1: 91.7%; @mAP: 77.8%
 | ✔️        | Jaccard   | 0.3            | 0.9463          | 0.9210          |
 | ✔️        | Jaccard   | Soft           | (0.9528)        | (0.9304)        |
 
-| Use XBM | Metric    | Acc@1    | mAP      |
-|---------|-----------|----------|----------|
-| ❌       | Euclidean | (0.9231) | (0.8203) |
-| ✔️      | Euclidean | (0.9216) | (0.8265) |
-| ❌       | Jaccard   | (0.9311) | (0.8923) |
-| ✔️      | Jaccard   | (0.9323) | (0.8991) |
+| Use XBM | Metric    | Acc@1           | mAP             |
+|---------|-----------|-----------------|-----------------|
+| ❌       | Euclidean | (0.9231)        | (0.8203)        |
+| ✔️      | Euclidean | (0.9216/0.9338) | (0.8265/0.8246) |
+| ❌       | Jaccard   | (0.9311)        | (0.8923)        |
+| ✔️      | Jaccard   | (0.9323/0.9365) | (0.8991/0.9018) |
 
 DukeMTMC
 
@@ -30,18 +30,18 @@ Baseline -- DukeMTMC @Acc1: 82.5%; @mAP: 68.8%
 | Continual | Metric    | Triplet Margin | Acc@1           | mAP             |
 |-----------|-----------|----------------|-----------------|-----------------|
 | ❌         | Euclidean | 0.3            | 0.8182          | 0.6967          |
-| ❌         | Euclidean | Soft           | 0.8259 (0.8110) | 0.7201 (0.7315) |
+| ❌         | Euclidean | Soft           | 0.8259 (0.8191) | 0.7201 (0.7437) |
 | ❌         | Jaccard   | 0.3            | 0.8532          | 0.8041          |
-| ❌         | Jaccard   | Soft           | 0.8640 (0.8703) | 0.8196 (0.8273) |
+| ❌         | Jaccard   | Soft           | 0.8640 (0.8748) | 0.8196 (0.8279) |
 | ✔️        | Jaccard   | 0.3            | 0.8757          | 0.8312          |
 | ✔️        | Jaccard   | Soft           | 0.8811 (0.8918) | 0.8422 (0.8530) |
 
-| Use Side (Co-eff=1.0) | Metric    | Acc@1  | mAP    |
-|-----------------------|-----------|--------|--------|
-| ❌                     | Euclidean | 0.8223 | 0.7134 |
-| ✔️                    | Euclidean | 0.8061 | 0.7273 |
-| ❌                     | Jaccard   | 0.8618 | 0.8108 |
-| ✔️                    | Jaccard   | 0.8694 | 0.8127 |
+| Use Side (Co-eff=1.0) | Metric    | Acc@1           | mAP             |
+|-----------------------|-----------|-----------------|-----------------|
+| ❌                     | Euclidean | 0.8223          | 0.7134          |
+| ✔️                    | Euclidean | 0.8061          | 0.7273          |
+| ❌                     | Jaccard   | 0.8618          | 0.8108          |
+| ✔️                    | Jaccard   | 0.8694 (0.8743) | 0.8127 (0.8252) |
 
 Veri776 on SeRes18, optionally apply re-detection [Cropped Detector](https://drive.google.com/file/d/1SYwGRfH9fSAt_keZahbDFMVhjscD5kZ9/view?usp=drive_link)
 
