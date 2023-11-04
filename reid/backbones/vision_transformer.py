@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 from timm.models.layers import trunc_normal_
 
-from .attention_pooling import FeedForward
 from .weight_init import weights_init_kaiming, weights_init_classifier
 
 import warnings
@@ -17,6 +16,25 @@ import warnings
 __all__ = ["vit_t"]
 
 pretrained_urls = {"vit_t": ""}
+
+
+class FeedForward(nn.Module):
+    def __init__(self, dim, hidden_dim, dropout=0.):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, dim),
+            nn.Dropout(dropout)
+        )
+
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_out')
+
+    def forward(self, x):
+        return self.net(x)
 
 class MixedNorm(nn.Module):
     def __init__(self, features):

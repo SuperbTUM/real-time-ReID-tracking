@@ -12,12 +12,31 @@ import warnings
 from timm.models.layers import trunc_normal_
 from timm.models.layers import Mlp
 
-from .attention_pooling import FeedForward, GeM_1D
+from .attention_pooling import GeM_1D
 from .weight_init import weights_init_classifier, weights_init_kaiming
 
 
 __all__ = ["swin_t"]
 pretrained_urls = {"swin_t": ""}
+
+
+class FeedForward(nn.Module):
+    def __init__(self, dim, hidden_dim, dropout=0.):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, dim),
+            nn.Dropout(dropout)
+        )
+
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_out')
+
+    def forward(self, x):
+        return self.net(x)
 
 
 class MixedNorm(nn.Module):

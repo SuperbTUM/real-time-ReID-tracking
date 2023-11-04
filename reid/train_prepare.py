@@ -25,7 +25,7 @@ def to_onnx(model, input_dummy, dataset_name, input_names=["input"], output_name
                           input_dummy,
                           "checkpoint/reid_model_{}.onnx".format(dataset_name),
                           export_params=True,
-                          opset_version=10,
+                          opset_version=17,
                           do_constant_folding=True,
                           input_names=input_names,
                           output_names=output_names,
@@ -36,7 +36,7 @@ def to_onnx(model, input_dummy, dataset_name, input_names=["input"], output_name
                           input_dummy,
                           "checkpoint/reid_model_{}.onnx".format(dataset_name),
                           export_params=True,
-                          opset_version=10,
+                          opset_version=17,
                           do_constant_folding=True,
                           input_names=input_names,
                           output_names=output_names)

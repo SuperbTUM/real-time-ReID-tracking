@@ -4,45 +4,46 @@ import torch.nn.functional as F
 from .weight_init import trunc_normal_
 
 
-class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout=0.):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
-            nn.Dropout(dropout)
-        )
-
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_out')
-
-    def forward(self, x):
-        return self.net(x)
-
-
 class AttentionPooling(nn.Module):
-    def __init__(self, in_dim):
+    def __init__(self, height: int, width: int, embed_dim: int, num_heads: int, output_dim: int = None):
         super().__init__()
-        self.cls_vec = nn.Parameter(torch.randn(in_dim), requires_grad=True)
-        trunc_normal_(self.cls_vec, 0.02)
-        self.fc = FeedForward(in_dim, 256)
-        self.softmax = nn.Softmax(-1)
+        self.positional_embedding = nn.Parameter(torch.randn(height * width + 1, embed_dim) / embed_dim ** 0.5)
+        self.k_proj = nn.Linear(embed_dim, embed_dim)
+        self.q_proj = nn.Linear(embed_dim, embed_dim)
+        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        self.c_proj = nn.Linear(embed_dim, output_dim or embed_dim)
+        self.num_heads = num_heads
+
+        std = self.c_proj.in_features ** -0.5
+        nn.init.normal_(self.q_proj.weight, std=std)
+        nn.init.normal_(self.k_proj.weight, std=std)
+        nn.init.normal_(self.v_proj.weight, std=std)
+        nn.init.normal_(self.c_proj.weight, std=std)
 
     def forward(self, x):
-        bs = x.size(0)
-        weights = torch.matmul(x.view(-1, x.shape[1]), self.cls_vec)
-        weights = self.softmax(weights.view(x.shape[0], -1))
-        x = torch.bmm(x.view(x.shape[0], x.shape[1], -1), weights.unsqueeze(-1)).squeeze()
-        x = x + self.cls_vec
-        x = self.fc(x)
-        x = x + self.cls_vec
-        x = x.squeeze()
-        if bs == 1:
-            x = x.unsqueeze(0)
-        return x
+        x = x.flatten(start_dim=2).permute(2, 0, 1)  # NCHW -> (HW)NC
+        x = torch.cat([x.mean(dim=0, keepdim=True), x], dim=0)  # (HW+1)NC
+        x = x + self.positional_embedding[:, None, :].to(x.dtype)  # (HW+1)NC
+        x, _ = F.multi_head_attention_forward(
+            query=x[:1], key=x, value=x,
+            embed_dim_to_check=x.shape[-1],
+            num_heads=self.num_heads,
+            q_proj_weight=self.q_proj.weight,
+            k_proj_weight=self.k_proj.weight,
+            v_proj_weight=self.v_proj.weight,
+            in_proj_weight=None,
+            in_proj_bias=torch.cat([self.q_proj.bias, self.k_proj.bias, self.v_proj.bias]),
+            bias_k=None,
+            bias_v=None,
+            add_zero_attn=False,
+            dropout_p=0,
+            out_proj_weight=self.c_proj.weight,
+            out_proj_bias=self.c_proj.bias,
+            use_separate_proj_weight=True,
+            training=self.training,
+            need_weights=False
+        )
+        return x.squeeze(0)
 
 
 class GeM(nn.Module):
