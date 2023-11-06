@@ -384,8 +384,8 @@ def produce_pseudo_data(model,
     seqs = torch.cat(seqs, dim=0)
     embeddings = diminish_camera_bias(embeddings, cams)
     # dists = euclidean_dist(embeddings, embeddings)
-    dists = compute_jaccard_distance(embeddings, use_float16=True)
-    cluster_method = DBSCAN(eps=params.eps, min_samples=min(15, all_cam + 1), metric="precomputed", n_jobs=-1)
+    dists = compute_jaccard_distance(embeddings, search_option=0)
+    cluster_method = DBSCAN(eps=params.eps, min_samples=min(10, all_cam + 1), metric="precomputed", n_jobs=-1)
     labels = cluster_method.fit_predict(dists)
     centroids = torch.zeros((max(labels)+1, embeddings.size(1)))
     for i, label in enumerate(labels):
