@@ -69,8 +69,8 @@ Baseline -- @Acc1: 40.0%; @mAP: 25.1%
 
 | Continual | Metric       | Acc@1  | mAP    |
 |-----------|--------------|--------|--------|
-| ❌         | Cross-domain | 0.4969 | 0.3334 |
-| ✔️        | Cross-domain | 0.5368 | 0.3896 |
+| ❌         | Cross-domain | 0.5794 | 0.4454 |
+| ✔️        | Cross-domain | 0.6198 | 0.4939 |
 
 DukeMTMC -> Market1501
 
@@ -78,5 +78,5 @@ Baseline -- @Acc1: 52.9%; @mAP: 25.1%
 
 | Continual | Metric       | Acc@1  | mAP    |
 |-----------|--------------|--------|--------|
-| ❌         | Cross-domain | 0.6256 | 0.3933 |
-| ✔️        | Cross-domain | 0.6580 | 0.4130 |
+| ❌         | Cross-domain | 0.6452 | 0.4809 |
+| ✔️        | Cross-domain | 0.7072 | 0.5476 |
