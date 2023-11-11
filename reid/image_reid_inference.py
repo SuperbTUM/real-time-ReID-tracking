@@ -220,6 +220,7 @@ def parser():
     args.add_argument("--renorm", action="store_true")
     args.add_argument("--eps", type=float, default=0.5)
     args.add_argument("--cross_domain", action="store_true")
+    args.add_argument("--market_attribute_path", default="Market-1501_Attribute/market_attribute.mat", type=str)
     return args.parse_args()
 
 
@@ -280,10 +281,10 @@ if __name__ == "__main__":
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
     # experimental
-    market_gallery = reidDataset(dataset.gallery, dataset.num_train_pids, transform_test, False)
-    dataloader1 = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    market_gallery.transform = transform_test_flip
-    dataloader2 = DataLoaderX(market_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
+    reid_gallery = reidDataset(dataset.gallery, dataset.num_train_pids, transform_test, False)
+    dataloader1 = DataLoaderX(reid_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
+    reid_gallery.transform = transform_test_flip
+    dataloader2 = DataLoaderX(reid_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     gallery_embeddings, gallery_labels, gallery_cams, gallery_seqs = inference_efficient(model, dataloader1, dataloader2, dataset.num_gallery_cams, params.use_side)
     gallery_embeddings1 = gallery_embeddings[0]
     gallery_embeddings2 = gallery_embeddings[1]
@@ -293,10 +294,10 @@ if __name__ == "__main__":
     gallery_embeddings = (gallery_embeddings1 + gallery_embeddings2) / 2.0
     gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
 
-    market_query = reidDataset(dataset.query, dataset.num_train_pids, transform_test, False)
-    dataloader1 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    market_query.transform = transform_test_flip
-    dataloader2 = DataLoaderX(market_query, batch_size=params.bs, num_workers=4, shuffle=False,
+    reid_query = reidDataset(dataset.query, dataset.num_train_pids, transform_test, False)
+    dataloader1 = DataLoaderX(reid_query, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
+    reid_query.transform = transform_test_flip
+    dataloader2 = DataLoaderX(reid_query, batch_size=params.bs, num_workers=4, shuffle=False,
                               pin_memory=True)
     query_embeddings, query_labels, query_cams, query_seqs = inference_efficient(model, dataloader1, dataloader2,
                                                                                  dataset.num_query_cams,
@@ -313,10 +314,16 @@ if __name__ == "__main__":
     merged_cams = torch.cat((gallery_cams, query_cams), dim=0)
     merged_seqs = torch.cat((gallery_seqs, query_seqs), dim=0)
 
+    if params.dataset == "market1501":
+        from tricks.additional_market_attributes import get_attribute_dist
+        attribute_dist = get_attribute_dist([label for _, label, _, _ in reid_gallery.images] + [label for _, label, _, _ in reid_query.images], params.market_attribute_path)
+
     # from losses.utils import euclidean_dist
     dists = compute_jaccard_distance(merged_embeddings, search_option=0)# euclidean_dist(merged_embeddings, merged_embeddings) #
     dists[dists < 0] = 0.
     dists[dists > 1] = 1.
+    if params.dataset == "market1501":
+        dists += attribute_dist
     try:
         from cuml import DBSCAN
         print("CUML Imported!")

@@ -16,7 +16,7 @@ The author has updated the repository with import of fast-reid package.
 
 Python >= 3.8 is recommended.
 
-All code was developed with latest version of PyTorch(2.0!) and Numpy. 
+All code was developed with the latest version of PyTorch(2.0!) and Numpy. 
 Please download and install the latest stable version with CUDA 11.x(ex. 11.8). 
 All codes are tested with one single GPU. 
 If you wish to accelerate training, you are advised to apply [mixed-precision training](https://github.com/NVIDIA/apex). 

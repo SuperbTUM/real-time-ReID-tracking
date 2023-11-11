@@ -23,6 +23,14 @@ Baseline -- @Acc1: 91.7%; @mAP: 77.8%
 | ❌       | Jaccard   | (0.9311)        | (0.8923)        |
 | ✔️      | Jaccard   | (0.9323/0.9365) | (0.8991/0.9018) |
 
+
+| Use Ancillary Attribute | Metric    | Acc@1    | mAP      |
+|-------------------------|-----------|----------|----------|
+| ❌                       | Euclidean | (0.9338) | (0.8246) |
+| ✔️                      | Euclidean | (0.9317) | (0.8286) |
+| ❌                       | Jaccard   | (0.9365) | (0.9018) |
+| ✔️                      | Jaccard   | (0.9454) | (0.9127) |
+
 DukeMTMC
 
 Baseline -- DukeMTMC @Acc1: 82.5%; @mAP: 68.8%
