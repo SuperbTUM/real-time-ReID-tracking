@@ -1,4 +1,5 @@
 from torchvision import transforms
+from train_prepare import RandomErasing
 from data_augment import LGT, Fuse_RGB_Gray_Sketch, Fuse_Gray
 
 
@@ -12,8 +13,8 @@ def get_train_transforms(dataset, ratio=1, transformer_model=False):
                 transforms.RandomCrop((448, 224)),
                 LGT(),
                 # transforms.ToTensor(),
-                transforms.RandomErasing(),
                 transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                RandomErasing(probability=.5, mean=[0.485, 0.456, 0.406]),
             ])
         else:
             transform_train = transforms.Compose([
@@ -24,7 +25,7 @@ def get_train_transforms(dataset, ratio=1, transformer_model=False):
                 Fuse_Gray(0.35, 0.05),
                 # transforms.ToTensor(),
                 transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-                transforms.RandomErasing(),
+                RandomErasing(probability=.5, mean=[0.485, 0.456, 0.406]),
             ])
     else:
         if transformer_model:
@@ -36,7 +37,7 @@ def get_train_transforms(dataset, ratio=1, transformer_model=False):
                 Fuse_Gray(0.35, 0.05),
                 # transforms.ToTensor(),
                 transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-                transforms.RandomErasing(),
+                RandomErasing(probability=.5, mean=[0.485, 0.456, 0.406]),
             ])
         else:
             transform_train = transforms.Compose([
@@ -47,7 +48,7 @@ def get_train_transforms(dataset, ratio=1, transformer_model=False):
                 Fuse_Gray(0.35, 0.05),
                 # transforms.ToTensor(),
                 transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-                transforms.RandomErasing(),
+                RandomErasing(probability=.5, mean=[0.485, 0.456, 0.406]),
             ])
     return transform_train
 

@@ -33,10 +33,7 @@ class HybridLoss(nn.Module):
     def forward(self,
                 embeddings,
                 outputs,
-                targets,
-                normed_embeddings=None,
-                embeddings_augment=None,
-                outputs_augment=None):
+                targets):
         """
         features: feature vectors
         targets: ground truth labels

@@ -31,7 +31,7 @@ def transform_dataset_hdf5(gt_paths, img_width, img_height):
         for cnt, path in enumerate(gt_paths):
             img = cv2.imread(path, cv2.IMREAD_COLOR)
             img_resize = cv2.resize(img, (img_width, img_height))
-            image_ds[cnt:cnt+1, :, :] = img_resize
+            image_ds[cnt:cnt + 1, :, :] = img_resize
     return image_ds
 
 
@@ -70,6 +70,7 @@ def ddp_trigger(model, rank=-1, world_size=-1):
 def postprocess_ddp(ddp_model, rank):
     def cleanup():
         dist.destroy_process_group()
+
     if rank == 0:
         torch.save(ddp_model.state_dict(), "checkpoint.pt")
     dist.barrier()
@@ -97,22 +98,14 @@ def export_yolo(sz=(256, 128)):
     success = model.export(format="onnx", imgsz=sz, dynamic=True, device=0)
     return success
 
+
 model = torch.hub.load('ultralytics/yolov5', "custom", path="crowdhuman_yolov5m.pt", source="local", _verbose=False)
+
 
 def redetection(images, format="pil", base_conf=0.5):
     """
     batched detection
     """
-    # # success = model.export(format="onnx")
-    # processed_image = np.array(image, dtype=np.float32) / 255.
-    # processed_image = np.expand_dims(processed_image.transpose((2, 0, 1)), axis=0)
-    # providers = ["CUDAExecutionProvider"]
-    # ort_session = onnxruntime.InferenceSession("yolov8n.onnx", providers=providers)
-    # model_inputs = ort_session.get_inputs()
-    # model_outputs = ort_session.get_outputs()
-    # input_names = [model_inputs[i].name for i in range(len(model_inputs))]
-    # output_names = [model_outputs[i].name for i in range(len(model_outputs))]
-    # outputs = np.squeeze(ort_session.run(output_names, {input_names[0]: processed_image})[0]).T
     result = model(images, size=(256, 128), augment=True)
     result = result.xyxy
     bboxes = []

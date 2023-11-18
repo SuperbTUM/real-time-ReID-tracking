@@ -103,12 +103,8 @@ class SEBasicBlock(nn.Module):
             if not ibn:
                 block.bn1 = BatchRenormalization2D(dim, block.bn1.state_dict())
             block.bn2 = BatchRenormalization2D(dim, block.bn2.state_dict())
-        if ibn:
-            # bn1 will be covered
-            # block.bn1 = IBN(dim)
-            if renorm:
-                block.bn1.BN = BatchRenormalization2D(dim >> 1, block.bn1.BN.state_dict())
-        # block.relu = AconC(dim)
+        if ibn & renorm:
+            block.bn1.BN = BatchRenormalization2D(dim >> 1, block.bn1.BN.state_dict())
         if list(block.named_children())[-1][0] == "downsample":
             self.block_pre = nn.Sequential(OrderedDict(list(block.named_children())[:-1]))
             downsample_layer = list(block.downsample.children())

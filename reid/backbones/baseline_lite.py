@@ -5,23 +5,17 @@ from torchvision import models
 from .weight_init import weights_init_kaiming, weights_init_classifier
 
 
-######################################################################
-
 # Defines the new fc layer and classification layer
 class ClassBlock(nn.Module):
-    def __init__(self, input_dim, class_num, bnorm=True, return_f=True):
+    def __init__(self, input_dim, class_num, return_f=True):
         super(ClassBlock, self).__init__()
         self.return_f = return_f
-        add_block = []
-        if bnorm:
-            add_block += [nn.BatchNorm1d(input_dim)]
-            add_block[-1].bias.requires_grad_(False)
-        add_block = nn.Sequential(*add_block)
+
+        add_block = nn.BatchNorm1d(input_dim)
+        add_block[-1].bias.requires_grad_(False)
         add_block.apply(weights_init_kaiming)
 
-        classifier = []
-        classifier += [nn.Linear(input_dim, class_num, bias=False)]
-        classifier = nn.Sequential(*classifier)
+        classifier = nn.Linear(input_dim, class_num, bias=False)
         classifier.apply(weights_init_classifier)
 
         self.add_block = add_block
@@ -40,19 +34,20 @@ class ft_baseline(nn.Module):
 
     def __init__(self, class_num, stride=1):
         super(ft_baseline, self).__init__()
-        model_ft = models.resnet18(weights="IMAGENET1K_V1")
+        model_ft = models.resnet18()
+        model_ft.load_state_dict(torch.hub.load_state_dict_from_url('https://download.pytorch.org/models/resnet18-5c106cde.pth', progress=False), strict=True)
         self.model = model_ft
         # avg pooling to global pooling
         if stride == 1:
             self.model.layer4[0].downsample[0].stride = (1, 1)
             self.model.layer4[0].conv1.stride = (1, 1)
-        model_ft.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        model_ft.avgpool = nn.AdaptiveAvgPool2d(1)
         self.classifier = ClassBlock(512, class_num)
 
-    def forward(self, x):
+    def forward(self, x, cam=True):
         x = self.model.conv1(x)
         x = self.model.bn1(x)
-        x = self.model.relu(x)
+        # x = self.model.relu(x)
         x = self.model.maxpool(x)
         x = self.model.layer1(x)
         x = self.model.layer2(x)

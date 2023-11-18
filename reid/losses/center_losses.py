@@ -38,7 +38,7 @@ class CenterLoss(nn.Module):
     def save(self):
         torch.save(self.centers, "center_ckpt.pt")
 
-    def forward(self, x, labels, x_augment=None, weights=None):
+    def forward(self, x, labels, weights=None):
         """
         Args:
             x: feature matrix with shape (batch_size, feat_dim).
@@ -51,30 +51,21 @@ class CenterLoss(nn.Module):
                   torch.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes, batch_size).t()
         distmat.addmm_(1, -2, x, self.centers.t())
 
-        if x_augment is not None:
-            distmat_augment = torch.pow(x_augment, 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_classes) + \
-                              torch.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes,
-                                                                                         batch_size).t()
-            distmat_augment.addmm_(1, -2, x_augment, self.centers.t())
-
         classes = torch.arange(self.num_classes).long()
         if self.use_gpu: classes = classes.cuda()
         labels = labels.unsqueeze(1).expand(batch_size, self.num_classes)
         mask = labels.eq(classes.expand(batch_size, self.num_classes))
 
-        dist = []
+        dist = distmat * mask.float()
+        dist = dist.clamp(min=1e-12, max=1e+12)
         indices = torch.zeros(batch_size, dtype=torch.int32)
         for i in range(batch_size):
-            value = distmat[i][mask[i]] if x_augment is None else (distmat[i][mask[i]] + distmat_augment[i][
-                mask[i]]) / 2.
-            value = value.clamp(min=1e-12, max=1e+12)  # for numerical stability
+            value = distmat[i][mask[i]]
             if value.detach().cpu().numpy():
                 indices[i] = 1
-            dist.append(value)
-        dist = torch.cat(dist)
         if weights is not None:
             dist = dist * weights[indices == 1]
             loss = dist.sum()
         else:
-            loss = dist.mean()
+            loss = dist.sum() / batch_size
         return loss

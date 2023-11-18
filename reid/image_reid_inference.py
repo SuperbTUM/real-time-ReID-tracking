@@ -23,6 +23,7 @@ from data_transforms import get_inference_transforms, get_inference_transforms_f
 from inference_utils import diminish_camera_bias
 from faiss_utils import compute_jaccard_distance
 
+
 # @credit to Zhedong
 #######################################################################
 # Evaluate
@@ -106,22 +107,6 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                 true_labels.append(true_label)
                 true_cams.append(cam)
     else:
-        # experimental
-        # input_example = np.random.rand(1, 3, 256, 128).astype(np.float32)  # (1, 3, 448, 224)
-        # index_example = np.zeros((1, ), dtype=int)
-        # embeddings_example = np.random.rand(1, 512).astype(np.float32) # seres18
-        # outputs_example = np.random.rand(1, 751).astype(np.float32) # market1501
-        # input_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(input_example, 'cuda', 0)
-        # index_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(index_example, 'cuda', 0)
-        # embeddings_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(embeddings_example, 'cuda', 0)
-        # outputs_ortvalue = onnxruntime.OrtValue.ortvalue_from_numpy(outputs_example, 'cuda', 0)
-        # io_binding = ort_session.io_binding()
-        # io_binding.bind_ortvalue_input('input', input_ortvalue)
-        # if use_side:
-        #     io_binding.bind_ortvalue_input('index', index_ortvalue)
-        # io_binding.bind_ortvalue_output('embeddings', embeddings_ortvalue)
-        # io_binding.bind_ortvalue_output('outputs', outputs_ortvalue)
-        # ort_session.run_with_iobinding(io_binding)
         for sample in tqdm(dataloader):
             if len(sample) == 2:
                 img, true_label = sample
@@ -140,7 +125,8 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                 # input_ortvalue.update_inplace(to_numpy(img))
                 # index_ortvalue.update_inplace(to_numpy(cam + all_cam * seq))
             # ort_session.run_with_iobinding(io_binding)
-            embeddings = ort_session.run(["embeddings", "outputs"], ort_inputs)[0]#embeddings_ortvalue.numpy()#ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
+            embeddings = ort_session.run(["embeddings", "outputs"], ort_inputs)[
+                0]  # embeddings_ortvalue.numpy()#ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
             embeddings = torch.from_numpy(embeddings)
             embeddings_total.append(embeddings)
             true_labels.append(true_label)
@@ -151,14 +137,14 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
         true_labels = torch.stack(true_labels).flatten()
         true_cams = torch.stack(true_cams).flatten()
     except RuntimeError:
-        embeddings_total = torch.cat((torch.stack(embeddings_total[:-1]).view(-1, embed_dim), embeddings_total[-1]), dim=0)
+        embeddings_total = torch.cat((torch.stack(embeddings_total[:-1]).view(-1, embed_dim), embeddings_total[-1]),
+                                     dim=0)
         true_labels = torch.cat((torch.stack(true_labels[:-1]).flatten(), true_labels[-1]), dim=0)
         true_cams = torch.cat((torch.stack(true_cams[:-1]).flatten(), true_cams[-1]), dim=0)
     return embeddings_total, true_labels, true_cams
 
 
-def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=False):
-    """Only support onnx inference"""
+def inference_efficient(model, dataloader1, dataloader2, use_side=False, use_onnx=False):
     torch.cuda.empty_cache()
     model.eval()
     embeddings_total1 = []
@@ -166,32 +152,49 @@ def inference_efficient(model, dataloader1, dataloader2, all_cam=6, use_side=Fal
     true_labels = []
     true_cams = []
     true_seqs = []
-    for sample1, sample2 in tqdm(zip(dataloader1, dataloader2), total=len(dataloader1)):
-        assert len(sample1) == len(sample2)
-        img1, true_label, cam, seq = sample1
-        img2 = sample2[0]
-        img = torch.cat((img1, img2), dim=0)
-        if not use_side:
-            ort_inputs = {'input': to_numpy(img)}
-            # input_ortvalue.update_inplace(to_numpy(img))
-        else:
-            ort_inputs = {'input': to_numpy(img),
-                          "index": np.repeat(to_numpy(cam), 2)}
-            # input_ortvalue.update_inplace(to_numpy(img))
-            # index_ortvalue.update_inplace(to_numpy(cam + all_cam * seq))
-        # ort_session.run_with_iobinding(io_binding)
-        # experimental
-        embeddings, outputs = ort_session.run(["embeddings", "outputs"], ort_inputs)  # embeddings_ortvalue.numpy()#ort_session.run(["embeddings", "outputs"], ort_inputs)[0]
-        # embeddings = torch.from_numpy(np.concatenate((embeddings, outputs), axis=1))
-        if params.cross_domain:
-            embeddings = torch.from_numpy(embeddings) # pending???
-        else:
-            embeddings = torch.cat((F.normalize(torch.from_numpy(embeddings), dim=1), F.normalize(torch.from_numpy(outputs), dim=1)), dim=1)
-        embeddings_total1.append(embeddings[:(len(embeddings) >> 1)])
-        embeddings_total2.append(embeddings[(len(embeddings) >> 1):])
-        true_labels.append(true_label)
-        true_cams.append(cam)
-        true_seqs.append(seq)
+    if use_onnx:
+        for sample1, sample2 in tqdm(zip(dataloader1, dataloader2), total=len(dataloader1)):
+            assert len(sample1) == len(sample2)
+            img1, true_label, cam, seq = sample1
+            img2 = sample2[0]
+            img = torch.cat((img1, img2), dim=0)
+            if not use_side:
+                ort_inputs = {'input': to_numpy(img)}
+            else:
+                ort_inputs = {'input': to_numpy(img),
+                              "index": np.repeat(to_numpy(cam), 2)}
+            # experimental
+            embeddings, outputs = ort_session.run(["embeddings", "outputs"], ort_inputs)
+            if params.cross_domain:
+                embeddings = torch.from_numpy(embeddings)  # pending???
+            else:
+                embeddings = torch.cat(
+                    (F.normalize(torch.from_numpy(embeddings), dim=1), F.normalize(torch.from_numpy(outputs), dim=1)),
+                    dim=1)
+            embeddings_total1.append(embeddings[:(len(embeddings) >> 1)])
+            embeddings_total2.append(embeddings[(len(embeddings) >> 1):])
+            true_labels.append(true_label)
+            true_cams.append(cam)
+            true_seqs.append(seq)
+    else:
+        with torch.no_grad():
+            for sample1, sample2 in tqdm(zip(dataloader1, dataloader2), total=len(dataloader1)):
+                assert len(sample1) == len(sample2)
+                img1, true_label, cam, seq = sample1
+                img2 = sample2[0]
+                img = torch.cat((img1, img2), dim=0).cuda()
+                if not use_side:
+                    embeddings, outputs = model(img)
+                else:
+                    embeddings, outputs = model(img, torch.repeat_interleave(cam, 2))
+                embeddings = embeddings.cpu()
+                outputs = outputs.cpu()
+                embeddings = torch.cat((F.normalize(embeddings, dim=1), F.normalize(outputs, dim=1)), dim=1)
+                embeddings_total1.append(embeddings[:(len(embeddings) >> 1)])
+                embeddings_total2.append(embeddings[(len(embeddings) >> 1):])
+                true_labels.append(true_label)
+                true_cams.append(cam)
+                true_seqs.append(seq)
 
     embeddings_total1 = torch.cat(embeddings_total1, dim=0)
     embeddings_total2 = torch.cat(embeddings_total2, dim=0)
@@ -246,7 +249,8 @@ if __name__ == "__main__":
         transform_test = get_inference_transforms(params.dataset, ratio)
         transform_test_flip = get_inference_transforms_flipped(params.dataset, ratio, strong_inference=True)
         if params.backbone == "seres18":
-            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
+            model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm,
+                                num_cams=dataset.num_train_cams).cuda()
         else:
             model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams).cuda()
     elif params.backbone == "resnet50":
@@ -260,7 +264,8 @@ if __name__ == "__main__":
     elif params.backbone == "vit":
         transform_test = get_inference_transforms(params.dataset, transformer_model=True)
         transform_test_flip = get_inference_transforms_flipped(params.dataset, transformer_model=True)
-        model = vit_t(img_size=(448, 224) if params.dataset in ("market1501", "dukemtmc") else (224, 224), num_classes=dataset.num_train_pids, loss="triplet",
+        model = vit_t(img_size=(448, 224) if params.dataset in ("market1501", "dukemtmc") else (224, 224),
+                      num_classes=dataset.num_train_pids, loss="triplet",
                       camera=dataset.num_train_cams,
                       sequence=dataset.num_train_seqs, side_info=True).cuda()
     elif params.backbone.startswith("swin"):
@@ -285,11 +290,11 @@ if __name__ == "__main__":
     dataloader1 = DataLoaderX(reid_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     reid_gallery.transform = transform_test_flip
     dataloader2 = DataLoaderX(reid_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
-    gallery_embeddings, gallery_labels, gallery_cams, gallery_seqs = inference_efficient(model, dataloader1, dataloader2, dataset.num_gallery_cams, params.use_side)
+    gallery_embeddings, gallery_labels, gallery_cams, gallery_seqs = inference_efficient(model, dataloader1,
+                                                                                         dataloader2, params.use_side,
+                                                                                         True)
     gallery_embeddings1 = gallery_embeddings[0]
     gallery_embeddings2 = gallery_embeddings[1]
-    # gallery_embeddings1 = F.normalize(gallery_embeddings1, dim=1)
-    # gallery_embeddings2 = F.normalize(gallery_embeddings2, dim=1)
 
     gallery_embeddings = (gallery_embeddings1 + gallery_embeddings2) / 2.0
     gallery_embeddings = F.normalize(gallery_embeddings, dim=1)
@@ -300,8 +305,7 @@ if __name__ == "__main__":
     dataloader2 = DataLoaderX(reid_query, batch_size=params.bs, num_workers=4, shuffle=False,
                               pin_memory=True)
     query_embeddings, query_labels, query_cams, query_seqs = inference_efficient(model, dataloader1, dataloader2,
-                                                                                 dataset.num_query_cams,
-                                                                                 params.use_side)
+                                                                                 params.use_side, True)
     query_embeddings1 = query_embeddings[0]
     query_embeddings2 = query_embeddings[1]
     # query_embeddings1 = F.normalize(query_embeddings1, dim=1)
@@ -316,22 +320,29 @@ if __name__ == "__main__":
 
     if params.dataset == "market1501":
         from tricks.additional_market_attributes import get_attribute_dist
-        attribute_dist = get_attribute_dist([label for _, label, _, _ in reid_gallery.images] + [label for _, label, _, _ in reid_query.images], params.market_attribute_path)
+
+        attribute_dist = get_attribute_dist(
+            [label for _, label, _, _ in reid_gallery.images] + [label for _, label, _, _ in reid_query.images],
+            params.market_attribute_path)
 
     # from losses.utils import euclidean_dist
-    dists = compute_jaccard_distance(merged_embeddings, search_option=0)# euclidean_dist(merged_embeddings, merged_embeddings) #
+    dists = compute_jaccard_distance(merged_embeddings,
+                                     search_option=0)  # euclidean_dist(merged_embeddings, merged_embeddings) #
     dists[dists < 0] = 0.
     dists[dists > 1] = 1.
     if params.dataset == "market1501":
         dists += attribute_dist
     try:
         from cuml import DBSCAN
+
         print("CUML Imported!")
-        cluster_method = DBSCAN(eps=params.eps, min_samples=min(10, dataset.num_gallery_cams+1), metric="precomputed")
+        cluster_method = DBSCAN(eps=params.eps, min_samples=min(10, dataset.num_gallery_cams + 1), metric="precomputed")
         dists = dists.cpu().numpy()
     except ImportError:
         from sklearn.cluster import DBSCAN
-        cluster_method = DBSCAN(eps=params.eps, min_samples=min(10, dataset.num_gallery_cams+1), metric="precomputed", n_jobs=-1)
+
+        cluster_method = DBSCAN(eps=params.eps, min_samples=min(10, dataset.num_gallery_cams + 1), metric="precomputed",
+                                n_jobs=-1)
     pseudo_labels = cluster_method.fit_predict(dists)
     indices_pseudo = (pseudo_labels != -1)
     num_labels = max(pseudo_labels) + 1
@@ -342,6 +353,7 @@ if __name__ == "__main__":
     merged_embeddings = diminish_camera_bias(merged_embeddings, merged_cams)
 
     from inference_utils import smooth_tracklets
+
     merged_embeddings = smooth_tracklets(merged_embeddings, merged_seqs, indices_pseudo)
 
     gallery_embeddings = merged_embeddings[:len(dataset.gallery)]

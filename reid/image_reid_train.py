@@ -22,7 +22,6 @@ from data_prepare import reidDataset, RandomIdentitySampler
 from data_transforms import get_train_transforms, get_inference_transforms
 from inference_utils import diminish_camera_bias
 from losses.hybrid_losses import HybridLoss, HybridLossWeighted
-from losses.utils import euclidean_dist
 from faiss_utils import compute_jaccard_distance
 
 import argparse
@@ -329,16 +328,6 @@ def side_info_only(model):
     return model
 
 
-def representation_only(model):
-    # for seres18/cares18
-    model.train()
-    model.module.conv0.requires_grad_ = False
-    model.module.bn0.requires_grad_ = False
-    model.module.relu0.requires_grad_ = False
-    model.module.pooling0.requires_grad_ = False
-    return model
-
-
 def produce_pseudo_data(model,
                         dataset_test,
                         merged_datasets,
@@ -610,16 +599,6 @@ if __name__ == "__main__":
 
     if params.backbone in ("plr_osnet", "seres18", "baseline", "cares18"):
         # No need for cross-domain retrain
-        # transform_train = transforms.Compose([
-        #     transforms.Resize((256, 128)),  # interpolation=3
-        #     transforms.RandomHorizontalFlip(),
-        #     transforms.Pad(10),
-        #     transforms.RandomCrop((256, 128)),
-        #     Fuse_Gray(0.35, 0.05),
-        #     # transforms.ToTensor(),
-        #     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        #     transforms.RandomErasing(),
-        # ])
         transform_train = get_train_transforms(params.dataset, ratio)
         source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
         torch.cuda.empty_cache()
@@ -648,12 +627,6 @@ if __name__ == "__main__":
                                               params.accelerate)
 
             if params.continual:
-                # transform_test = transforms.Compose([transforms.Resize((256, 128)),
-                #                                      transforms.ToTensor(),
-                #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
-                #                                                           std=(0.229, 0.224, 0.225)),
-                #                                      ]
-                #                                     )
                 transform_test = get_inference_transforms(params.dataset, ratio)
                 merged_datasets = dataset.gallery + dataset.query
                 dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
@@ -666,7 +639,6 @@ if __name__ == "__main__":
                 del dataset_test
                 source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
                 source_dataset.set_cross_domain()
-                # model = representation_only(model)
                 torch.cuda.empty_cache()
                 if params.sie:
                     model, loss_stats = train_cnn_continual_sie(model, source_dataset, num_class_new, centroids, params.bs,
@@ -677,23 +649,7 @@ if __name__ == "__main__":
                 source_dataset.reset_cross_domain()
 
     else:
-        # transform_train = transforms.Compose([
-        #     transforms.Resize((448, 224)),
-        #     transforms.RandomHorizontalFlip(),
-        #     transforms.Pad(10),
-        #     transforms.RandomCrop((448, 224)),
-        #     LGT(),
-        #     # transforms.ToTensor(),
-        #     transforms.RandomErasing(),
-        #     transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        # ])
         transform_train = get_train_transforms(params.dataset, transformer_model=True)
-        # transform_test = transforms.Compose([transforms.Resize((448, 224)),
-        #                                      transforms.ToTensor(),
-        #                                      transforms.Normalize(mean=(0.485, 0.456, 0.406),
-        #                                                           std=(0.229, 0.224, 0.225)),
-        #                                      ]
-        #                                     )
         transform_test = get_inference_transforms(params.dataset, transformer_model=True)
         source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
 
@@ -708,26 +664,6 @@ if __name__ == "__main__":
                                                         dataset.num_train_cams,
                                                         dataset.num_train_seqs,
                                                         params.accelerate)
-            # if params.continual:
-            #     merged_datasets = dataset.gallery + dataset.query
-            #     dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
-            #
-            #     ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset),
-            #                                                providers=providers)
-            #
-            #     pseudo_labeled_data, num_class_new, _ = produce_pseudo_data(model, dataset_test, merged_datasets,
-            #                                                              dataset.num_gallery_cams, use_onnx=True,
-            #                                                              use_side=True)
-            #     del dataset_test
-            #     source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
-            #     source_dataset.set_cross_domain()
-            #     model = side_info_only(model)
-            #     model, loss_stats = train_transformer_model(model, source_dataset, 384,
-            #                                                 params.bs, params.epochs,
-            #                                                 dataset.num_train_pids,
-            #                                                 dataset.num_train_cams,
-            #                                                 dataset.num_train_seqs)
-            #     source_dataset.reset_cross_domain()
         elif params.backbone.startswith("swin"):
             model = swin_t(num_classes=dataset.num_train_pids, loss="triplet",
                            camera=dataset.num_train_cams, sequence=dataset.num_train_seqs,
@@ -740,28 +676,6 @@ if __name__ == "__main__":
                                                         dataset.num_train_cams,
                                                         dataset.num_train_seqs,
                                                         params.accelerate)
-
-            # if params.continual:
-            #     merged_datasets = dataset.gallery + dataset.query
-            #     dataset_test = reidDataset(merged_datasets, dataset.num_train_pids, transform_test)
-            #     # dataloader_test = DataLoaderX(dataset_test, batch_size=params.bs, shuffle=False, num_workers=4,
-            #     #                               pin_memory=True)
-            #
-            #     ort_session = onnxruntime.InferenceSession("checkpoint/reid_model_{}.onnx".format(params.dataset),
-            #                                                providers=providers)
-            #     pseudo_labeled_data, num_class_new, _ = produce_pseudo_data(model, dataset_test, merged_datasets,
-            #                                                              dataset.num_gallery_cams, use_onnx=True,
-            #                                                              use_side=True)
-            #     del dataset_test
-            #     source_dataset.add_pseudo(pseudo_labeled_data, num_class_new)
-            #     source_dataset.set_cross_domain()
-            #     model = side_info_only(model)
-            #     model, loss_stats = train_transformer_model(model, source_dataset, 96,
-            #                                                 params.bs, params.epochs,
-            #                                                 dataset.num_train_pids,
-            #                                                 dataset.num_train_cams,
-            #                                                 dataset.num_train_seqs)
-            #     source_dataset.reset_cross_domain()
         else:
             raise NotImplementedError
 
