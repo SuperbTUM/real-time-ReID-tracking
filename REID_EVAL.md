@@ -9,9 +9,9 @@ Baseline -- @Acc1: 91.7%; @mAP: 77.8%
 |-----------------|--------|--------|
 | Baseline        | 0.9181 | 0.7994 |
 | Inference Boost | /      | /      |
-| Backbone Boost️ | 0.9379 | 0.8613 |
+| Backbone Boost️ | 0.9388 | 0.8628 |
 | Metric Boost    | 0.9406 | 0.9172 |
-| Training Boost️ | 0.9412 | 0.9181 |
+| Training Boost️ | 0.9445 | 0.9207 |
 | Continual Boost | 0.9572 | 0.9406 |
 
 DukeMTMC

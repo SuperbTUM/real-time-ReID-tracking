@@ -82,7 +82,6 @@ class HybridLossWeighted(nn.Module):
                 embeddings,
                 outputs,
                 targets,
-                normed_embeddings=None,
                 embeddings_augment=None,
                 weights=None,
                 outputs_augment=None,

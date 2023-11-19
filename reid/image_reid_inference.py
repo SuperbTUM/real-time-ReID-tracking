@@ -89,14 +89,7 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
     if not use_onnx:
         with torch.no_grad():
             for sample in tqdm(dataloader):
-                if len(sample) == 2:
-                    img, true_label = sample
-                    cam = seq = None
-                elif len(sample) == 3:
-                    img, true_label, cam = sample
-                    seq = 0
-                else:
-                    img, true_label, cam, seq = sample
+                img, true_label, cam, seq = sample
                 img = img.cuda(non_blocking=True)
                 if use_side:
                     side_index = (cam + all_cam * seq).cuda(non_blocking=True)
@@ -108,14 +101,7 @@ def inference(model, dataloader, all_cam=6, use_onnx=True, use_side=False):
                 true_cams.append(cam)
     else:
         for sample in tqdm(dataloader):
-            if len(sample) == 2:
-                img, true_label = sample
-                cam = seq = None
-            elif len(sample) == 3:
-                img, true_label, cam = sample
-                seq = 0
-            else:
-                img, true_label, cam, seq = sample
+            img, true_label, cam, seq = sample
             if not use_side:
                 ort_inputs = {'input': to_numpy(img)}
                 # input_ortvalue.update_inplace(to_numpy(img))
@@ -162,7 +148,7 @@ def inference_efficient(model, dataloader1, dataloader2, use_side=False, use_onn
                 ort_inputs = {'input': to_numpy(img)}
             else:
                 ort_inputs = {'input': to_numpy(img),
-                              "index": np.repeat(to_numpy(cam), 2)}
+                              "index": np.tile(to_numpy(cam), 2)}
             # experimental
             embeddings, outputs = ort_session.run(["embeddings", "outputs"], ort_inputs)
             if params.cross_domain:
@@ -186,7 +172,7 @@ def inference_efficient(model, dataloader1, dataloader2, use_side=False, use_onn
                 if not use_side:
                     embeddings, outputs = model(img)
                 else:
-                    embeddings, outputs = model(img, torch.repeat_interleave(cam, 2))
+                    embeddings, outputs = model(img, cam.repeat(2))
                 embeddings = embeddings.cpu()
                 outputs = outputs.cpu()
                 embeddings = torch.cat((F.normalize(embeddings, dim=1), F.normalize(outputs, dim=1)), dim=1)
