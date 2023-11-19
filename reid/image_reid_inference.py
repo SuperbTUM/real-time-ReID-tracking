@@ -281,6 +281,11 @@ if __name__ == "__main__":
     model.eval()
     if params.ckpt.endswith("pt") or params.ckpt.endswith("pth"):
         model_weights = torch.load(params.ckpt)
+        if not params.sie:
+            try:
+                del model_weights["module.cam_bias"]
+            except KeyError:
+                pass
         last_layer_weights = list(model_weights.values())[-1].size(0)
         last_layer_model = list(model.module.named_children())[-1][1]
         if isinstance(last_layer_model, nn.Sequential):
@@ -294,20 +299,22 @@ if __name__ == "__main__":
             else:
                 last_layer_in_feat = last_layer_model.in_features
             setattr(model, "module." + last_layer_name + (".0" if isinstance(last_layer_model, nn.Sequential) else ""), nn.Linear(last_layer_in_feat, last_layer_weights, bias=False).cuda())
-        model.load_state_dict(model_weights, strict=True)
+        model.load_state_dict(model_weights, strict=False)
+        use_onnx = False
 
     else:
         # providers = [("CUDAExecutionProvider", {'enable_cuda_graph': True})]
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         ort_session = onnxruntime.InferenceSession(params.ckpt, providers=providers)
+        use_onnx = True
     # experimental
     reid_gallery = reidDataset(dataset.gallery, dataset.num_train_pids, transform_test, False)
     dataloader1 = DataLoaderX(reid_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     reid_gallery.transform = transform_test_flip
     dataloader2 = DataLoaderX(reid_gallery, batch_size=params.bs, num_workers=4, shuffle=False, pin_memory=True)
     gallery_embeddings, gallery_labels, gallery_cams, gallery_seqs = inference_efficient(model, dataloader1,
-                                                                                         dataloader2, params.use_side,
-                                                                                         True)
+                                                                                         dataloader2, params.sie,
+                                                                                         use_onnx)
     gallery_embeddings1 = gallery_embeddings[0]
     gallery_embeddings2 = gallery_embeddings[1]
 
@@ -320,7 +327,7 @@ if __name__ == "__main__":
     dataloader2 = DataLoaderX(reid_query, batch_size=params.bs, num_workers=4, shuffle=False,
                               pin_memory=True)
     query_embeddings, query_labels, query_cams, query_seqs = inference_efficient(model, dataloader1, dataloader2,
-                                                                                 params.use_side, True)
+                                                                                 params.sie, use_onnx)
     query_embeddings1 = query_embeddings[0]
     query_embeddings2 = query_embeddings[1]
     # query_embeddings1 = F.normalize(query_embeddings1, dim=1)
