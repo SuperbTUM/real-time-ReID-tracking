@@ -34,9 +34,8 @@ class ft_baseline(nn.Module):
 
     def __init__(self, class_num, stride=1):
         super(ft_baseline, self).__init__()
-        model_ft = models.resnet18()
-        model_ft.load_state_dict(torch.hub.load_state_dict_from_url('https://download.pytorch.org/models/resnet18-5c106cde.pth', progress=False), strict=True)
-        self.model = model_ft
+        model_ft = models.resnet18(weights='IMAGENET1K_V1')
+        self.model = nn.ModuleDict(list(model_ft.children())[:-1])
         # avg pooling to global pooling
         if stride == 1:
             self.model.layer4[0].downsample[0].stride = (1, 1)

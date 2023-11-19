@@ -18,7 +18,7 @@ from reid.datasets.dataset_market import Market1501
 from reid.datasets.dataset_dukemtmc import DukeMTMCreID
 from reid.datasets.dataset_veri776 import VeRi
 from train_prepare import WarmupMultiStepLR, to_onnx
-from data_prepare import reidDataset, RandomIdentitySampler
+from data_prepare import reidDataset, RandomIdentitySampler_
 from data_transforms import get_train_transforms, get_inference_transforms
 from inference_utils import diminish_camera_bias
 from losses.hybrid_losses import HybridLoss, HybridLossWeighted
@@ -48,7 +48,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
     if params.instance > 0:
-        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        custom_sampler = RandomIdentitySampler_(dataset, batch_size, params.instance)
         optimizer = torch.optim.Adam(model.parameters(), lr=3.5e-4, weight_decay=5e-4)
     else:
         custom_sampler = None
@@ -119,7 +119,7 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
     optimizer_center = torch.optim.SGD(loss_func.center.parameters(), lr=0.5)
 
     if params.instance > 0:
-        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        custom_sampler = RandomIdentitySampler_(dataset, batch_size, params.instance)
         optimizer = torch.optim.Adam(model.parameters(), lr=3.5e-4, weight_decay=5e-4)
     else:
         custom_sampler = None
@@ -183,7 +183,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
         model.load_state_dict(model_state_dict, strict=False)
     model.train()
     if params.instance > 0:
-        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        custom_sampler = RandomIdentitySampler_(dataset, batch_size, params.instance)
         optimizer = torch.optim.Adam(model.parameters(), lr=3.5e-4, weight_decay=5e-4)
     else:
         custom_sampler = None
@@ -258,7 +258,7 @@ def train_transformer_model(model, dataset, feat_dim=384, batch_size=8, epochs=2
 
     model.train()
     if params.instance > 0:
-        custom_sampler = RandomIdentitySampler(dataset, params.instance)
+        custom_sampler = RandomIdentitySampler_(dataset, batch_size, params.instance)
         optimizer = torch.optim.SGD(model.parameters(), lr=0.008, weight_decay=1e-4)
     else:
         custom_sampler = None
@@ -400,7 +400,7 @@ def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_s
     model.module.classifier[-1].weight.data[:dataset.num_train_pids] = prev_weights
     model.module.classifier[-1].weight.data[dataset.num_train_pids:] = centroids
     if params.instance > 0:
-        custom_sampler = RandomIdentitySampler(merged_dataset, params.instance)
+        custom_sampler = RandomIdentitySampler_(merged_dataset, batch_size, params.instance)
         optimizer = torch.optim.Adam(model.parameters(), lr=7e-5, weight_decay=5e-4)
     else:
         custom_sampler = None
@@ -478,7 +478,7 @@ def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, bat
     model.module.classifier[-1].weight.data[:dataset.num_train_pids] = prev_weights
     model.module.classifier[-1].weight.data[dataset.num_train_pids:] = centroids
     if params.instance > 0:
-        custom_sampler = RandomIdentitySampler(merged_dataset, params.instance)
+        custom_sampler = RandomIdentitySampler_(merged_dataset, batch_size, params.instance)
         optimizer = torch.optim.Adam(model.parameters(), lr=7e-5, weight_decay=5e-4)
     else:
         custom_sampler = None
