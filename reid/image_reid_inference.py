@@ -280,7 +280,22 @@ if __name__ == "__main__":
     model = nn.DataParallel(model)
     model.eval()
     if params.ckpt.endswith("pt") or params.ckpt.endswith("pth"):
-        model.load_state_dict(torch.load(params.ckpt), strict=False)
+        model_weights = torch.load(params.ckpt)
+        last_layer_weights = list(model_weights.values())[-1].size(0)
+        last_layer_model = list(model.module.named_children())[-1][1]
+        if isinstance(last_layer_model, nn.Sequential):
+            last_layer_out_feat = last_layer_model[-1].out_features
+        else:
+            last_layer_out_feat = last_layer_model.out_features
+        if last_layer_out_feat != last_layer_weights:
+            last_layer_name = list(model.module.named_children())[-1][0]
+            if isinstance(last_layer_model, nn.Sequential):
+                last_layer_in_feat = last_layer_model[-1].in_features
+            else:
+                last_layer_in_feat = last_layer_model.in_features
+            setattr(model, "module." + last_layer_name + (".0" if isinstance(last_layer_model, nn.Sequential) else ""), nn.Linear(last_layer_in_feat, last_layer_weights, bias=False).cuda())
+        model.load_state_dict(model_weights, strict=True)
+
     else:
         # providers = [("CUDAExecutionProvider", {'enable_cuda_graph': True})]
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -318,6 +333,8 @@ if __name__ == "__main__":
     merged_cams = torch.cat((gallery_cams, query_cams), dim=0)
     merged_seqs = torch.cat((gallery_seqs, query_seqs), dim=0)
 
+    merged_embeddings = diminish_camera_bias(merged_embeddings, merged_cams)
+
     if params.dataset == "market1501":
         from tricks.additional_market_attributes import get_attribute_dist
 
@@ -349,8 +366,6 @@ if __name__ == "__main__":
     assert num_labels >= 0.2 * dataset.num_train_pids
     # merged_seqs = merged_seqs * dataset.num_gallery_cams * num_labels + merged_cams * num_labels + pseudo_labels
     merged_seqs = merged_seqs * num_labels + pseudo_labels
-
-    merged_embeddings = diminish_camera_bias(merged_embeddings, merged_cams)
 
     from inference_utils import smooth_tracklets
 

@@ -416,8 +416,7 @@ def train_cnn_continual(model, merged_dataset, num_class_new, centroids, batch_s
                              num_workers=4,
                              shuffle=not params.instance,
                              pin_memory=True,
-                             sampler=custom_sampler,
-                             drop_last=True)
+                             sampler=custom_sampler)
     if accelerate:
         accelerator = Accelerator()
         model = model.to(accelerator.device)
@@ -494,8 +493,7 @@ def train_cnn_continual_sie(model, merged_dataset, num_class_new, centroids, bat
                              num_workers=4,
                              shuffle=not params.instance,
                              pin_memory=True,
-                             sampler=custom_sampler,
-                             drop_last=True)
+                             sampler=custom_sampler)
     if accelerate:
         accelerator = Accelerator()
         model = model.to(accelerator.device)

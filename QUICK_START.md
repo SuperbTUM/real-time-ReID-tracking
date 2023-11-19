@@ -27,17 +27,17 @@ We train the model on both image-based dataset and video-based dataset(w/. groun
 
 For non-continual image training
 ```python
-python reid/image_reid_train.py --bs 32 --backbone seres18 --accelerate --center_lamda 0.0005 --instance 8 --dataset market1501 --temperature 2.
+python reid/image_reid_train.py --bs 64 --backbone seres18 --accelerate --center_lamda 0.0005 --instance 4 --dataset market1501 --temperature 2. --epochs 120
 ```
 
 For continual image training
 ```python
-python reid/image_reid_train.py --bs 32 --backbone seres18 --accelerate --center_lamda 0.0005 --instance 8 --continual --eps 0.6 --dataset market1501 --temperature 2.
+python reid/image_reid_train.py --bs 64 --backbone seres18 --accelerate --center_lamda 0.0005 --instance 4 --continual --eps 0.6 --dataset market1501 --temperature 2. --epochs 120
 ```
 
 For image training with SIE
 ```python
-python reid/image_reid_train.py --bs 32 --backbone seres18 --accelerate --center_lamda 0.0005 --instance 8 --continual --eps 0.6 --dataset market1501 --sie --temperature 2.
+python reid/image_reid_train.py --bs 64 --backbone seres18 --accelerate --center_lamda 0.0005 --instance 4 --continual --eps 0.6 --dataset market1501 --sie --temperature 2. --epochs 120
 ```
 
 For image-level testing 

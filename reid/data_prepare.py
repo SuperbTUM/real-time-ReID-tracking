@@ -156,7 +156,8 @@ class RandomIdentitySampler_(torch.utils.data.sampler.Sampler):
         self.num_instances = num_instances
         self.num_pids_per_batch = self.batch_size // self.num_instances
         self.index_dic = defaultdict(list)
-        for index, (_, pid, _, _) in enumerate(self.data_source):
+        for index, img_info in enumerate(self.data_source):
+            pid = img_info[1]
             self.index_dic[pid.item()].append(index)
         self.pids = list(self.index_dic.keys())
 
