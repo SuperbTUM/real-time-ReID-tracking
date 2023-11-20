@@ -81,6 +81,42 @@ class WarmUpScheduler(torch.optim.lr_scheduler._LRScheduler):
         ]
 
 
+class WarmUpCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
+    def __init__(self,
+                 optimizer,
+                 train_epochs,
+                 delayed_epoch=30,
+                 eta_min=7e-7,
+                 gamma=0.1,
+                 warmup_factor=0.01,
+                 warmup_iters=10,
+                 warmup_method="linear",
+                 last_epoch=-1):
+        self.last_epoch = last_epoch
+        self.start_iters = max(warmup_iters, delayed_epoch)
+        self.warmup = WarmUpScheduler(optimizer, gamma, warmup_factor, warmup_iters, warmup_method, last_epoch)
+        self.cosine_sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, train_epochs-self.start_iters, eta_min=eta_min)
+
+    def step(self, epoch=None):
+        self.last_epoch += 1
+        if self.last_epoch < self.start_iters:
+            self.warmup.step()
+        else:
+            self.cosine_sched.step()
+
+    def get_lr(self):
+        if self.last_epoch < self.start_iters:
+            return self.warmup.get_lr()
+        else:
+            return self.cosine_sched.get_lr()
+
+    def get_last_lr(self):
+        if self.last_epoch < self.start_iters:
+            return self.warmup.get_last_lr()
+        else:
+            return self.cosine_sched.get_last_lr()
+
+
 class WarmupMultiStepLR(torch.optim.lr_scheduler._LRScheduler):
     def __init__(
             self,

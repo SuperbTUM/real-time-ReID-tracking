@@ -18,7 +18,7 @@ from train_utils import check_parameters, DataLoaderX, plot_loss, to_numpy
 from reid.datasets.dataset_market import Market1501
 from reid.datasets.dataset_dukemtmc import DukeMTMCreID
 from reid.datasets.dataset_veri776 import VeRi
-from train_prepare import WarmupMultiStepLR, to_onnx
+from train_prepare import WarmupMultiStepLR, WarmUpCosineScheduler, to_onnx
 from data_prepare import reidDataset, RandomIdentitySampler_
 from data_transforms import get_train_transforms, get_inference_transforms
 from inference_utils import diminish_camera_bias
@@ -58,8 +58,7 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     else:
         custom_sampler = None
         optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[40, 70],
-                                     gamma=0.1)  # WarmupMultiStepLR(optimizer, [10, 30])
+    lr_scheduler = WarmUpCosineScheduler(optimizer, epochs)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
                              pin_memory=True, sampler=custom_sampler, drop_last=True)
     if accelerate:
@@ -140,8 +139,7 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
     else:
         custom_sampler = None
         optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
-    lr_scheduler = WarmupMultiStepLR(optimizer, milestones=[40, 70],
-                                     gamma=0.1)  # WarmupMultiStepLR(optimizer, [10, 30])
+    lr_scheduler = WarmUpCosineScheduler(optimizer, epochs)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
                              pin_memory=True, sampler=custom_sampler, drop_last=True)
     if accelerate:
@@ -211,7 +209,7 @@ def train_plr_osnet(model, dataset, batch_size=8, epochs=25, num_classes=517, ac
     else:
         custom_sampler = None
         optimizer = madgrad.MADGRAD(model.parameters(), lr=0.01, weight_decay=5e-4)
-    lr_scheduler = WarmupMultiStepLR(optimizer, [30, 55])
+    lr_scheduler = WarmUpCosineScheduler(optimizer, epochs)
     loss_func1 = HybridLoss(num_classes, model.module.classifier1.in_features, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     loss_func2 = HybridLoss(num_classes, model.module.classifier2.in_features, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
@@ -286,7 +284,7 @@ def train_transformer_model(model, dataset, feat_dim=384, batch_size=8, epochs=2
     else:
         custom_sampler = None
         optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-4)
-    lr_scheduler = WarmupMultiStepLR(optimizer, [30, 55])
+    lr_scheduler = WarmUpCosineScheduler(optimizer, epochs)
     loss_func = HybridLoss(num_classes, feat_dim, params.margin, epsilon=params.epsilon, lamda=params.center_lamda)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
                              pin_memory=True, sampler=custom_sampler)

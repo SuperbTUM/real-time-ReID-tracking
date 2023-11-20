@@ -9,7 +9,7 @@ Baseline -- @Acc1: 91.7%; @mAP: 77.8%
 |-----------------|--------|--------|
 | Baseline        | 0.9181 | 0.7994 |
 | Inference Boost | 0.92+  | 0.82+  |
-| Backbone Boost️ | 0.9365 | 0.8746 |
+| Backbone Boost️ | 0.9344 | 0.8847 |
 | Metric Boost    | 0.9406 | 0.9172 |
 | Training Boost️ | 0.9477 | 0.9222 |
 | Continual Boost | 0.9572 | 0.9406 |
