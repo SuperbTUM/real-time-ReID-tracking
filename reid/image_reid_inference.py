@@ -339,7 +339,7 @@ if __name__ == "__main__":
     dists = compute_jaccard_distance(merged_embeddings,
                                      search_option=0)  # euclidean_dist(merged_embeddings, merged_embeddings) #
     dists[dists < 0] = 0.
-    dists[dists > 1] = 1.
+    # dists[dists > 1] = 1.
     if params.dataset == "market1501":
         dists += attribute_dist
     try:

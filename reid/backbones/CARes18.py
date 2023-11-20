@@ -6,7 +6,6 @@ from collections import OrderedDict
 from .weight_init import weights_init_classifier, weights_init_kaiming, trunc_normal_
 from .SERes18_IBN import GeM, IBN
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization2D_Noniid, BatchRenormalization1D
-from .attention_pooling import GeM_Custom
 
 
 class CABlock(nn.Module):
@@ -40,9 +39,6 @@ class CABlock(nn.Module):
         self.F_w = nn.Conv2d(in_channels=mip, out_channels=channel, kernel_size=1, stride=1, bias=False)
 
         self.sigmoid = nn.Sigmoid()
-
-        # self.gem_h = GeM_Custom(3)
-        # self.gem_w = GeM_Custom(2)
 
         # torch.nn.init.kaiming_normal_(self.conv_1x1.weight.data, a=0, mode='fan_out')
         # torch.nn.init.kaiming_normal_(self.F_h.weight.data, a=0, mode='fan_out')

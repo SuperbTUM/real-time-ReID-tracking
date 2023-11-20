@@ -8,17 +8,20 @@ Baseline -- @Acc1: 91.7%; @mAP: 77.8%
 | Action          | Acc@1  | mAP    |
 |-----------------|--------|--------|
 | Baseline        | 0.9181 | 0.7994 |
-| Inference Boost | /      | /      |
-| Backbone Boost️ | 0.9388 | 0.8628 |
+| Inference Boost | 0.92+  | 0.82+  |
+| Backbone Boost️ | 0.9365 | 0.8746 |
 | Metric Boost    | 0.9406 | 0.9172 |
-| Training Boost️ | 0.9445 | 0.9207 |
+| Training Boost️ | 0.9477 | 0.9222 |
 | Continual Boost | 0.9572 | 0.9406 |
 
 DukeMTMC
 
 Baseline -- DukeMTMC @Acc1: 82.5%; @mAP: 68.8%
 
-Pending
+| Metric    | Acc@1  | mAP    |
+|-----------|--------|--------|
+| Euclidean | 0.8528 | 0.7396 |
+| Jaccard   | 0.8730 | 0.8280 |
 
 Veri776 on SeRes18, optionally apply re-detection [Cropped Detector](https://drive.google.com/file/d/1SYwGRfH9fSAt_keZahbDFMVhjscD5kZ9/view?usp=drive_link)
 

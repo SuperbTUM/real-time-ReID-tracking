@@ -11,13 +11,13 @@ from .attention_pooling import GeM
 
 # This can be applied as channel attention for gallery based on query
 class SEBlock(nn.Module):
-    def __init__(self, c_in: int, lbn: bool = False):
+    def __init__(self, c_in: int, lbn: bool = False, renorm: bool = False):
         super().__init__()
         self.globalavgpooling = nn.AdaptiveAvgPool2d(1)
         mip = max(8, c_in // 16)
         self.fc1 = nn.Conv2d(c_in, mip, kernel_size=1, padding=0, bias=False)
         if lbn:
-            self.bn = LBN_1D(mip)
+            self.bn = LBN_1D(mip, renorm=renorm)
         else:
             self.bn = nn.BatchNorm1d(mip)
         self.relu = nn.ReLU(inplace=True)
@@ -110,12 +110,12 @@ class SEBasicBlock(nn.Module):
             downsample_layer = list(block.downsample.children())
             self.block_post = nn.Sequential(OrderedDict(
                 [("conv", downsample_layer[0]),
-                 ("bn", downsample_layer[1])]
+                 ("bn", BatchRenormalization2D(dim, downsample_layer[1].state_dict()) if renorm else downsample_layer[1])]
             ))
         else:
             self.block_pre = block
             self.block_post = None
-        self.seblock = SEBlock(dim, se_ibn)
+        self.seblock = SEBlock(dim, se_ibn, renorm)
 
     def forward(self, x):
         branch = x
@@ -200,7 +200,7 @@ class SERse18_IBN(nn.Module):
         model = torch.hub.load("XingangPan/IBN-Net", "resnet18_ibn_a", pretrained=True)
         self.conv0 = model.conv1
         if renorm:
-            self.bn0 = BatchRenormalization2D(64, self.bn0.state_dict())
+            self.bn0 = BatchRenormalization2D(64, model.bn1.state_dict())
         else:
             self.bn0 = model.bn1
         self.relu0 = model.relu
@@ -228,12 +228,12 @@ class SERse18_IBN(nn.Module):
         else:
             self.avgpooling = model.avgpool
 
-        if renorm:
-            self.bnneck = BatchRenormalization1D(512)
-            self.bnneck.beta.requires_grad_(False)
-        else:
-            self.bnneck = nn.BatchNorm1d(512)
-            self.bnneck.bias.requires_grad_(False)
+        # if renorm:
+        #     self.bnneck = BatchRenormalization1D(512)
+        #     self.bnneck.beta.requires_grad_(False)
+        # else:
+        self.bnneck = nn.BatchNorm1d(512)
+        self.bnneck.bias.requires_grad_(False)
 
         self.bnneck.apply(weights_init_kaiming)
 
@@ -266,7 +266,7 @@ class SERse18_IBN(nn.Module):
 
         x_normed = self.bnneck(feature)
         if cam is not None:
-            x_normed = x_normed + self.cam_factor * self.cam_bias[cam] # This is not good
+            x_normed = x_normed + self.cam_factor * self.cam_bias[cam]
         x = self.classifier(x_normed)
         if self.is_reid:
             return x

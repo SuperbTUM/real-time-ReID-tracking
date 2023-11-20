@@ -70,6 +70,8 @@ class CrossEntropyLabelSmooth(nn.Module):
         loss = (- targets * log_probs).sum(1)
         one_minus_pt = torch.sum(targets * (1 - probs), dim=1)
         loss += one_minus_pt * self.epsilon
+        if self.epsilon < 0:
+            loss += 0.2 * one_minus_pt ** 2
         return loss.mean()
 
 
