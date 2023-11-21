@@ -2,7 +2,7 @@ import torch
 from .utils import normalize_rank, euclidean_dist
 
 
-def rank_loss(dist_mat, labels, margin, alpha, tval, dist_mat_augment):
+def rank_loss(dist_mat, labels, margin, alpha, tval):
     """
     Args:
       dist_mat: pytorch Variable, pair wise distance between samples, shape [N, N]
@@ -20,13 +20,7 @@ def rank_loss(dist_mat, labels, margin, alpha, tval, dist_mat_augment):
         is_neg = labels.ne(labels[ind])
 
         dist_ap = dist_mat[ind][is_pos]
-        cnt = 0
-        for i in range(is_pos.size(0)):
-            if is_pos[i].item():
-                if dist_ap[cnt] < 1e-6:
-                    dist_ap[cnt] = dist_mat_augment[ind][i]
-                cnt += 1
-        dist_an = torch.maximum(dist_mat[ind][is_neg], dist_mat_augment[ind][is_neg])
+        dist_an = dist_mat[ind][is_neg]
 
         ap_is_pos = torch.clamp(torch.add(dist_ap, margin - alpha), min=0.0)
         ap_pos_num = ap_is_pos.size(0) + 1e-5
@@ -54,11 +48,10 @@ class RankedLoss(object):
         self.alpha = alpha
         self.tval = tval
 
-    def __call__(self, global_feat, labels, normalize_feature=True, feat_augment=None):
+    def __call__(self, global_feat, labels, normalize_feature=True):
         if normalize_feature:
             global_feat = normalize_rank(global_feat, axis=-1)
         dist_mat = euclidean_dist(global_feat, global_feat)
-        dist_mat_augment = euclidean_dist(global_feat, feat_augment)
-        total_loss = rank_loss(dist_mat, labels, self.margin, self.alpha, self.tval, dist_mat_augment)
+        total_loss = rank_loss(dist_mat, labels, self.margin, self.alpha, self.tval)
 
         return total_loss

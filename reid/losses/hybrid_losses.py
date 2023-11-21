@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 from .center_losses import CenterLoss
-from .identification_losses import LabelSmoothing, LabelSmoothingMixup, FocalLoss, CrossEntropyLabelSmooth
+from .identification_losses import LabelSmoothing, FocalLoss, CrossEntropyLabelSmooth
 from .triplet_losses import TripletBeta, WeightedRegularizedTriplet, TripletLoss
 from .circle_losses import CircleLoss
 from .utils import normalize_rank
@@ -57,7 +57,6 @@ class HybridLossWeighted(nn.Module):
                  lamda=0.0005,
                  alpha=0.0,
                  triplet_smooth=False,
-                 mixup=False,
                  class_stats=None,
                  circle_factor=0.,
                  centroids=None,
@@ -69,13 +68,9 @@ class HybridLossWeighted(nn.Module):
             self.triplet = TripletBeta(margin, alpha, triplet_smooth, reduction="none")
         else:
             self.triplet = WeightedRegularizedTriplet("none")
-        if mixup:
-            self.smooth = LabelSmoothingMixup(smoothing, epsilon)
-        else:
-            self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon, tao=tao)#LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
+        self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon, tao=tao)#LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
         self.circle = CircleLoss()
         self.lamda = lamda
-        self.mixup = mixup
         self.circle_factor = circle_factor
 
     def forward(self,
@@ -83,23 +78,14 @@ class HybridLossWeighted(nn.Module):
                 outputs,
                 targets,
                 embeddings_augment=None,
-                weights=None,
-                outputs_augment=None,
-                targets_a=None,
-                targets_b=None,
-                lam=None):
+                weights=None):
         """
         features: feature vectors
         targets: ground truth labels
         """
-        if self.mixup:
-            smooth_loss = self.smooth(outputs, targets_a, targets_b, lam)
-        else:
-            smooth_loss = self.smooth(outputs, targets)
-        if outputs_augment is not None:
-            circle_loss = self.circle(normalize_rank(outputs, 1), targets, normalize_rank(outputs_augment, 1))
-        else:
-            circle_loss = self.circle(normalize_rank(outputs, 1), targets)
+
+        smooth_loss = self.smooth(outputs, targets)
+        circle_loss = self.circle(normalize_rank(outputs, 1), targets)
         # triplet_loss = self.triplet(embeddings, targets)
         triplet_loss = self.triplet(embeddings, targets, embeddings_augment, weights)
         center_loss = self.center(embeddings, targets, embeddings_augment, weights)

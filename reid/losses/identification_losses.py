@@ -104,34 +104,3 @@ class LabelSmoothing(nn.Module):
         # return loss.mean()
         return poly_loss.mean()
 
-
-class LabelSmoothingMixup(LabelSmoothing):
-    def __init__(self, smoothing=0.1, epsilon=0., class_weights=None):
-        super(LabelSmoothingMixup, self).__init__(smoothing, epsilon, class_weights)
-
-    def forward(self, x, target_a, target_b, lam):
-        logprobs = F.log_softmax(x, dim=-1)
-        probs = F.softmax(x, dim=-1)
-        target_a = target_a.long()
-        nll_loss = -logprobs.gather(dim=-1, index=target_a.unsqueeze(1))
-        nll_loss = nll_loss.squeeze(1)
-        smooth_loss = -logprobs.mean(dim=-1)
-        smoothed_labels = F.one_hot(target_a, x.size(-1)) * self.confidence + self.smoothing / x.size(-1)
-        one_minus_pt = torch.sum(smoothed_labels * (1 - probs), dim=-1)
-        loss = self.confidence * nll_loss + self.smoothing * smooth_loss
-        poly_loss_a = loss + one_minus_pt * self.epsilon
-        if self.class_weights is not None:
-            poly_loss_a *= self.class_weights[target_a]
-
-        target_b = target_b.long()
-        nll_loss = -logprobs.gather(dim=-1, index=target_b.unsqueeze(1))
-        nll_loss = nll_loss.squeeze(1)
-        smooth_loss = -logprobs.mean(dim=-1)
-        smoothed_labels = F.one_hot(target_b, x.size(-1)) * self.confidence + self.smoothing / x.size(-1)
-        one_minus_pt = torch.sum(smoothed_labels * (1 - probs), dim=-1)
-        loss = self.confidence * nll_loss + self.smoothing * smooth_loss
-        poly_loss_b = loss + one_minus_pt * self.epsilon
-        if self.class_weights is not None:
-            poly_loss_b *= self.class_weights[target_b]
-
-        return torch.mean(poly_loss_a * lam + poly_loss_b * (1-lam))
