@@ -33,7 +33,7 @@ class SEBlock(nn.Module):
         x = self.globalavgpooling(x)
         x = self.fc1(x)
         x = x.squeeze()
-        x = self.bn(x)
+        # x = self.bn(x)
         x = self.relu(x)
         x = self.fc2(x)
         x = x.unsqueeze(-1).unsqueeze(-1)
