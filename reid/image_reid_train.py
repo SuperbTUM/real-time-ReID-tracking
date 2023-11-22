@@ -575,6 +575,7 @@ def parser():
     args.add_argument("--instance", type=int, default=0)
     args.add_argument("--sie", action="store_true", help="side information embedding")
     args.add_argument("--temperature", default=1, type=int)
+    args.add_argument("--cam_factor", default=0., type=float)
     return args.parse_args()
 
 
@@ -606,10 +607,10 @@ if __name__ == "__main__":
         else:
             if params.backbone == "seres18":
                 model = seres18_ibn(num_classes=dataset.num_train_pids, loss="triplet", renorm=params.renorm,
-                                    num_cams=dataset.num_train_cams).cuda()
+                                    num_cams=dataset.num_train_cams, cam_factor=params.cam_factor).cuda()
             elif params.backbone == "cares18":
                 model = cares18_ibn(dataset.num_train_pids, renorm=params.renorm, num_cams=dataset.num_train_cams,
-                                    non_iid=params.instance).cuda()
+                                    non_iid=params.instance, cam_factor=params.cam_factor).cuda()
             else:
                 model = ft_baseline(dataset.num_train_pids).cuda()
             print("model size: {:.3f} MB".format(check_parameters(model)))

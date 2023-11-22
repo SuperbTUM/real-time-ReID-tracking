@@ -197,7 +197,8 @@ class CARes18_IBN(nn.Module):
                  pooling="gem",
                  renorm=False,
                  is_reid=False,
-                 non_iid=0):
+                 non_iid=0,
+                 cam_factor=1.):
         super().__init__()
         # model = models.resnet18(weights=resnet18_pretrained, progress=False)
         model = torch.hub.load("XingangPan/IBN-Net", "resnet18_ibn_a", pretrained=True)
@@ -250,7 +251,7 @@ class CARes18_IBN(nn.Module):
         self.is_reid = is_reid
         self.cam_bias = nn.Parameter(torch.randn(num_cams, 512))
         trunc_normal_(self.cam_bias, std=0.02)
-        self.cam_factor = 1.
+        self.cam_factor = cam_factor
 
     def forward(self, x, cam=None):
         x = self.conv0(x)

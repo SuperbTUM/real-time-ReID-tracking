@@ -18,10 +18,10 @@ DukeMTMC
 
 Baseline -- DukeMTMC @Acc1: 82.5%; @mAP: 68.8%
 
-| Metric    | Acc@1  | mAP    |
-|-----------|--------|--------|
-| Euclidean | 0.8528 | 0.7396 |
-| Jaccard   | 0.8730 | 0.8280 |
+| Metric    | Acc@1  | Acc@5  | Acc@10 | mAP    |
+|-----------|--------|--------|--------|--------|
+| Euclidean | 0.8613 | 0.9336 | 0.9502 | 0.7506 |
+| Jaccard   | 0.8873 | 0.9327 | 0.9430 | 0.8464 |
 
 Veri776 on SeRes18, optionally apply re-detection [Cropped Detector](https://drive.google.com/file/d/1SYwGRfH9fSAt_keZahbDFMVhjscD5kZ9/view?usp=drive_link)
 
