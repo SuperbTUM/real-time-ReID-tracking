@@ -39,11 +39,11 @@ class BaseImageDataset(BaseDataset):
         num_gallery_pids, num_gallery_imgs, num_gallery_cams, num_gallery_seqs = self.get_imagedata_info(gallery)
 
         print("Dataset statistics:")
-        print("  ----------------------------------------")
+        print("  ----------------------------------------------------")
         print("  subset   | # ids | # images | # cameras | # sequences")
-        print("  ----------------------------------------")
+        print("  ----------------------------------------------------")
         print("  train    | {:5d} | {:8d} | {:9d} | {:9d}".format(num_train_pids, num_train_imgs, num_train_cams, num_train_seqs))
         print("  query    | {:5d} | {:8d} | {:9d} | {:9d}".format(num_query_pids, num_query_imgs, num_query_cams, num_query_seqs))
         print("  gallery  | {:5d} | {:8d} | {:9d} | {:9d}".format(num_gallery_pids, num_gallery_imgs, num_gallery_cams, num_gallery_seqs))
-        print("  ----------------------------------------")
+        print("  ----------------------------------------------------")
 

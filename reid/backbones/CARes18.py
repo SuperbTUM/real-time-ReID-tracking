@@ -57,9 +57,6 @@ class CABlock(nn.Module):
         x_h = x.mean(dim=3, keepdim=True).permute(0, 1, 3, 2)
         x_w = x.mean(dim=2, keepdim=True)
 
-        # x_h = self.gem_h(x).permute(0, 1, 3, 2)
-        # x_w = self.gem_w(x)
-
         concat = torch.cat((x_h, x_w), 3)#.permute(0, 2, 3, 1) # (32, 64, 1, 96) -> (32, 1, 96, 64)
 
         x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
@@ -84,9 +81,9 @@ class CABlock(nn.Module):
 #     def forward(self, x):
 #         h, w = x.size(2), x.size(3)
 #
-#         x_h = F.adaptive_avg_pool2d(x, (h, 1)).permute(0, 1, 3, 2)
-#         x_w = F.adaptive_avg_pool2d(x, (1, w))
-#         x_c = F.adaptive_avg_pool2d(x, 1)
+#         x_h = x.mean(dim=3, keepdim=True).permute(0, 1, 3, 2)
+#         x_w = x.mean(dim=2, keepdim=True)
+#         x_c = x.mean(dim=(2, 3), keepdim=True)
 #         concat = torch.cat((x_h, x_w, x_c), 3).permute(0, 2, 3, 1)  # (32, 64, 1, 97) ->
 #
 #         # x_cat_conv_relu = self.relu(self.bn(self.conv_1x1(concat)))
@@ -133,7 +130,6 @@ class CABasicBlock(nn.Module):
                 else:
                     block.bn1.BN = BatchRenormalization2D(dim >> 1, block.bn1.BN.state_dict())
 
-        # block.relu = AconC(dim)
         if list(block.named_children())[-1][0] == "downsample":
             self.block_pre = nn.Sequential(*list(block.children())[:-1])
             self.block_post = block.downsample
@@ -198,6 +194,7 @@ class CARes18_IBN(nn.Module):
                  renorm=False,
                  is_reid=False,
                  non_iid=0,
+                 ca_ibn=False,
                  cam_factor=1.):
         super().__init__()
         # model = models.resnet18(weights=resnet18_pretrained, progress=False)
@@ -213,17 +210,17 @@ class CARes18_IBN(nn.Module):
         self.relu0 = model.relu
         self.pooling0 = model.maxpool
 
-        self.basicBlock11 = CABasicBlock(model.layer1[0], 64, renorm, True, non_iid=non_iid, ca_ibn=True)
+        self.basicBlock11 = CABasicBlock(model.layer1[0], 64, renorm, True, non_iid=non_iid, ca_ibn=ca_ibn)
 
-        self.basicBlock12 = CABasicBlock(model.layer1[1], 64, renorm, True, non_iid=non_iid, ca_ibn=True)
+        self.basicBlock12 = CABasicBlock(model.layer1[1], 64, renorm, True, non_iid=non_iid, ca_ibn=ca_ibn)
 
-        self.basicBlock21 = CABasicBlock(model.layer2[0], 128, renorm, True, non_iid=non_iid, ca_ibn=True)
+        self.basicBlock21 = CABasicBlock(model.layer2[0], 128, renorm, True, non_iid=non_iid, ca_ibn=ca_ibn)
 
-        self.basicBlock22 = CABasicBlock(model.layer2[1], 128, renorm, True, non_iid=non_iid, ca_ibn=True)
+        self.basicBlock22 = CABasicBlock(model.layer2[1], 128, renorm, True, non_iid=non_iid, ca_ibn=ca_ibn)
 
-        self.basicBlock31 = CABasicBlock(model.layer3[0], 256, renorm, True, non_iid=non_iid, ca_ibn=True)
+        self.basicBlock31 = CABasicBlock(model.layer3[0], 256, renorm, True, non_iid=non_iid, ca_ibn=ca_ibn)
 
-        self.basicBlock32 = CABasicBlock(model.layer3[1], 256, renorm, True, non_iid=non_iid, ca_ibn=True)
+        self.basicBlock32 = CABasicBlock(model.layer3[1], 256, renorm, True, non_iid=non_iid, ca_ibn=ca_ibn)
 
         # last stride = 1
         self.basicBlock41 = CABasicBlock(model.layer4[0], 512, renorm, False, True, non_iid=non_iid)
