@@ -17,7 +17,7 @@ class BasicBlock(nn.Module):
 
     def forward(self, x):
         branch = x
-        x = F.leaky_relu(self.conv1(x), 0.2)
+        x = F.leaky_relu(self.conv1(x), 0.1)
         x = F.avg_pool2d(self.conv2(x), 2)
         branch = F.avg_pool2d(branch, 2)
         branch = self.downsample_layer(branch)
@@ -76,20 +76,7 @@ class Discriminator(nn.Module):
                 # input is (nc) x 128 x 64
                 nn.Conv2d(nc, ndf, 4, (4, 2), 1, bias=False),
                 nn.LeakyReLU(0.2, inplace=True),
-                # # state size. (ndf) x  x 32
-                # nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-                # nn.BatchNorm2d(ndf * 2),
-                # nn.LeakyReLU(0.2, inplace=True),
-                # # state size. (ndf*2) x 16 x 16
-                # nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-                # nn.BatchNorm2d(ndf * 4),
-                # nn.LeakyReLU(0.2, inplace=True),
-                # # state size. (ndf*4) x 8 x 8
-                # nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-                # nn.BatchNorm2d(ndf * 8),
-                # nn.LeakyReLU(0.2, inplace=True),
-                # state size. (ndf*8) x 4 x 4
-                # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+
                 nn.Conv2d(ndf, ndf * 2, 3, stride=1, padding=1),
                 nn.LeakyReLU(0.2, True),
                 nn.MaxPool2d((2, 2)),
@@ -108,8 +95,9 @@ class Discriminator(nn.Module):
                     BasicBlock(nc, ndf),
                     BasicBlock(ndf, ndf * 2),
                     BasicBlock(ndf * 2, ndf * 4),
+                    SelfAttention(ndf * 4) if self_attn else nn.Identity(),
                     BasicBlock(ndf * 4, ndf * 8),
-                    nn.ReLU(True),
+                    # nn.ReLU(True),
                 )
             else:
                 self.main = nn.Sequential(

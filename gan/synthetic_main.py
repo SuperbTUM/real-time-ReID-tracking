@@ -24,7 +24,7 @@ def load_model(nz,
                ngf,
                ndf,
                device="cuda:0",
-               lr=0.0002,
+               lr=0.0001,
                spectral_norm=True,
                self_attn=False):
     modelG = Generator(nz=nz, ngf=ngf, spectral_norm=spectral_norm, self_attn=self_attn).to(device)
@@ -35,9 +35,9 @@ def load_model(nz,
     criterion = nn.BCELoss()
     # criterion = LabelSmoothing()
     optimizerG = torch.optim.Adam(modelG.parameters(), lr=lr, betas=(0., 0.9))
-    optimizerD = torch.optim.Adam(modelD.parameters(), lr=lr, betas=(0., 0.9))
-    lr_schedulerG = torch.optim.lr_scheduler.StepLR(optimizerG, 5, 0.5)
-    lr_schedulerD = torch.optim.lr_scheduler.StepLR(optimizerD, 5, 0.75)
+    optimizerD = torch.optim.Adam(modelD.parameters(), lr=lr * 4, betas=(0., 0.9))
+    lr_schedulerG = torch.optim.lr_scheduler.StepLR(optimizerG, 5, 0.95)
+    lr_schedulerD = torch.optim.lr_scheduler.StepLR(optimizerD, 5, 0.95)
     return modelG, modelD, criterion, optimizerG, optimizerD, lr_schedulerG, lr_schedulerD
 
 

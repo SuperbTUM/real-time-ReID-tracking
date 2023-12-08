@@ -140,17 +140,18 @@ class Generator(nn.Module):
             self.main = nn.Sequential(
                 nn.Flatten(),
                 nn.Linear(nz, (bottom_width ** 2 >> 1) * ngf),
-                nn.Unflatten(1, (ngf, bottom_width, bottom_width >> 1)),
-                BasicBlock(ngf, ngf, num_class=num_class),
-                BasicBlock(ngf, ngf * 8, num_class=num_class),
-                BasicBlock(ngf * 8, ngf * 4, num_class=num_class),
+                nn.Unflatten(1, (ngf, bottom_width, bottom_width >> 1)), # 4*2
+                BasicBlock(ngf, ngf, num_class=num_class), # 8*4
+                BasicBlock(ngf, ngf * 8, num_class=num_class), # 16*8
+                BasicBlock(ngf * 8, ngf * 4, num_class=num_class), #32*16
                 SelfAttention(ngf * 4) if self_attn else nn.Identity(),
-                BasicBlock(ngf * 4, ngf * 2, num_class=num_class),
+                BasicBlock(ngf * 4, ngf * 2, num_class=num_class), #64*32
                 SelfAttention(ngf * 2) if self_attn else nn.Identity(),
-                BasicBlock(ngf * 2, ngf, num_class=num_class),
-                nn.BatchNorm2d(ngf, 0.9),
-                nn.ReLU(True),
-                nn.Conv2d(ngf, nc, 3, 1, 1),
+                # BasicBlock(ngf * 2, ngf, num_class=num_class), #128*64
+                # nn.BatchNorm2d(ngf, 0.9),
+                # nn.ReLU(True),
+                # nn.Conv2d(ngf, nc, 3, 1, 1),
+                nn.ConvTranspose2d(ngf * 2, nc, 4, 2, 1), #128*64
                 nn.Tanh()
             )
         else:

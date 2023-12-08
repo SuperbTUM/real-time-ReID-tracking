@@ -11,7 +11,7 @@ Unfortunately we don't have diffusion model at this moment.
 In a general scenario, you can simply execute the training script:
 
 ```python
-python modification_gan/synthetic_generate.py --ngf 256 --ndf 64 --ema
+python modification_gan/synthetic_main.py --ngf 256 --ndf 64 --ema
 ```
 
 **ReID(Image Retrival) training**
