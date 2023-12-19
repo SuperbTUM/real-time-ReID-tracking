@@ -21,6 +21,7 @@ from train_prepare import WarmupMultiStepLR, WarmUpCosineScheduler, to_onnx
 from data_prepare import reidDataset, RandomIdentitySampler_
 from data_transforms import get_train_transforms, get_inference_transforms
 from inference_utils import diminish_camera_bias
+from losses.center_contrastive_losses import generate_centers
 from losses.hybrid_losses import HybridLoss, HybridLossWeighted
 from faiss_utils import compute_jaccard_distance
 
@@ -55,7 +56,8 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
         optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
     lr_scheduler = WarmUpCosineScheduler(optimizer, epochs)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
-                             pin_memory=True, sampler=custom_sampler, drop_last=True)
+                             pin_memory=True, sampler=custom_sampler, drop_last=False)
+    dataloader_test = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=False, pin_memory=True)
     if accelerate:
         accelerator = Accelerator()
         model = model.to(accelerator.device)
@@ -65,6 +67,8 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
+        with torch.no_grad():
+            loss_func.cluster_ce.features = generate_centers(model, dataloader_test)
         for sample in iterator:
             images, label, cams = sample[:3]
             optimizer.zero_grad()
@@ -125,7 +129,8 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
         optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=5e-4, momentum=0.9, nesterov=True)
     lr_scheduler = WarmUpCosineScheduler(optimizer, epochs)
     dataloader = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=not params.instance,
-                             pin_memory=True, sampler=custom_sampler, drop_last=True)
+                             pin_memory=True, sampler=custom_sampler, drop_last=False)
+    dataloader_test = DataLoaderX(dataset, batch_size=batch_size, num_workers=4, shuffle=False, pin_memory=True)
     if accelerate:
         accelerator = Accelerator()
         model = model.to(accelerator.device)
@@ -135,6 +140,8 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
+        with torch.no_grad():
+            loss_func.cluster_ce.features = generate_centers(model, dataloader_test)
         for sample in iterator:
             images, label, cams, seqs = sample
             optimizer.zero_grad()
@@ -598,6 +605,11 @@ if __name__ == "__main__":
         # No need for cross-domain retrain
         transform_train = get_train_transforms(params.dataset, ratio)
         source_dataset = reidDataset(dataset.train, dataset.num_train_pids, transform_train)
+        eval_dataset_query = reidDataset(dataset.query, dataset.num_query_pids, get_inference_transforms(params.dataset, ratio))
+        eval_dataloader_query = DataLoaderX(eval_dataset_query, batch_size=params.bs, shuffle=False, pin_memory=True)
+        eval_dataset_gallery = reidDataset(dataset.gallery, dataset.num_gallery_pids, get_inference_transforms(params.dataset, ratio))
+        eval_dataloader_gallery = DataLoaderX(eval_dataset_gallery, batch_size=params.bs, shuffle=False, pin_memory=True)
+
         torch.cuda.empty_cache()
         if params.backbone == "plr_osnet":
             model = plr_osnet(num_classes=dataset.num_train_pids, loss='triplet').cuda()

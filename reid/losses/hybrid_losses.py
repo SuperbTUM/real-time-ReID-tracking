@@ -3,8 +3,7 @@ import torch.nn as nn
 from .center_losses import CenterLoss
 from .identification_losses import LabelSmoothing, FocalLoss, CrossEntropyLabelSmooth
 from .triplet_losses import TripletBeta, WeightedRegularizedTriplet, TripletLoss
-from .circle_losses import CircleLoss
-from .utils import normalize_rank
+from .center_contrastive_losses import ClusterMemory
 
 
 class HybridLoss(nn.Module):
@@ -17,7 +16,7 @@ class HybridLoss(nn.Module):
                  alpha=0.0,
                  triplet_smooth=False,
                  class_stats=None,
-                 circle_factor=0.,
+                 cluster_factor=0.5,
                  tao=1.):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
@@ -26,9 +25,9 @@ class HybridLoss(nn.Module):
         else:
             self.triplet = WeightedRegularizedTriplet()
         self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon, tao=tao)#FocalLoss(smoothing, epsilon, class_stats)  # LabelSmoothing(smoothing, epsilon)
-        self.circle = CircleLoss()
+        self.cluster_ce = ClusterMemory(feat_dim, num_classes)
         self.lamda = lamda
-        self.circle_factor = circle_factor
+        self.cluster_factor = cluster_factor
 
     def forward(self,
                 embeddings,
@@ -39,13 +38,13 @@ class HybridLoss(nn.Module):
         targets: ground truth labels
         """
         smooth_loss = self.smooth(outputs, targets)
-        circle_loss = self.circle(normalize_rank(outputs, 1), targets)
+        cluster_ce_loss = self.cluster_ce(outputs, targets)
         triplet_loss = self.triplet(embeddings, targets)
         center_loss = self.center(embeddings, targets)
-        return (1. - self.circle_factor) * smooth_loss + \
+        return smooth_loss + \
                triplet_loss + \
                self.lamda * center_loss + \
-               self.circle_factor * circle_loss
+               self.cluster_factor * cluster_ce_loss
 
 
 class HybridLossWeighted(nn.Module):
@@ -58,7 +57,7 @@ class HybridLossWeighted(nn.Module):
                  alpha=0.0,
                  triplet_smooth=False,
                  class_stats=None,
-                 circle_factor=0.,
+                 cluster_factor=0.,
                  centroids=None,
                  tao=1.):
         super().__init__()
@@ -69,9 +68,9 @@ class HybridLossWeighted(nn.Module):
         else:
             self.triplet = WeightedRegularizedTriplet("none")
         self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon, tao=tao)#LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
-        self.circle = CircleLoss()
+        self.cluster_ce = ClusterMemory(feat_dim, num_classes)
         self.lamda = lamda
-        self.circle_factor = circle_factor
+        self.cluster_factor = cluster_factor
 
     def forward(self,
                 embeddings,
@@ -85,14 +84,14 @@ class HybridLossWeighted(nn.Module):
         """
 
         smooth_loss = self.smooth(outputs, targets)
-        circle_loss = self.circle(normalize_rank(outputs, 1), targets)
+        cluster_ce_loss = self.cluster_ce(outputs, targets)
         # triplet_loss = self.triplet(embeddings, targets)
         triplet_loss = self.triplet(embeddings, targets, embeddings_augment, weights)
         center_loss = self.center(embeddings, targets, embeddings_augment, weights)
-        return (1. - self.circle_factor) * smooth_loss + \
+        return smooth_loss + \
                triplet_loss + \
                self.lamda * center_loss + \
-               self.circle_factor * circle_loss
+               self.cluster_factor * cluster_ce_loss
 
 
 class RepreLoss(nn.Module):
