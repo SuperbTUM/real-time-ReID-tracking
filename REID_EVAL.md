@@ -27,7 +27,10 @@ Veri776 on SeRes18, optionally apply re-detection [Cropped Detector](https://dri
 
 Baseline -- Veri776 @Acc1: 87.6%; @mAP: 59.0%
 
-Pending
+| Metric    | Acc@1  | Acc@5  | Acc@10 | mAP    |
+|-----------|--------|--------|--------|--------|
+| Euclidean | 0.8898 | 0.9374 | 0.9553 | 0.7397 |
+| Jaccard   | 0.9410 | 0.9631 | 0.9702 | 0.7994 |
 
 * Domain Transfer
 
