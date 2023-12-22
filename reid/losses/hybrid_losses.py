@@ -3,7 +3,7 @@ import torch.nn as nn
 from .center_losses import CenterLoss
 from .identification_losses import LabelSmoothing, FocalLoss, CrossEntropyLabelSmooth
 from .triplet_losses import TripletBeta, WeightedRegularizedTriplet, TripletLoss
-from .center_contrastive_losses import ClusterMemory
+from .center_contrastive_losses import DCCLoss
 
 
 class HybridLoss(nn.Module):
@@ -16,7 +16,7 @@ class HybridLoss(nn.Module):
                  alpha=0.0,
                  triplet_smooth=False,
                  class_stats=None,
-                 cluster_factor=0.5,
+                 cluster_factor=1.,
                  tao=1.):
         super().__init__()
         self.center = CenterLoss(num_classes=num_classes, feat_dim=feat_dim)
@@ -24,8 +24,8 @@ class HybridLoss(nn.Module):
             self.triplet = TripletLoss(margin, alpha, triplet_smooth)  # Smooth only works for hard triplet loss now
         else:
             self.triplet = WeightedRegularizedTriplet()
-        self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon, tao=tao)#FocalLoss(smoothing, epsilon, class_stats)  # LabelSmoothing(smoothing, epsilon)
-        self.cluster_ce = ClusterMemory(feat_dim, num_classes)
+        # self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon, tao=tao)#FocalLoss(smoothing, epsilon, class_stats)  # LabelSmoothing(smoothing, epsilon)
+        self.cluster_ce = DCCLoss(feat_dim, num_classes)
         self.lamda = lamda
         self.cluster_factor = cluster_factor
 
@@ -37,12 +37,11 @@ class HybridLoss(nn.Module):
         features: feature vectors
         targets: ground truth labels
         """
-        smooth_loss = self.smooth(outputs, targets)
+        # smooth_loss = self.smooth(outputs, targets)
         cluster_ce_loss = self.cluster_ce(outputs, targets)
         triplet_loss = self.triplet(embeddings, targets)
         center_loss = self.center(embeddings, targets)
-        return smooth_loss + \
-               triplet_loss + \
+        return triplet_loss + \
                self.lamda * center_loss + \
                self.cluster_factor * cluster_ce_loss
 
@@ -68,7 +67,7 @@ class HybridLossWeighted(nn.Module):
         else:
             self.triplet = WeightedRegularizedTriplet("none")
         self.smooth = CrossEntropyLabelSmooth(num_classes, smoothing, epsilon, tao=tao)#LabelSmoothing(smoothing, epsilon) # FocalLoss(smoothing, epsilon, class_stats)  #
-        self.cluster_ce = ClusterMemory(feat_dim, num_classes)
+        self.cluster_ce = DCCLoss(feat_dim, num_classes)
         self.lamda = lamda
         self.cluster_factor = cluster_factor
 

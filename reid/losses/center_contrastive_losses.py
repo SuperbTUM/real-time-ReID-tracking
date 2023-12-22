@@ -1,8 +1,4 @@
-# Implemented by Alibaba
-
-import numpy as np
 from collections import defaultdict
-from abc import ABC
 import torch
 import torch.nn.functional as F
 from torch import nn, autograd
@@ -10,100 +6,78 @@ from torch import nn, autograd
 from reid.evaluate import get_feats
 
 
-class CM(autograd.Function):
-
+# from https://github.com/htyao89/Cross-View-Asymmetric-Cluster-Contrastive/blob/main/examples/main.py
+class DCC(autograd.Function):
     @staticmethod
-    def forward(ctx, inputs, targets, features, momentum):
-        ctx.features = features
+    def forward(ctx, inputs, targets, lut_ccc, lut_icc,  momentum):
+        ctx.lut_ccc = lut_ccc
+        ctx.lut_icc = lut_icc
         ctx.momentum = momentum
         ctx.save_for_backward(inputs, targets)
-        outputs = inputs.mm(ctx.features.t())
+        outputs_ccc = inputs.mm(ctx.lut_ccc.t())
+        outputs_icc = inputs.mm(ctx.lut_icc.t())
 
-        return outputs
+        return outputs_ccc,outputs_icc
 
     @staticmethod
-    def backward(ctx, grad_outputs):
-        inputs, targets = ctx.saved_tensors
+    def backward(ctx, grad_outputs_ccc, grad_outputs_icc):
+        inputs,targets = ctx.saved_tensors
         grad_inputs = None
         if ctx.needs_input_grad[0]:
-            grad_inputs = grad_outputs.mm(ctx.features)
+            grad_inputs = grad_outputs_ccc.mm(ctx.lut_ccc)+grad_outputs_icc.mm(ctx.lut_icc)
 
         batch_centers = defaultdict(list)
-        for instance_feature, index in zip(inputs, targets.tolist()):
+        for instance_feature, index in zip(inputs, targets.data.cpu().numpy()):
             batch_centers[index].append(instance_feature)
 
-        for index, features in batch_centers.items():
-            mean_feature = torch.stack(batch_centers[index], dim=0)
-            x = mean_feature.mean(0)
+        for y, features in batch_centers.items():
+            mean_feature = torch.stack(batch_centers[y],dim=0)
+            non_mean_feature = mean_feature.mean(0)
+            x = F.normalize(non_mean_feature,dim=0)
+            ctx.lut_ccc[y] = ctx.momentum * ctx.lut_ccc[y] + (1.-ctx.momentum) * x
+            ctx.lut_ccc[y] /= ctx.lut_ccc[y].norm()
 
-            ctx.features[index] = ctx.features[index] * ctx.momentum + (1 - ctx.momentum) * x
-            ctx.features[index] /= ctx.features[index].norm()
+        del batch_centers
 
-        return grad_inputs, None, None, None
+        for x, y in zip(inputs,targets.data.cpu().numpy()):
+            ctx.lut_icc[y] = ctx.lut_icc[y] * ctx.momentum + (1 - ctx.momentum) * x
+            ctx.lut_icc[y] /= ctx.lut_icc[y].norm()
 
-
-class CM_Hard(autograd.Function):
-
-    @staticmethod
-    def forward(ctx, inputs, targets, features, momentum):
-        ctx.features = features
-        ctx.momentum = momentum
-        ctx.save_for_backward(inputs, targets)
-        outputs = inputs.mm(ctx.features.t())
-
-        return outputs
-
-    @staticmethod
-    def backward(ctx, grad_outputs):
-        inputs, targets = ctx.saved_tensors
-        grad_inputs = None
-        if ctx.needs_input_grad[0]:
-            grad_inputs = grad_outputs.mm(ctx.features)
-
-        batch_centers = defaultdict(list)
-        for instance_feature, index in zip(inputs, targets.tolist()):
-            batch_centers[index].append(instance_feature)
-
-        for index, features in batch_centers.items():
-            distances = []
-            for feature in features:
-                distance = feature.unsqueeze(0).mm(ctx.features[index].unsqueeze(0).t())[0][0]
-                distances.append(distance.cpu().numpy())
-
-            median = np.argmin(np.array(distances))
-            ctx.features[index] = ctx.features[index] * ctx.momentum + (1 - ctx.momentum) * features[median]
-            ctx.features[index] /= ctx.features[index].norm()
-
-        return grad_inputs, None, None, None
+        return grad_inputs, None, None, None, None
 
 
-def cm(inputs, indexes, features, momentum=0.5):
-    return CM.apply(inputs, indexes, features, torch.Tensor([momentum]).to(inputs.device))
+def oim(inputs, targets, lut_ccc, lut_icc, momentum=0.1):
+    return DCC.apply(inputs, targets, lut_ccc, lut_icc, torch.Tensor([momentum]).to(inputs.device))
 
 
-def cm_hard(inputs, indexes, features, momentum=0.5):
-    return CM_Hard.apply(inputs, indexes, features, torch.Tensor([momentum]).to(inputs.device))
-
-
-class ClusterMemory(nn.Module, ABC):
-    def __init__(self, num_features, num_samples, temp=0.05, momentum=0.1):
-        super(ClusterMemory, self).__init__()
+class DCCLoss(nn.Module):
+    def __init__(self, num_features, num_classes, scalar=20.0, momentum=0.1,
+                 weight=0.25, size_average=True):
+        super(DCCLoss, self).__init__()
         self.num_features = num_features
-        self.num_samples = num_samples
-
+        self.num_classes = num_classes
         self.momentum = momentum
-        self.temp = temp
+        self.scalar = scalar
+        self.weight = weight
+        self.size_average = size_average
 
-        self.register_buffer('features', torch.zeros(num_samples, num_features))
+        self.register_buffer('lut_ccc', torch.zeros(num_classes, num_features).cuda())
+        self.register_buffer('lut_icc', torch.zeros(num_classes, num_features).cuda())
+
+        print('Weight:{}, Momentum:{}'.format(self.weight,self.momentum))
 
     def forward(self, inputs, targets):
+        inputs_ccc, inputs_icc = oim(inputs, targets, self.lut_ccc, self.lut_icc, momentum=self.momentum)
 
-        inputs = F.normalize(inputs, dim=1).cuda()
-        outputs = cm(inputs, targets, self.features, self.momentum)
-        # outputs = cm_hard(inputs, targets, self.features, self.momentum)
+        inputs_ccc *= self.scalar
+        inputs_icc *= self.scalar
 
-        outputs /= self.temp
-        loss = F.cross_entropy(outputs, targets)
+        loss_ccc = F.cross_entropy(inputs_ccc, targets, size_average=self.size_average)
+        loss_icc = F.cross_entropy(inputs_icc, targets, size_average=self.size_average)
+
+        loss_con = F.smooth_l1_loss(inputs_ccc, inputs_icc.detach(), reduction='elementwise_mean')
+        loss = loss_ccc+loss_icc+self.weight*loss_con
+
         return loss
 
 

@@ -67,8 +67,11 @@ def train_cnn(model, dataset, batch_size=8, epochs=25, num_classes=517, accelera
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
-        with torch.no_grad():
-            loss_func.cluster_ce.features = F.normalize(generate_centers(model, dataloader_test), dim=1)
+        if epoch == 0:
+            with torch.no_grad():
+                feature = F.normalize(generate_centers(model, dataloader_test), dim=1)
+                loss_func.cluster_ce.lut_ccc = feature
+                loss_func.cluster_ce.lut_icc = feature
         for sample in iterator:
             images, label, cams = sample[:3]
             optimizer.zero_grad()
@@ -140,8 +143,11 @@ def train_cnn_sie(model, dataset, batch_size=8, epochs=25, num_classes=517, acce
     loss_stats = []
     for epoch in range(epochs):
         iterator = tqdm(dataloader)
-        with torch.no_grad():
-            loss_func.cluster_ce.features = F.normalize(generate_centers(model, dataloader_test), dim=1)
+        if epoch == 0:
+            with torch.no_grad():
+                feature = F.normalize(generate_centers(model, dataloader_test), dim=1)
+                loss_func.cluster_ce.lut_ccc = feature
+                loss_func.cluster_ce.lut_icc = feature
         for sample in iterator:
             images, label, cams, seqs = sample
             optimizer.zero_grad()
