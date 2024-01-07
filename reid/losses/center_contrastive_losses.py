@@ -1,9 +1,27 @@
+import numpy as np
+import random
 from collections import defaultdict
 import torch
 import torch.nn.functional as F
 from torch import nn, autograd
 
-from reid.evaluate import get_feats
+
+def get_feats(model, dataloader):
+    model.eval()
+    labels = []
+    features = []
+    cams = []
+    for sample in dataloader:
+        image, label, cam = sample[:3]
+        feat = model(image.cuda(), cam)
+        features.append(feat[1])
+        labels.append(label)
+        cams.append(cam)
+    labels = torch.cat(labels, dim=0)
+    features = torch.cat(features, dim=0)
+    cams = torch.cat(cams, dim=0)
+    model.train()
+    return labels, features, cams
 
 
 # from https://github.com/htyao89/Cross-View-Asymmetric-Cluster-Contrastive/blob/main/examples/main.py
@@ -72,8 +90,19 @@ class DCCLoss(nn.Module):
         inputs_ccc *= self.scalar
         inputs_icc *= self.scalar
 
-        loss_ccc = F.cross_entropy(inputs_ccc, targets, size_average=self.size_average)
-        loss_icc = F.cross_entropy(inputs_icc, targets, size_average=self.size_average)
+        loss_ccc = F.cross_entropy(inputs_ccc, targets, size_average=self.size_average, label_smoothing=0.1)
+        loss_icc = F.cross_entropy(inputs_icc, targets, size_average=self.size_average, label_smoothing=0.1)
+
+        '''
+        targets = F.one_hot(targets, inputs.size(1))
+        probs_ccc = F.softmax(inputs_ccc, dim=1)
+        one_minus_pt_ccc = torch.sum(targets * (1 - probs_ccc), dim=1)
+        loss_ccc += one_minus_pt_ccc.mean()
+
+        probs_icc = F.softmax(inputs_icc, dim=1)
+        one_minus_pt_icc = torch.sum(targets * (1 - probs_icc), dim=1)
+        loss_icc += one_minus_pt_icc.mean()
+        '''
 
         loss_con = F.smooth_l1_loss(inputs_ccc, inputs_icc.detach(), reduction='elementwise_mean')
         loss = loss_ccc+loss_icc+self.weight*loss_con
@@ -87,7 +116,7 @@ def generate_centers(model, dataloader):
     for i, label in enumerate(labels):
         if label == -1:
             continue
-        centers[labels[i]].append(features[i])
+        centers[labels[i].item()].append(features[i])
 
     centers = [torch.stack(centers[idx], dim=0).mean(0) for idx in sorted(centers.keys())]
 
