@@ -6,6 +6,7 @@ from collections import OrderedDict
 from .weight_init import weights_init_classifier, weights_init_kaiming, trunc_normal_
 from .SERes18_IBN import GeM, IBN
 from .batchrenorm import BatchRenormalization2D, BatchRenormalization2D_Noniid, BatchRenormalization1D
+from .triplet_attention import TripletAttention
 
 
 class CABlock(nn.Module):
@@ -141,7 +142,7 @@ class CABasicBlock(nn.Module):
         else:
             self.block_pre = block
             self.block_post = None
-        self.cablock = CABlock(dim, renorm=renorm, non_iid=non_iid, ca_ibn=ca_ibn)
+        self.cablock = TripletAttention() # CABlock(dim, renorm=renorm, non_iid=non_iid, ca_ibn=ca_ibn)
 
     def forward(self, x):
         branch = x

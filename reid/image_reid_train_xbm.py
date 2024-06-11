@@ -15,9 +15,9 @@ from backbones.vision_transformer import vit_t
 from backbones.swin_transformer import swin_t
 from tricks.XBM import XBM
 from train_utils import check_parameters, DataLoaderX, plot_loss, to_numpy
-from reid.datasets.dataset_market import Market1501
-from reid.datasets.dataset_dukemtmc import DukeMTMCreID
-from reid.datasets.dataset_veri776 import VeRi
+from datasets.dataset_market import Market1501
+from datasets.dataset_dukemtmc import DukeMTMCreID
+from datasets.dataset_veri776 import VeRi
 from train_prepare import WarmupMultiStepLR, WarmUpCosineScheduler, to_onnx
 from data_prepare import reidDataset, RandomIdentitySampler_
 from data_transforms import get_train_transforms, get_inference_transforms
@@ -592,7 +592,7 @@ def parser():
     args.add_argument("--margin", help="for triplet loss", default=0.0, type=float)
     args.add_argument("--center_lamda", help="for center loss", default=0.0005, type=float)
     args.add_argument("--eps", default=0.5, type=float, help="clustering eps for continual training")
-    args.add_argument("--continual", action="store_true", hep="continual training")
+    args.add_argument("--continual", action="store_true", help="continual training")
     args.add_argument("--accelerate", action="store_true")
     args.add_argument("--renorm", action="store_true")
     args.add_argument("--instance", type=int, default=0)
